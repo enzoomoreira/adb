@@ -1,41 +1,24 @@
 from .client import SGSClient
 from .collector import SGSCollector
 from .indicators import (
-    INDICATORS,
+    SGS_CONFIG,
     get_by_frequency,
     get_codes_dict,
     get_indicator_keys,
     get_indicator_config,
     list_indicators,
-    # Compatibilidade com formato antigo
-    IBC_BR,
-    IGP_M,
-    SELIC,
-    CURRENCY,
-    CDI,
-    MONTHLY_INDICATORS,
-    DAILY_INDICATORS,
-    ALL_SGS_CODES,
 )
 
 __all__ = [
-    # Principais
+    # Classes
     'SGSClient',
     'SGSCollector',
-    'INDICATORS',
+    # Config
+    'SGS_CONFIG',
     # Helpers
     'get_by_frequency',
     'get_codes_dict',
     'get_indicator_keys',
     'get_indicator_config',
     'list_indicators',
-    # Compatibilidade
-    'IBC_BR',
-    'IGP_M',
-    'SELIC',
-    'CURRENCY',
-    'CDI',
-    'MONTHLY_INDICATORS',
-    'DAILY_INDICATORS',
-    'ALL_SGS_CODES',
 ]

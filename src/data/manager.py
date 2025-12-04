@@ -187,6 +187,7 @@ class DataManager:
         subdir: str = 'daily',
         save: bool = True,
         verbose: bool = False,
+        add_source: bool = False,
     ) -> pd.DataFrame:
         """
         Consolida multiplos arquivos em um DataFrame.
@@ -197,6 +198,7 @@ class DataManager:
             subdir: Subdiretorio dentro de raw/
             save: Se True, salva em processed/
             verbose: Se True, imprime progresso
+            add_source: Se True, adiciona coluna '_source' com nome do arquivo origem
 
         Returns:
             DataFrame consolidado
@@ -216,20 +218,29 @@ class DataManager:
         for filename in files:
             df = self.read(filename, subdir)
             if not df.empty:
-                # Usar filename como nome da coluna se tiver coluna 'value'
-                if 'value' in df.columns:
-                    df = df.rename(columns={'value': filename})
-                dfs.append(df)
+                if add_source:
+                    # Concatenar com coluna de origem
+                    df = df.copy()
+                    df['_source'] = filename
+                    dfs.append(df)
+                else:
+                    # Usar filename como nome da coluna se tiver coluna 'value'
+                    if 'value' in df.columns:
+                        df = df.rename(columns={'value': filename})
+                    dfs.append(df)
 
         if not dfs:
             return pd.DataFrame()
 
-        # Juntar todos os DataFrames
-        result = dfs[0]
-        for df in dfs[1:]:
-            result = result.join(df, how='outer')
-
-        result = result.sort_index()
+        if add_source:
+            # Concatenar verticalmente quando add_source=True
+            result = pd.concat(dfs, ignore_index=True)
+        else:
+            # Juntar horizontalmente por indice
+            result = dfs[0]
+            for df in dfs[1:]:
+                result = result.join(df, how='outer')
+            result = result.sort_index()
 
         if save:
             if output_filename is None:

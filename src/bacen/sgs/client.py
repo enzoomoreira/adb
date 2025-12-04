@@ -8,6 +8,33 @@ class SGSClient:
     Cliente para o Sistema Gerenciador de Series Temporais (SGS) do BCB.
     """
 
+    def __init__(self):
+        """Inicializa o cliente SGS."""
+        pass
+
+    def query(
+        self,
+        codes: dict[str, int],
+        start_date: str = None,
+        end_date: str = None,
+        last: int = None
+    ) -> pd.DataFrame:
+        """
+        Busca series temporais do SGS.
+
+        Alias semantico para get_series() - consistencia com ExpectationsClient.
+
+        Args:
+            codes: Dicionario {nome: codigo_sgs}
+            start_date: Data inicial 'YYYY-MM-DD' (opcional)
+            end_date: Data final 'YYYY-MM-DD' (opcional)
+            last: Numero de ultimos registros (opcional)
+
+        Returns:
+            DataFrame com as series solicitadas
+        """
+        return self.get_series(codes, start_date, end_date, last)
+
     def get_series(
         self,
         codes: dict[str, int],

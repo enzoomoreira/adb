@@ -2,26 +2,31 @@
 Coletor de expectativas do BCB (Relatorio Focus).
 
 Orquestra a coleta de dados de expectativas com flexibilidade de parametros.
-Usa DataManager para persistencia (DRY).
 """
 
 from pathlib import Path
 import pandas as pd
 
+from ..base import BaseCollector
 from .client import ExpectationsClient
 from .indicators import EXPECTATIONS_CONFIG, get_indicator_config
-from data import DataManager
 
 
-class ExpectationsCollector:
+class ExpectationsCollector(BaseCollector):
     """
     Orquestrador de coleta de expectativas do BCB.
 
-    Oferece tres niveis de uso:
+    Oferece dois niveis de uso:
     1. collect_endpoint() - Controle total, usuario define tudo
-    2. collect_indicator() - Usa config predefinida com override opcional
-    3. collect_all() - Automacao completa
+    2. collect() - Usa config predefinida, coleta um ou mais indicadores
+
+    Herda de BaseCollector:
+    - save(), read(), list_files() - delegacoes para DataManager
+    - get_status() - status dos arquivos salvos
     """
+
+    default_subdir = 'expectations'
+    default_consolidate_subdirs = ['expectations']
 
     def __init__(self, data_path: Path):
         """
@@ -30,9 +35,8 @@ class ExpectationsCollector:
         Args:
             data_path: Caminho base para diretorio data/
         """
-        self.data_path = Path(data_path)
+        super().__init__(data_path)
         self.client = ExpectationsClient()
-        self.data_manager = DataManager(data_path)
 
     # =========================================================================
     # NIVEL 1: Controle Total
@@ -46,7 +50,7 @@ class ExpectationsCollector:
         start_date: str = None,
         end_date: str = None,
         limit: int = None,
-        subdir: str = 'expectations',
+        subdir: str = None,
         save: bool = True,
         verbose: bool = True,
     ) -> pd.DataFrame:
@@ -67,6 +71,8 @@ class ExpectationsCollector:
         Returns:
             DataFrame com dados coletados
         """
+        subdir = subdir or self.default_subdir
+
         if verbose:
             print(f"Coletando: {endpoint}", end="")
             if indicator:
@@ -99,69 +105,25 @@ class ExpectationsCollector:
         return df
 
     # =========================================================================
-    # NIVEL 2: Config Predefinida
+    # NIVEL 2: API Simplificada
     # =========================================================================
 
-    def collect_indicator(
+    def collect(
         self,
-        key: str,
-        filename: str = None,
-        start_date: str = None,
-        end_date: str = None,
-        limit: int = None,
-        subdir: str = 'expectations',
-        save: bool = True,
-        verbose: bool = True,
-    ) -> pd.DataFrame:
-        """
-        Coleta um indicador usando configuracao predefinida.
-
-        Args:
-            key: Chave do indicador em EXPECTATIONS_CONFIG
-            filename: Nome do arquivo (default: usa key)
-            start_date: Data inicial (override)
-            end_date: Data final (override)
-            limit: Limite de registros (override)
-            subdir: Subdiretorio dentro de raw/
-            save: Se True, salva em Parquet
-            verbose: Se True, imprime progresso
-
-        Returns:
-            DataFrame com dados coletados
-        """
-        config = get_indicator_config(key)
-
-        return self.collect_endpoint(
-            endpoint=config['endpoint'],
-            filename=filename or key,
-            indicator=config['indicator'],
-            start_date=start_date,
-            end_date=end_date,
-            limit=limit,
-            subdir=subdir,
-            save=save,
-            verbose=verbose,
-        )
-
-    # =========================================================================
-    # NIVEL 3: Automatico
-    # =========================================================================
-
-    def collect_all(
-        self,
-        config: dict = None,
-        subdir: str = 'expectations',
+        indicators: list[str] | str = 'all',
         start_date: str = None,
         limit: int = None,
         save: bool = True,
         verbose: bool = True,
     ) -> dict[str, pd.DataFrame]:
         """
-        Coleta todos os indicadores da configuracao.
+        Coleta um ou mais indicadores.
 
         Args:
-            config: Dict de configuracao (default: EXPECTATIONS_CONFIG)
-            subdir: Subdiretorio dentro de raw/
+            indicators: Indicadores a coletar:
+                - 'all': todos de EXPECTATIONS_CONFIG
+                - lista: ['ipca_anual', 'selic', ...]
+                - string: 'ipca_anual' (um unico)
             start_date: Data inicial para todos (opcional)
             limit: Limite de registros para todos (opcional)
             save: Se True, salva cada indicador em Parquet
@@ -170,28 +132,37 @@ class ExpectationsCollector:
         Returns:
             Dict {key: DataFrame} com dados coletados
         """
-        if config is None:
-            config = EXPECTATIONS_CONFIG
+        # Normalizar entrada
+        if indicators == 'all':
+            keys = list(EXPECTATIONS_CONFIG.keys())
+        elif isinstance(indicators, str):
+            keys = [indicators]
+        else:
+            keys = list(indicators)
 
         if verbose:
             print("=" * 70)
             print("COLETA DE EXPECTATIVAS DO BCB")
             print("=" * 70)
-            print(f"Indicadores a coletar: {len(config)}")
+            print(f"Indicadores a coletar: {len(keys)}")
             print()
 
         results = {}
-        for key in config.keys():
-            df = self.collect_indicator(
-                key=key,
+        for key in keys:
+            config = get_indicator_config(key)
+
+            df = self.collect_endpoint(
+                endpoint=config['endpoint'],
                 filename=key,
+                indicator=config['indicator'],
                 start_date=start_date,
                 limit=limit,
-                subdir=subdir,
+                subdir=self.default_subdir,
                 save=save,
                 verbose=verbose,
             )
             results[key] = df
+
             if verbose:
                 print()
 
@@ -209,136 +180,89 @@ class ExpectationsCollector:
 
     def consolidate(
         self,
-        files: list[str] = None,
-        output_filename: str = 'expectations_consolidated',
-        subdir: str = 'expectations',
+        subdirs: list[str] | str = None,
+        output_prefix: str = 'expectations',
+        add_source: bool = True,
         save: bool = True,
         verbose: bool = True,
-    ) -> pd.DataFrame:
+    ) -> dict[str, pd.DataFrame]:
         """
-        Consolida multiplos arquivos em um DataFrame.
+        Consolida arquivos de um ou mais subdiretorios.
 
         Args:
-            files: Lista de nomes de arquivos (default: todos os arquivos)
-            output_filename: Nome do arquivo consolidado
-            subdir: Subdiretorio dentro de raw/
+            subdirs: Subdiretorios a consolidar:
+                - None: usa default_consolidate_subdirs (['expectations'])
+                - lista: ['expectations']
+                - string: 'expectations' (um unico)
+            output_prefix: Prefixo para nomes de arquivo (default: 'expectations')
+            add_source: Se True, adiciona coluna '_source' com nome do arquivo
             save: Se True, salva em processed/
             verbose: Se True, imprime progresso
 
         Returns:
-            DataFrame consolidado
+            Dict {subdir: DataFrame} com dados consolidados
         """
-        if files is None:
-            files = self.data_manager.list_files(subdir)
-
-        if not files:
-            if verbose:
-                print("Nenhum arquivo para consolidar")
-            return pd.DataFrame()
+        # Normalizar entrada
+        if subdirs is None:
+            subdirs_list = self.default_consolidate_subdirs
+        elif isinstance(subdirs, str):
+            subdirs_list = [subdirs]
+        else:
+            subdirs_list = list(subdirs)
 
         if verbose:
-            print(f"Consolidando {len(files)} arquivos...")
+            print("=" * 70)
+            print("CONSOLIDANDO EXPECTATIVAS")
+            print("=" * 70)
+            print()
 
-        dfs = []
-        for filename in files:
-            df = self.data_manager.read(filename, subdir)
-            if not df.empty:
-                df['_source'] = filename
-                dfs.append(df)
-
-        if not dfs:
-            return pd.DataFrame()
-
-        consolidated = pd.concat(dfs, ignore_index=True)
-
-        if save:
-            output_dir = self.data_path / 'processed'
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-            filepath = output_dir / f"{output_filename}.parquet"
-            consolidated.to_parquet(
-                filepath,
-                engine='pyarrow',
-                compression='snappy',
-                index=False,
+        results = {}
+        for subdir in subdirs_list:
+            # Consolidar sem salvar - precisamos processar antes
+            df = self.data_manager.consolidate(
+                subdir=subdir,
+                output_filename=None,
+                save=False,
+                verbose=verbose,
+                add_source=add_source,
             )
-            if verbose:
-                print(f"Salvo: {filepath.relative_to(self.data_path)}")
+
+            # ---------------------------------------------------------------------
+            # Converter coluna 'Data' para DatetimeIndex
+            #
+            # Por que fazer isso:
+            # - Padroniza com o resto do projeto (SGS usa DatetimeIndex)
+            # - Facilita fatiamento temporal: df.loc['2025-01']
+            #
+            # Por que indices duplicados sao aceitaveis:
+            # - Cada data tem multiplos registros (projecoes para diferentes anos)
+            # - Exemplo: 2025-11-28 tem projecoes para 2025, 2026, 2027, 2028, 2029
+            # - Pandas lida bem com isso, permite filtrar por DataReferencia
+            #
+            # Por que fazer apenas no consolidado (nao no raw):
+            # - Arquivos raw preservam estrutura original da API
+            # - Consolidado e otimizado para analise
+            # ---------------------------------------------------------------------
+            if 'Data' in df.columns and not df.empty:
+                df = df.set_index('Data').sort_index()
+                df.index.name = 'Date'  # Padronizar nome do indice
+
+            # Salvar arquivo processado
+            if save and not df.empty:
+                output_name = f"{output_prefix}_consolidated"
+                output_path = self.data_manager.processed_path / f"{output_name}.parquet"
+                self.data_manager.processed_path.mkdir(parents=True, exist_ok=True)
+                df.to_parquet(output_path, engine='pyarrow', compression='snappy', index=True)
+                if verbose:
+                    print(f"  Salvo: {output_path.relative_to(self.data_manager.base_path)}")
+
+            results[subdir] = df
+
+            if verbose and not df.empty:
+                print(f"  {subdir}: {len(df):,} registros")
+                print()
 
         if verbose:
-            print(f"Total: {len(consolidated):,} registros")
+            print("Consolidacao concluida!")
 
-        return consolidated
-
-    # =========================================================================
-    # Utilitarios (delegam para DataManager)
-    # =========================================================================
-
-    def save(
-        self,
-        df: pd.DataFrame,
-        filename: str,
-        subdir: str = 'expectations',
-        **kwargs
-    ):
-        """Delega para DataManager.save()"""
-        return self.data_manager.save(df, filename, subdir, **kwargs)
-
-    def read(
-        self,
-        filename: str,
-        subdir: str = 'expectations',
-    ) -> pd.DataFrame:
-        """Delega para DataManager.read()"""
-        return self.data_manager.read(filename, subdir)
-
-    def list_files(self, subdir: str = 'expectations') -> list[str]:
-        """Delega para DataManager.list_files()"""
-        return self.data_manager.list_files(subdir)
-
-    def get_status(self, subdir: str = 'expectations') -> pd.DataFrame:
-        """
-        Retorna status dos arquivos salvos.
-
-        Args:
-            subdir: Subdiretorio dentro de raw/
-
-        Returns:
-            DataFrame com status de cada arquivo
-        """
-        files = self.data_manager.list_files(subdir)
-
-        if not files:
-            return pd.DataFrame()
-
-        status_data = []
-        for filename in files:
-            df = self.data_manager.read(filename, subdir)
-
-            if df.empty:
-                status_data.append({
-                    'arquivo': filename,
-                    'registros': 0,
-                    'colunas': 0,
-                    'status': 'Vazio',
-                })
-            else:
-                # Tentar identificar range de datas
-                data_col = 'Data' if 'Data' in df.columns else None
-                primeira_data = None
-                ultima_data = None
-
-                if data_col and pd.api.types.is_datetime64_any_dtype(df[data_col]):
-                    primeira_data = df[data_col].min()
-                    ultima_data = df[data_col].max()
-
-                status_data.append({
-                    'arquivo': filename,
-                    'registros': len(df),
-                    'colunas': len(df.columns),
-                    'primeira_data': primeira_data,
-                    'ultima_data': ultima_data,
-                    'status': 'OK',
-                })
-
-        return pd.DataFrame(status_data)
+        return results
