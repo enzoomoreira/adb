@@ -249,6 +249,29 @@ from src.data import DataManager
 - **Coluna de valor**: `value` (SGS) ou colunas originais (Expectations)
 - **Metadata**: Armazenada em `df.attrs` (sgs_code, endpoint, etc)
 
+## Transformacoes Automaticas
+
+### CDI Anualizado
+
+O CDI vem da API como taxa percentual **diaria** (ex: 0.055% ao dia), enquanto a SELIC ja vem como taxa **anual** (ex: 15% ao ano). Para facilitar comparacoes, o `SGSCollector.consolidate()` adiciona automaticamente a coluna `cdi_anualizado` ao arquivo `sgs_daily_consolidated.parquet`.
+
+**Formula:**
+```
+cdi_anualizado = ((1 + cdi_diario/100) ** 252 - 1) * 100
+```
+
+**Exemplo:**
+- CDI diario: 0.055131%
+- CDI anualizado: 14.90%
+- SELIC: 15.00%
+- Diferenca tipica: ~0.10 p.p. (CDI fica ligeiramente abaixo da SELIC meta)
+
+**Colunas em sgs_daily_consolidated.parquet:**
+- `cdi` - Taxa diaria original
+- `cdi_anualizado` - Taxa anualizada (comparavel com SELIC)
+- `selic` - Meta SELIC (ja anualizada)
+- `dolar_ptax`, `euro_ptax` - Taxas de cambio
+
 ## Extensibilidade
 
 Para adicionar novo indicador SGS:

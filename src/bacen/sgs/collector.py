@@ -178,6 +178,18 @@ class SGSCollector(BaseCollector):
     # Consolidacao
     # =========================================================================
 
+    @staticmethod
+    def _annualize_cdi(daily_rate: pd.Series) -> pd.Series:
+        """
+        Calcula taxa anualizada a partir da taxa diaria do CDI.
+
+        Formula: ((1 + taxa_diaria/100) ** 252 - 1) * 100
+
+        O CDI vem em percentual diario (ex: 0.055 = 0.055% ao dia).
+        Resultado em percentual anual (ex: 14.9 = 14.9% ao ano).
+        """
+        return ((1 + daily_rate / 100) ** 252 - 1) * 100
+
     def consolidate(
         self,
         subdirs: list[str] | str = None,
@@ -187,6 +199,9 @@ class SGSCollector(BaseCollector):
     ) -> dict[str, pd.DataFrame]:
         """
         Consolida arquivos de um ou mais subdiretorios.
+
+        Para sgs/daily, adiciona coluna 'cdi_anualizado' com o CDI
+        convertido para taxa anual (comparavel com SELIC).
 
         Args:
             subdirs: Subdiretorios a consolidar:
@@ -220,12 +235,33 @@ class SGSCollector(BaseCollector):
             subdir_safe = subdir.replace('/', '_')
             output_name = f"{output_prefix or subdir_safe}_consolidated" if save else None
 
+            # Consolidar sem salvar primeiro (para aplicar transformacoes)
             df = self.data_manager.consolidate(
                 subdir=subdir,
-                output_filename=output_name,
-                save=save,
+                output_filename=None,
+                save=False,
                 verbose=verbose,
             )
+
+            # Adicionar cdi_anualizado para dados diarios
+            if subdir == 'sgs/daily' and 'cdi' in df.columns:
+                df['cdi_anualizado'] = self._annualize_cdi(df['cdi'])
+                if verbose:
+                    print("  + Adicionada coluna 'cdi_anualizado'")
+
+            # Salvar se solicitado
+            if save and output_name and not df.empty:
+                self.data_manager.processed_path.mkdir(parents=True, exist_ok=True)
+                filepath = self.data_manager.processed_path / f"{output_name}.parquet"
+                df.to_parquet(
+                    filepath,
+                    engine='pyarrow',
+                    compression='snappy',
+                    index=True
+                )
+                if verbose:
+                    print(f"  Salvo: {filepath.relative_to(self.data_manager.base_path)}")
+
             results[subdir] = df
 
             if verbose and not df.empty:
