@@ -57,11 +57,14 @@ class ExpectationsCollector(BaseCollector):
         """
         Coleta dados de um endpoint com controle total.
 
+        Suporta atualizacao incremental: se ja existem dados salvos,
+        busca apenas registros novos desde a ultima data.
+
         Args:
             endpoint: Chave do endpoint ('top5_anuais', 'selic', etc)
             filename: Nome do arquivo para salvar (sem extensao)
             indicator: Filtrar por indicador (ex: 'IPCA')
-            start_date: Data inicial 'YYYY-MM-DD'
+            start_date: Data inicial 'YYYY-MM-DD' (override manual)
             end_date: Data final 'YYYY-MM-DD'
             limit: Limite de registros (None = sem limite)
             subdir: Subdiretorio dentro de raw/ (default: 'expectations')
@@ -73,34 +76,33 @@ class ExpectationsCollector(BaseCollector):
         """
         subdir = subdir or self.default_subdir
 
-        if verbose:
-            print(f"Coletando: {endpoint}", end="")
-            if indicator:
-                print(f" [{indicator}]", end="")
-            print("...")
+        # Nome para log: usa indicator se disponivel, senao filename
+        log_name = indicator or filename
 
-        df = self.client.query(
-            endpoint_key=endpoint,
-            indicator=indicator,
-            start_date=start_date,
-            end_date=end_date,
-            limit=limit,
-        )
-
-        if df.empty:
-            if verbose:
-                print(f"  Nenhum dado retornado")
-            return df
-
-        if verbose:
-            print(f"  {len(df):,} registros coletados")
+        def fetch(auto_start_date: str | None) -> pd.DataFrame:
+            # start_date manual tem prioridade sobre automatico
+            effective_start = start_date or auto_start_date
+            self._log_fetch_start(log_name, effective_start, verbose)
+            return self.client.query(
+                endpoint_key=endpoint,
+                indicator=indicator,
+                start_date=effective_start,
+                end_date=end_date,
+                limit=limit,
+            )
 
         if save:
-            self.data_manager.save(
-                df, filename, subdir,
-                metadata={'endpoint': endpoint, 'indicator': indicator},
-                verbose=verbose,
+            df, _ = self.data_manager.fetch_and_sync(
+                filename=filename,
+                subdir=subdir,
+                fetch_fn=fetch,
+                verbose=False,
             )
+        else:
+            df = fetch(start_date)
+
+        # Log resultado
+        self._log_fetch_result(log_name, len(df), verbose)
 
         return df
 
@@ -141,8 +143,12 @@ class ExpectationsCollector(BaseCollector):
             keys = list(indicators)
 
         if verbose:
+            is_first_run = self.data_manager.is_first_run(self.default_subdir)
             print("=" * 70)
-            print("COLETA DE EXPECTATIVAS DO BCB")
+            if is_first_run:
+                print("PRIMEIRA EXECUCAO - Download Completo")
+            else:
+                print("ATUALIZACAO INCREMENTAL")
             print("=" * 70)
             print(f"Indicadores a coletar: {len(keys)}")
             print()

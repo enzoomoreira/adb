@@ -6,8 +6,10 @@ Usado por todos os modulos (SGS, Expectations, etc).
 """
 
 from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Callable
+
 import pandas as pd
-from datetime import datetime
 
 
 class DataManager:
@@ -178,7 +180,86 @@ class DataManager:
         df = self.read(filename, subdir)
         if df.empty:
             return None
-        return df.index.max()
+
+        # Verificar se indice e datetime
+        if pd.api.types.is_datetime64_any_dtype(df.index):
+            return df.index.max()
+
+        # Verificar se existe coluna 'Data' com datetime
+        if 'Data' in df.columns and pd.api.types.is_datetime64_any_dtype(df['Data']):
+            return df['Data'].max()
+
+        # Fallback: tentar converter indice para datetime
+        return None
+
+    def is_first_run(self, subdir: str) -> bool:
+        """
+        Verifica se e primeira execucao (subdiretorio nao existe ou esta vazio).
+
+        Args:
+            subdir: Subdiretorio dentro de raw/
+
+        Returns:
+            True se nao existem arquivos no subdiretorio
+        """
+        path = self.raw_path / subdir
+        if not path.exists():
+            return True
+        return len(list(path.glob('*.parquet'))) == 0
+
+    def fetch_and_sync(
+        self,
+        filename: str,
+        subdir: str,
+        fetch_fn: Callable[[str | None], pd.DataFrame],
+        frequency: str = 'daily',
+        verbose: bool = True,
+    ) -> tuple[pd.DataFrame, bool]:
+        """
+        Orquestra coleta incremental: verifica ultima data, busca dados, salva/append.
+
+        Metodo generico para qualquer fonte de dados (BCB, IBGE, Bloomberg, etc).
+        Centraliza a logica de decidir entre download completo ou incremental.
+
+        Args:
+            filename: Nome do arquivo (sem extensao)
+            subdir: Subdiretorio em raw/
+            fetch_fn: Funcao que recebe start_date e retorna DataFrame
+                      - None: buscar historico completo
+                      - 'YYYY-MM-DD': buscar a partir desta data
+            frequency: Frequencia dos dados ('daily' ou 'monthly')
+            verbose: Imprimir progresso
+
+        Returns:
+            (DataFrame com dados coletados, is_first_run)
+
+        Example:
+            def fetch(start_date):
+                return client.get_data(code, start=start_date)
+
+            df, is_first = data_manager.fetch_and_sync('selic', 'sgs/daily', fetch)
+        """
+        last_date = self.get_last_date(filename, subdir)
+        is_first_run = last_date is None
+
+        if is_first_run:
+            start_date = None
+        elif frequency == 'monthly':
+            # Para series mensais, pular para o proximo mes
+            next_month = (last_date.replace(day=1) + timedelta(days=32)).replace(day=1)
+            start_date = next_month.strftime('%Y-%m-%d')
+        else:
+            start_date = (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
+
+        df = fetch_fn(start_date)
+
+        if not df.empty:
+            if is_first_run:
+                self.save(df, filename, subdir, verbose=verbose)
+            else:
+                self.append(df, filename, subdir, verbose=verbose)
+
+        return df, is_first_run
 
     def consolidate(
         self,

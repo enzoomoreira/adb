@@ -38,6 +38,28 @@ class BaseCollector:
         self.data_manager = DataManager(data_path)
 
     # =========================================================================
+    # Logging (output padronizado)
+    # =========================================================================
+
+    def _log_fetch_start(self, name: str, start_date: str = None, verbose: bool = True):
+        """Loga inicio de fetch de indicador."""
+        if not verbose:
+            return
+        if start_date:
+            print(f"  Buscando {name} desde {start_date}...")
+        else:
+            print(f"  Buscando {name} (historico completo)...")
+
+    def _log_fetch_result(self, name: str, count: int, verbose: bool = True):
+        """Loga resultado de fetch de indicador."""
+        if not verbose:
+            return
+        if count:
+            print(f"  {count:,} registros")
+        else:
+            print(f"  Sem dados disponiveis")
+
+    # =========================================================================
     # Delegacoes para DataManager
     # =========================================================================
 

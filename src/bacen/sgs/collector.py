@@ -55,12 +55,15 @@ class SGSCollector(BaseCollector):
         """
         Coleta uma serie temporal com controle total.
 
+        Suporta atualizacao incremental: se ja existem dados salvos,
+        busca apenas registros novos desde a ultima data.
+
         Args:
             code: Codigo SGS do indicador
             filename: Nome do arquivo para salvar (sem extensao)
             name: Nome da serie (default: usa filename)
-            frequency: 'daily' ou 'monthly' (para chunking)
-            subdir: Subdiretorio dentro de raw/ (default: usa frequency)
+            frequency: 'daily' ou 'monthly'
+            subdir: Subdiretorio dentro de raw/ (default: sgs/{frequency})
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
 
@@ -72,34 +75,29 @@ class SGSCollector(BaseCollector):
         if subdir is None:
             subdir = f"sgs/{frequency}"
 
-        last_date = self.data_manager.get_last_date(filename, subdir)
+        def fetch(start_date: str | None) -> pd.DataFrame:
+            self._log_fetch_start(name, start_date, verbose)
+            return self.client.get_data(
+                code=code,
+                name=name,
+                frequency=frequency,
+                start_date=start_date,
+                verbose=False,  # Client silencioso, collector controla logs
+            )
 
-        if last_date is None:
-            # Primeiro download: historico completo
-            if verbose:
-                print(f"Baixando {name} (historico completo)...")
-            df = self.client.get_historical(
-                code=code,
-                name=name,
+        if save:
+            df, _ = self.data_manager.fetch_and_sync(
+                filename=filename,
+                subdir=subdir,
+                fetch_fn=fetch,
                 frequency=frequency,
-                verbose=verbose
+                verbose=False,
             )
-            if not df.empty and save:
-                self.data_manager.save(
-                    df, filename, subdir,
-                    metadata={'sgs_code': code, 'name': name}
-                )
         else:
-            # Atualizacao incremental
-            df = self.client.get_incremental(
-                code=code,
-                name=name,
-                frequency=frequency,
-                last_date=last_date,
-                verbose=verbose
-            )
-            if not df.empty and save:
-                self.data_manager.append(df, filename, subdir)
+            df = fetch(None)
+
+        # Log resultado
+        self._log_fetch_result(name, len(df), verbose)
 
         return df
 
@@ -136,7 +134,7 @@ class SGSCollector(BaseCollector):
             keys = list(indicators)
 
         # Verificar se e primeiro run
-        is_first_run = not (self.data_path / 'raw' / 'sgs').exists()
+        is_first_run = self.data_manager.is_first_run('sgs/daily')
 
         if verbose:
             print("=" * 70)
