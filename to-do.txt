@@ -1,0 +1,2 @@
+1. make caged status output the same as bacen
+2. implement optmization to bulk requests

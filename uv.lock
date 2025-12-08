@@ -440,6 +440,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastparquet" },
+    { name = "ipeadatapy" },
     { name = "ipykernel" },
     { name = "matplotlib" },
     { name = "openpyxl" },
@@ -455,6 +456,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastparquet", specifier = ">=2024.11.0" },
+    { name = "ipeadatapy", specifier = ">=0.1.9" },
     { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "matplotlib", specifier = ">=3.10.7" },
     { name = "openpyxl", specifier = ">=3.1.5" },
@@ -688,6 +690,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8e/30/8bbc587bb2ad09ab7edf1f9215b2c5faf4fa7ee7c071daefe9ed55e28814/inflate64-1.0.4-cp314-cp314t-win32.whl", hash = "sha256:f8964ceaabea294bc20abc9ef408c6aae978a75c25c83168a76cd87a37c38938", size = 33865, upload-time = "2025-11-28T10:55:35.335Z" },
     { url = "https://files.pythonhosted.org/packages/91/87/8bf6f412f93c8b6dc14866a021b83321331fbdd17f6ab902a24dbf88773d/inflate64-1.0.4-cp314-cp314t-win_amd64.whl", hash = "sha256:7d13b04cba65c12d21e65eaa77da9484e265e8e821b26e0761d1455ad3a878d9", size = 36943, upload-time = "2025-11-28T10:55:36.983Z" },
     { url = "https://files.pythonhosted.org/packages/7d/85/33447bb3c4e3c0ae7b1fde3aadc52a18b2b0193cfcf4f585977e924c6463/inflate64-1.0.4-cp314-cp314t-win_arm64.whl", hash = "sha256:9ae3ee727235a06dc3cd353ee5761fdd8e3b56ad119c711f61680528972a6ced", size = 34846, upload-time = "2025-11-28T10:55:38.433Z" },
+]
+
+[[package]]
+name = "ipeadatapy"
+version = "0.1.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pandas" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8d/dd/48dbf8d7b2c21613db96d2474a589ff65170b15c24f800202a18fe28fd32/ipeadatapy-0.1.9.tar.gz", hash = "sha256:396c3f7d723a70667fd5a64714d7252f7f234c34c9f63e77751b02123691d8ad", size = 7478, upload-time = "2023-02-15T13:21:38.125Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f6/2c/8b36052b6e4e884cbdab7bb71c99cde4010a3fb1cbf047524deaf60db656/ipeadatapy-0.1.9-py3-none-any.whl", hash = "sha256:0bfd5a180599f77106421477d3cc505e4478ac0f4e3d5eb688dd8696fce906e3", size = 10120, upload-time = "2023-02-15T13:21:36.535Z" },
 ]
 
 [[package]]
