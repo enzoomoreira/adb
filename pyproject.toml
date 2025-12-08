@@ -1,5 +1,5 @@
 [project]
-name = "dados-bcb"
+name = "agora-database"
 version = "0.1.0"
 description = "Coleta e gestao de dados economicos do BCB e outras fontes"
 readme = "README.md"
