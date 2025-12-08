@@ -25,8 +25,8 @@ class ExpectationsCollector(BaseCollector):
     - get_status() - status dos arquivos salvos
     """
 
-    default_subdir = 'expectations'
-    default_consolidate_subdirs = ['expectations']
+    default_subdir = 'bacen/expectations'
+    default_consolidate_subdirs = ['bacen/expectations']
 
     def __init__(self, data_path: Path):
         """

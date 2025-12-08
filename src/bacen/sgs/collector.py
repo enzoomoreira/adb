@@ -25,8 +25,8 @@ class SGSCollector(BaseCollector):
     - get_status() - status dos arquivos salvos
     """
 
-    default_subdir = 'sgs/daily'
-    default_consolidate_subdirs = ['sgs/daily', 'sgs/monthly']
+    default_subdir = 'bacen/sgs/daily'
+    default_consolidate_subdirs = ['bacen/sgs/daily', 'bacen/sgs/monthly']
 
     def __init__(self, data_path: Path):
         """
@@ -73,7 +73,7 @@ class SGSCollector(BaseCollector):
         if name is None:
             name = filename
         if subdir is None:
-            subdir = f"sgs/{frequency}"
+            subdir = f"bacen/sgs/{frequency}"
 
         def fetch(start_date: str | None) -> pd.DataFrame:
             self._log_fetch_start(name, start_date, verbose)
@@ -134,7 +134,7 @@ class SGSCollector(BaseCollector):
             keys = list(indicators)
 
         # Verificar se e primeiro run
-        is_first_run = self.data_manager.is_first_run('sgs/daily')
+        is_first_run = self.data_manager.is_first_run('bacen/sgs/daily')
 
         if verbose:
             print("=" * 70)
@@ -149,7 +149,7 @@ class SGSCollector(BaseCollector):
         results = {}
         for key in keys:
             config = get_indicator_config(key)
-            subdir = f"sgs/{config['frequency']}"
+            subdir = f"bacen/sgs/{config['frequency']}"
 
             df = self.collect_series(
                 code=config['code'],
@@ -242,7 +242,7 @@ class SGSCollector(BaseCollector):
             )
 
             # Adicionar cdi_anualizado para dados diarios
-            if subdir == 'sgs/daily' and 'cdi' in df.columns:
+            if subdir == 'bacen/sgs/daily' and 'cdi' in df.columns:
                 df['cdi_anualizado'] = self._annualize_cdi(df['cdi'])
                 if verbose:
                     print("  + Adicionada coluna 'cdi_anualizado'")

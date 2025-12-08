@@ -115,6 +115,7 @@ class DataManager:
         df: pd.DataFrame,
         filename: str,
         subdir: str = 'daily',
+        dedup: bool = True,
         verbose: bool = False,
     ):
         """
@@ -124,17 +125,35 @@ class DataManager:
             df: DataFrame com novos dados
             filename: Nome do arquivo
             subdir: Subdiretorio dentro de raw/
+            dedup: Se True, remove duplicatas por indice (para series temporais).
+                   Se False, mantem todos os registros (para microdados como CAGED).
             verbose: Se True, imprime progresso
+
+        Nota sobre dedup:
+            - dedup=True (padrao): Para series temporais onde indice = data unica.
+              Remove duplicatas mantendo o valor mais recente.
+            - dedup=False: Para microdados onde cada linha e um registro unico
+              (ex: CAGED). Usa ignore_index=True para resetar indices e nao
+              remove nenhum registro.
         """
         existing_df = self.read(filename, subdir)
 
         if existing_df.empty:
+            # Primeira insercao: se dedup=False, reseta indice para evitar problemas futuros
+            if not dedup:
+                df = df.reset_index(drop=True)
             self.save(df, filename, subdir, verbose=verbose)
             return
 
-        combined = pd.concat([existing_df, df])
-        combined = combined[~combined.index.duplicated(keep='last')]
-        combined = combined.sort_index()
+        # Concatena DataFrames
+        # - dedup=True: mantem indices originais para poder identificar duplicatas
+        # - dedup=False: usa ignore_index para criar indice sequencial unico
+        combined = pd.concat([existing_df, df], ignore_index=not dedup)
+
+        # Remove duplicatas apenas para series temporais (dedup=True)
+        if dedup:
+            combined = combined[~combined.index.duplicated(keep='last')]
+            combined = combined.sort_index()
 
         # Preservar metadata existente
         combined.attrs = existing_df.attrs.copy()

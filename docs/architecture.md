@@ -4,17 +4,21 @@ Documentacao tecnica para referencia rapida. Este documento descreve a estrutura
 
 ## Visao Geral
 
-Projeto para coleta e armazenamento de dados economicos do Banco Central do Brasil (BCB). Suporta duas fontes de dados:
+Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta tres fontes de dados:
 
+**BCB (Banco Central do Brasil):**
 1. **SGS** (Sistema Gerenciador de Series Temporais) - Series historicas (Selic, IPCA, cambio, etc)
 2. **Expectations** (Relatorio Focus) - Expectativas de mercado
+
+**MTE (Ministerio do Trabalho e Emprego):**
+3. **CAGED** (Cadastro Geral de Empregados e Desempregados) - Microdados de emprego formal
 
 ## Estrutura de Pastas
 
 ```
 dados-bcb/
 ├── src/
-│   ├── bacen/                    # Modulo principal
+│   ├── bacen/                    # Modulo BCB
 │   │   ├── __init__.py           # Exports publicos
 │   │   ├── base.py               # BaseCollector (classe base)
 │   │   ├── sgs/                  # Coleta de series temporais
@@ -25,14 +29,23 @@ dados-bcb/
 │   │       ├── client.py         # ExpectationsClient - wrapper da API
 │   │       ├── collector.py      # ExpectationsCollector - orquestrador
 │   │       └── indicators.py     # EXPECTATIONS_CONFIG - configuracao
+│   ├── mte/                      # Modulo MTE
+│   │   ├── __init__.py           # Exports publicos
+│   │   └── caged/                # Coleta de dados CAGED
+│   │       ├── client.py         # CAGEDClient - cliente FTP
+│   │       ├── collector.py      # CAGEDCollector - orquestrador
+│   │       └── indicators.py     # CAGED_CONFIG - configuracao
 │   └── data/
 │       └── manager.py            # DataManager - persistencia centralizada
 ├── data/                         # Dados coletados
 │   ├── raw/                      # Dados brutos por subdiretorio
-│   │   ├── sgs/                  # Series temporais do SGS
-│   │   │   ├── daily/            # Series diarias (selic, cdi, ptax)
-│   │   │   └── monthly/          # Series mensais (ibc-br, igp-m)
-│   │   └── expectations/         # Expectativas do Focus
+│   │   ├── bacen/                # Dados do Banco Central
+│   │   │   ├── sgs/              # Series temporais do SGS
+│   │   │   │   ├── daily/        # Series diarias (selic, cdi, ptax)
+│   │   │   │   └── monthly/      # Series mensais (ibc-br, igp-m)
+│   │   │   └── expectations/     # Expectativas do Focus
+│   │   └── mte/                  # Dados do Ministerio do Trabalho
+│   │       └── caged/            # Microdados CAGED
 │   └── processed/                # Dados consolidados
 ├── notebooks/                    # Jupyter notebooks
 ├── scripts/                      # Scripts utilitarios
@@ -45,6 +58,8 @@ dados-bcb/
 BaseCollector (src/bacen/base.py)
 ├── SGSCollector (src/bacen/sgs/collector.py)
 └── ExpectationsCollector (src/bacen/expectations/collector.py)
+
+CAGEDCollector (src/mte/caged/collector.py) - independente, nao herda de BaseCollector
 
 DataManager (src/data/manager.py) - usado por composicao em todos os collectors
 ```
@@ -89,8 +104,8 @@ results = collector.collect(['selic', 'cdi'])     # Lista
 results = collector.collect()                      # Todos (default='all')
 
 # Consolidacao
-results = collector.consolidate()                  # Todos subdirs (sgs/daily + sgs/monthly)
-results = collector.consolidate('sgs/daily')       # Um subdir especifico
+results = collector.consolidate()                  # Todos subdirs (bacen/sgs/daily + bacen/sgs/monthly)
+results = collector.consolidate('bacen/sgs/daily') # Um subdir especifico
 ```
 
 **Configuracao (SGS_CONFIG):**
@@ -135,7 +150,46 @@ EXPECTATIONS_CONFIG = {
 }
 ```
 
-### 4. DataManager
+### 4. CAGEDCollector
+
+Coleta microdados do Novo CAGED via FTP:
+
+```python
+from src.mte import CAGEDCollector
+
+collector = CAGEDCollector(data_path='data/')
+
+# Coleta (salvamento incremental - baixo uso de memoria)
+results = collector.collect('cagedmov')            # Um indicador
+results = collector.collect(['cagedmov', 'cagedfor'])  # Lista
+results = collector.collect()                       # Todos (default='all')
+# Retorna: dict[str, int] com contagem de registros novos
+
+# Leitura
+df = collector.read('cagedmov')                    # Le dados salvos
+
+# Status
+collector.get_status()                              # Status dos arquivos
+
+# Consolidacao
+results = collector.consolidate()                   # Copia raw -> processed
+```
+
+**Caracteristicas:**
+- **Salvamento incremental**: Cada mes e salvo imediatamente apos download (baixo uso de memoria)
+- **Resiliencia**: Se falhar no meio, meses ja salvos permanecem
+- **Retorno**: `collect()` retorna contagem de registros, nao DataFrame (para evitar carregar milhoes de registros na memoria)
+
+**Configuracao (CAGED_CONFIG):**
+```python
+CAGED_CONFIG = {
+    'cagedmov': {'prefix': 'CAGEDMOV', 'name': 'Movimentacoes', 'start_year': 2020},
+    'cagedfor': {'prefix': 'CAGEDFOR', 'name': 'Fora do Prazo', 'start_year': 2020},
+    'cagedexc': {'prefix': 'CAGEDEXC', 'name': 'Exclusoes', 'start_year': 2020},
+}
+```
+
+### 5. DataManager
 
 Gerenciador centralizado de persistencia:
 
@@ -145,9 +199,9 @@ from src.data import DataManager
 dm = DataManager(base_path='data/')
 
 # Operacoes basicas
-dm.save(df, filename='selic', subdir='sgs/daily')
-df = dm.read(filename='selic', subdir='sgs/daily')
-files = dm.list_files(subdir='sgs/daily')
+dm.save(df, filename='selic', subdir='bacen/sgs/daily')
+df = dm.read(filename='selic', subdir='bacen/sgs/daily')
+files = dm.list_files(subdir='bacen/sgs/daily')
 
 # Operacoes avancadas
 dm.append(df, filename, subdir)           # Update incremental
@@ -155,50 +209,58 @@ last_date = dm.get_last_date(filename, subdir)
 
 # Consolidacao
 df = dm.consolidate(
-    subdir='sgs/daily',
+    subdir='bacen/sgs/daily',
     output_filename='sgs_daily_consolidated',
     add_source=False,    # True para adicionar coluna _source
     save=True
 )
 ```
 
-### 5. Clients (SGSClient / ExpectationsClient)
+### 6. Clients (SGSClient / ExpectationsClient / CAGEDClient)
 
 Wrappers de baixo nivel para as APIs:
 
 ```python
-# SGSClient
+# SGSClient (HTTP/REST)
 client = SGSClient()
 df = client.query({'Selic': 432}, start_date='2024-01-01')
 df = client.get_historical(code=432, name='Selic', frequency='daily')
 df = client.get_incremental(code=432, name='Selic', frequency='daily', last_date=dt)
 
-# ExpectationsClient
+# ExpectationsClient (HTTP/REST)
 client = ExpectationsClient()
 df = client.query(endpoint_key='selic', indicator='Selic', start_date='2024-01-01')
 df = client.get_selic_expectations(start_date='2024-01-01')
 df = client.get_annual_expectations(indicator='IPCA', reference_year=2025)
+
+# CAGEDClient (FTP)
+client = CAGEDClient()
+client.connect()
+df = client.get_data(prefix='CAGEDMOV', year=2024, month=10)  # Baixa e extrai 7z
+files = client.list_files(year=2024)                          # Lista arquivos no FTP
+client.disconnect()
 ```
 
 ## Fluxo de Dados
 
 ```
-API BCB (SGS/Expectations)
-        │
-        ▼
-    Client (query/fetch)
-        │
-        ▼
-    Collector (orquestra + logica de negocio)
-        │
-        ▼
-    DataManager (persistencia)
-        │
-        ▼
-    data/raw/{subdir}/*.parquet
-        │
-        ▼ (consolidate)
-    data/processed/*.parquet
+API BCB (SGS/Expectations)          FTP MTE (CAGED)
+        │                                  │
+        ▼                                  ▼
+    Client (HTTP)                    Client (FTP + 7z)
+        │                                  │
+        ▼                                  ▼
+    Collector (orquestra)           Collector (orquestra)
+        │                                  │
+        └──────────┬───────────────────────┘
+                   ▼
+            DataManager (persistencia)
+                   │
+                   ▼
+         data/raw/{subdir}/*.parquet
+                   │
+                   ▼ (consolidate)
+         data/processed/*.parquet
 ```
 
 ## Padroes de Uso
@@ -219,13 +281,14 @@ collector.collect()  # Detecta automaticamente e baixa apenas novos dados
 ```python
 collector = SGSCollector('data/')
 results = collector.consolidate()
-df_daily = results['sgs/daily']      # DataFrame com todas as series diarias
-df_monthly = results['sgs/monthly']  # DataFrame com todas as series mensais
+df_daily = results['bacen/sgs/daily']      # DataFrame com todas as series diarias
+df_monthly = results['bacen/sgs/monthly']  # DataFrame com todas as series mensais
 ```
 
 ## Imports Publicos
 
 ```python
+# BCB
 from src.bacen import (
     # Classes
     BaseCollector,
@@ -237,6 +300,18 @@ from src.bacen import (
     SGS_CONFIG,
     EXPECTATIONS_CONFIG,
     ENDPOINTS,
+)
+
+# MTE
+from src.mte import (
+    # Classes
+    CAGEDCollector,
+    CAGEDClient,
+    # Configuracoes
+    CAGED_CONFIG,
+    list_indicators,
+    get_indicator_config,
+    get_available_periods,
 )
 
 from src.data import DataManager
@@ -294,3 +369,26 @@ EXPECTATIONS_CONFIG['novo_indicador'] = {
     'description': 'Descricao',
 }
 ```
+
+Para adicionar novo tipo de dado CAGED:
+```python
+# Em src/mte/caged/indicators.py
+CAGED_CONFIG['novo_tipo'] = {
+    'prefix': 'PREFIXO',      # Prefixo do arquivo no FTP (ex: CAGEDMOV)
+    'name': 'Nome do Tipo',
+    'description': 'Descricao',
+    'start_year': 2020,        # Ano inicial dos dados
+}
+```
+
+## Diferencas entre Collectors
+
+| Aspecto | SGS/Expectations | CAGED |
+|---------|------------------|-------|
+| Protocolo | HTTP (REST API) | FTP |
+| Formato | JSON | 7z -> CSV |
+| Tamanho/periodo | ~KB | ~500MB-1GB |
+| Granularidade | Diaria/Mensal | Mensal |
+| Retorno collect() | DataFrame | int (contagem) |
+| Salvamento | Fim da coleta | A cada mes |
+| Heranca | BaseCollector | Independente |
