@@ -7,7 +7,7 @@ Fornece metodos utilitarios comuns para SGS e Expectations.
 from pathlib import Path
 import pandas as pd
 
-from data import DataManager
+from core.data import DataManager
 
 
 class BaseCollector:

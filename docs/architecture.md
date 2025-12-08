@@ -39,10 +39,10 @@ dados-bcb/
 │   │   ├── client.py             # IPEAClient
 │   │   ├── collector.py          # IPEACollector
 │   │   └── indicators.py         # IPEA_CONFIG
-│   ├── core/                     # Utilitarios compartilhados
-│   │   └── parallel.py           # ParallelFetcher
-│   └── data/
-│       └── manager.py            # DataManager
+│   └── core/                     # Utilitarios compartilhados
+│       ├── parallel.py           # ParallelFetcher
+│       └── data/
+│           └── manager.py        # DataManager
 ├── data/                         # Dados coletados
 │   ├── raw/                      # Dados brutos
 │   │   ├── bacen/
@@ -72,7 +72,7 @@ BaseCollector (src/bacen/base.py)
 CAGEDCollector (src/mte/caged/collector.py)  # Independente
 IPEACollector (src/ipea/collector.py)        # Independente
 
-DataManager (src/data/manager.py)  # Usado por todos os collectors
+DataManager (src/core/data/manager.py)  # Usado por todos os collectors
 ParallelFetcher (src/core/parallel.py)  # Usado pelo CAGEDCollector
 ```
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from data import DataManager
+from core.data import DataManager
 from .client import IPEAClient
 from .indicators import IPEA_CONFIG, get_indicator_config
 

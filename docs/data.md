@@ -6,14 +6,14 @@ Documentacao do gerenciador centralizado de persistencia.
 
 O `DataManager` fornece API unificada para salvar, ler e consolidar dados em formato Parquet. E usado por todos os collectors do projeto.
 
-**Localização:** `src/data/manager.py`
+**Localização:** `src/core/data/manager.py`
 
 ---
 
 ## Inicializacao
 
 ```python
-from src.data import DataManager
+from src.core.data import DataManager
 
 dm = DataManager(base_path='data/')
 
@@ -262,5 +262,5 @@ Wrappers para API antiga (uso desencorajado):
 ## Import
 
 ```python
-from src.data import DataManager
+from src.core.data import DataManager
 ```

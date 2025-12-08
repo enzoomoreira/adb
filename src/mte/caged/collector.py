@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from data import DataManager
+from core.data import DataManager
 from core.parallel import ParallelFetcher
 from .client import CAGEDClient
 from .indicators import CAGED_CONFIG, get_indicator_config, get_available_periods

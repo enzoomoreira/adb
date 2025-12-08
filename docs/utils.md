@@ -219,6 +219,8 @@ src/
 │   ├── client.py            # IPEAClient
 │   ├── collector.py         # IPEACollector
 │   └── indicators.py        # IPEA_CONFIG
-└── data/
-    └── manager.py           # DataManager
+└── core/
+    ├── parallel.py          # ParallelFetcher
+    └── data/
+        └── manager.py       # DataManager
 ```
