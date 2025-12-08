@@ -1,2 +1,3 @@
-1. make caged status output the same as bacen
-2. implement optmization to bulk requests
+1. padronizar o output de todos os collectors
+2. adicionar explorador para cada fonte de dados, que nem fizemos para CAGED do MTE
+3. adicionar engine de charting

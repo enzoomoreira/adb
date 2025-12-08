@@ -5,6 +5,7 @@ description = "Coleta e gestao de dados economicos do BCB e outras fontes"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "duckdb>=1.4.2",
     "fastparquet>=2024.11.0",
     "ipeadatapy>=0.1.9",
     "ipykernel>=7.1.0",

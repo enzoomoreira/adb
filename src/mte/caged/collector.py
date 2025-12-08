@@ -210,27 +210,135 @@ class CAGEDCollector:
 
         return results
 
-    def read(self, indicator: str = "cagedmov") -> pd.DataFrame:
+    def get_files(
+        self,
+        indicator: str = "cagedmov",
+        year: int | list[int] | None = None,
+    ) -> list[Path]:
         """
-        Le e unifica dados do Raw Layer (Legado + Mensais).
+        Retorna lista de paths dos arquivos parquet.
+
+        Util para uso externo com DuckDB, PyArrow, etc.
+
+        Args:
+            indicator: cagedmov, cagedfor, cagedexc
+            year: Ano(s) para filtrar (None = todos)
+
+        Returns:
+            Lista de paths absolutos dos arquivos
+        """
+        subdir = "mte/caged"
+        raw_dir = self.data_manager.raw_path / subdir
+        files = self.data_manager.list_files(subdir)
+        prefix = f"{indicator}_"
+
+        # Filtra por prefixo
+        matching = [f for f in files if f.startswith(prefix)]
+
+        # Filtra por ano se especificado
+        if year is not None:
+            years = [year] if isinstance(year, int) else year
+            matching = [
+                f for f in matching
+                if any(f.startswith(f"{prefix}{y}-") for y in years)
+            ]
+
+        matching.sort()
+        return [raw_dir / f"{f}.parquet" for f in matching]
+
+    def query(self, sql: str) -> pd.DataFrame:
+        """
+        Executa query SQL nos arquivos parquet usando DuckDB.
+
+        Permite consultas eficientes sem carregar todos os dados na memoria.
+
+        Args:
+            sql: Query SQL. Use glob patterns para os arquivos, ex:
+                'data/raw/mte/caged/cagedmov_2025-*.parquet'
+
+        Returns:
+            DataFrame com resultado da query
+
+        Exemplo:
+            collector.query('''
+                SELECT uf, COUNT(*) as total
+                FROM 'data/raw/mte/caged/cagedmov_2025-*.parquet'
+                GROUP BY uf
+            ''')
+
+        Requires:
+            pip install duckdb
+        """
+        try:
+            import duckdb
+        except ImportError:
+            raise ImportError(
+                "duckdb e necessario para usar query(). "
+                "Instale com: pip install duckdb"
+            )
+        return duckdb.sql(sql).df()
+
+    def read(
+        self,
+        indicator: str = "cagedmov",
+        year: int | list[int] | None = None,
+        months: list[int] | None = None,
+        columns: list[str] | None = None,
+    ) -> pd.DataFrame:
+        """
+        Le dados do CAGED com filtros opcionais.
+
+        Args:
+            indicator: cagedmov, cagedfor, cagedexc
+            year: Ano(s) para filtrar (None = todos)
+            months: Meses para filtrar (None = todos do(s) ano(s))
+            columns: Colunas para carregar (None = todas)
+
+        Returns:
+            DataFrame com dados filtrados
         """
         subdir = "mte/caged"
         files = self.data_manager.list_files(subdir)
-        dfs = []
-
-        # 1. Carrega legado se existir
-        if indicator in files:
-            dfs.append(self.data_manager.read(indicator, subdir))
-
-        # 2. Carrega mensais
         prefix = f"{indicator}_"
-        monthly_files = sorted([f for f in files if f.startswith(prefix)])
 
-        for f in monthly_files:
-            dfs.append(self.data_manager.read(f, subdir))
+        # Filtra arquivos mensais
+        matching = [f for f in files if f.startswith(prefix)]
 
-        if not dfs:
+        # Filtra por ano
+        if year is not None:
+            years = [year] if isinstance(year, int) else year
+            matching = [
+                f for f in matching
+                if any(f.startswith(f"{prefix}{y}-") for y in years)
+            ]
+
+        # Filtra por mes
+        if months is not None:
+            filtered = []
+            for f in matching:
+                try:
+                    _, date_part = f.rsplit("_", 1)
+                    _, m = map(int, date_part.split("-"))
+                    if m in months:
+                        filtered.append(f)
+                except (ValueError, IndexError):
+                    pass
+            matching = filtered
+
+        matching.sort()
+
+        if not matching:
             return pd.DataFrame()
+
+        # Carrega arquivos
+        dfs = []
+        for f in matching:
+            df = self.data_manager.read(f, subdir)
+            if columns is not None:
+                # Filtra colunas existentes
+                cols = [c for c in columns if c in df.columns]
+                df = df[cols]
+            dfs.append(df)
 
         return pd.concat(dfs, ignore_index=True)
 
@@ -252,112 +360,3 @@ class CAGEDCollector:
             )
 
         return pd.DataFrame(status)
-
-    def consolidate(
-        self,
-        indicators: list[str] | str = "all",
-        save: bool = True,
-        verbose: bool = True,
-    ) -> dict[str, pd.DataFrame]:
-        """
-        Consolida dados do CAGED em processed/ AGRUPADOS POR ANO.
-
-        Cria p/ cada ano: caged_{indicator}_{ano}.parquet
-        Evita carregar todo historico na memoria de uma vez.
-
-        Args:
-            indicators: 'all', 'cagedmov', ou lista
-            save: Salvar em processed/
-            verbose: Imprimir progresso
-
-        Returns:
-            Dict com dataframe do ULTIMO ano processado (para verificacao rapida)
-        """
-        if indicators == "all":
-            keys = list(CAGED_CONFIG.keys())
-        elif isinstance(indicators, str):
-            keys = [indicators]
-        else:
-            keys = list(indicators)
-
-        if verbose:
-            print("=" * 70)
-            print("CONSOLIDANDO DADOS CAGED (POR ANO)")
-            print("=" * 70)
-            print()
-
-        results = {}
-        processed_dir = self.data_manager.processed_path / "mte" / "caged"
-        processed_dir.mkdir(parents=True, exist_ok=True)
-
-        for key in keys:
-            if verbose:
-                print(f"Indicador: {key}")
-
-            # 1. Identificar anos disponiveis nos arquivos raw
-            subdir = "mte/caged"
-            files = self.data_manager.list_files(subdir)
-            prefix = f"{key}_"
-
-            # Extrair anos unicos dos arquivos (ex: cagedmov_2023-01 -> 2023)
-            years = set()
-            for f in files:
-                if f.startswith(prefix):
-                    try:
-                        _, date_part = f.rsplit("_", 1)
-                        y, _ = map(int, date_part.split("-"))
-                        years.add(y)
-                    except (ValueError, IndexError):
-                        pass
-
-            years = sorted(list(years))
-
-            if not years:
-                if verbose:
-                    print("  Nenhum dado encontrado.")
-                continue
-
-            # 2. Processar ano a ano
-            for year in years:
-                yearly_files = [f for f in files if f.startswith(f"{key}_{year}-")]
-                yearly_files.sort()
-
-                if not yearly_files:
-                    continue
-
-                if verbose:
-                    print(f"  Processando {year} ({len(yearly_files)} meses)...")
-
-                dfs = []
-                for f in yearly_files:
-                    dfs.append(self.data_manager.read(f, subdir))
-
-                if not dfs:
-                    continue
-
-                df_year = pd.concat(dfs, ignore_index=True)
-
-                if save:
-                    output_path = processed_dir / f"caged_{key}_{year}.parquet"
-                    df_year.to_parquet(
-                        output_path, engine="pyarrow", compression="snappy"
-                    )
-                    if verbose:
-                        print(
-                            f"    -> Salvo: {output_path.name} ({len(df_year):,} registros)"
-                        )
-
-                # Mantem ultimo ano no results para retorno
-                results[key] = df_year
-
-                # Limpa memoria explictamente
-                del df_year, dfs
-                import gc
-
-                gc.collect()
-
-        if verbose:
-            print()
-            print("Consolidacao concluida!")
-
-        return results
