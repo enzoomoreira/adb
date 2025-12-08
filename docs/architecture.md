@@ -1,4 +1,4 @@
-# Arquitetura do Projeto dados-bcb
+# Arquitetura do Projeto agora-database
 
 Visao geral da estrutura e funcionamento do repositorio.
 
@@ -18,7 +18,7 @@ Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta qua
 ## Estrutura de Pastas
 
 ```
-dados-bcb/
+agora-database/
 ├── src/
 │   ├── bacen/                    # Modulo BCB
 │   │   ├── base.py               # BaseCollector (classe base)

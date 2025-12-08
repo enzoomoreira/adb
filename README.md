@@ -1,4 +1,4 @@
-# dados-bcb
+# agora-database
 
 Coleta e armazenamento de dados economicos brasileiros. Suporta quatro fontes:
 
@@ -12,7 +12,7 @@ Coleta e armazenamento de dados economicos brasileiros. Suporta quatro fontes:
 ## Instalacao
 
 ```bash
-pip install pandas pyarrow requests ipeadatapy py7zr duckdb
+uv sync
 ```
 
 ## Uso Rapido
