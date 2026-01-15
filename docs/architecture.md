@@ -82,13 +82,21 @@ BaseCollector (src/core/collectors/base.py)
 ├── IPEACollector (src/ipea/collector.py)
 └── BloombergCollector (src/bloomberg/collector.py)
 
-DataManager (src/core/data/storage.py)  # Usado por todos os collectors
-QueryEngine (src/core/data/query.py)    # Consultas SQL via DuckDB
-ParallelFetcher (src/core/parallel.py)  # Usado pelo CAGEDCollector
+# Persistencia (usado por collectors)
+DataManager (src/core/data/storage.py)    # save/read/append/consolidate
 
-# Funcoes centralizadas
-core.indicators (src/core/indicators.py)  # list_indicators(), get_indicator_config(), filter_by_field()
+# Consultas (usado para leitura/analise)
+QueryEngine (src/core/data/query.py)      # SQL queries via DuckDB
+
+# Utilitarios
+ParallelFetcher (src/core/parallel.py)    # Usado pelo CAGEDCollector
+core.indicators (src/core/indicators.py)  # list_indicators(), get_indicator_config()
 ```
+
+**Separacao de Responsabilidades:**
+- **Collectors**: Apenas coleta de dados (collect, consolidate, get_status)
+- **DataManager**: Persistencia (save, read, append)
+- **QueryEngine**: Consultas SQL eficientes (sql, read, read_glob, aggregate)
 
 ---
 
@@ -144,6 +152,32 @@ collector.collect()
 
 # Consolidacao
 results = collector.consolidate()
+```
+
+### Leitura e Consultas SQL
+
+Para leitura e queries nos dados coletados, use o `QueryEngine` (separacao de responsabilidades):
+
+```python
+from core.data import QueryEngine
+
+qe = QueryEngine('data/')
+
+# Leitura simples
+df = qe.read('selic', 'bacen/sgs/daily')
+
+# Leitura com filtros
+df = qe.read('selic', 'bacen/sgs/daily', columns=['value'], where="value > 10")
+
+# Query SQL (suporta glob patterns e variaveis {raw}, {processed})
+df = qe.sql('''
+    SELECT strftime(date, '%Y') as ano, AVG(value) as media
+    FROM '{raw}/bacen/sgs/daily/selic.parquet'
+    GROUP BY ano
+''')
+
+# Leitura de multiplos arquivos (ideal para CAGED)
+df = qe.read_glob('cagedmov_2024-*.parquet', subdir='mte/caged')
 ```
 
 ---

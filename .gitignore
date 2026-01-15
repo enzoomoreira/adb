@@ -14,3 +14,6 @@ wheels/
 
 # Temp files
 temp
+
+# Test benchmarks
+scripts/tests/benchmark/

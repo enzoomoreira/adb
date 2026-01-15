@@ -24,9 +24,11 @@ class CAGEDCollector(BaseCollector):
     - collect() - Coleta microdados do CAGED via FTP
     - consolidate() - Consolida arquivos mensais (via DuckDB)
     - get_status() - Status dos dados locais (override - usa periodos)
-    - query() - Executa SQL nos parquets via DuckDB
-    - read() - Le dados com filtros opcionais
-    - get_files() - Retorna paths dos arquivos
+
+    Para leitura e queries SQL nos dados coletados, use QueryEngine:
+        from core.data import QueryEngine
+        qe = QueryEngine('data/')
+        df = qe.sql("SELECT * FROM '{raw}/mte/caged/cagedmov_*.parquet'")
 
     Herda de BaseCollector para padronizacao de logging.
     """
@@ -223,138 +225,6 @@ class CAGEDCollector(BaseCollector):
                 self.client.disconnect()
 
         return results
-
-    def get_files(
-        self,
-        indicator: str = "cagedmov",
-        year: int | list[int] | None = None,
-    ) -> list[Path]:
-        """
-        Retorna lista de paths dos arquivos parquet.
-
-        Util para uso externo com DuckDB, PyArrow, etc.
-
-        Args:
-            indicator: cagedmov, cagedfor, cagedexc
-            year: Ano(s) para filtrar (None = todos)
-
-        Returns:
-            Lista de paths absolutos dos arquivos
-        """
-        subdir = "mte/caged"
-        raw_dir = self.data_manager.raw_path / subdir
-        files = self.data_manager.list_files(subdir)
-        prefix = f"{indicator}_"
-
-        # Filtra por prefixo
-        matching = [f for f in files if f.startswith(prefix)]
-
-        # Filtra por ano se especificado
-        if year is not None:
-            years = [year] if isinstance(year, int) else year
-            matching = [
-                f for f in matching
-                if any(f.startswith(f"{prefix}{y}-") for y in years)
-            ]
-
-        matching.sort()
-        return [raw_dir / f"{f}.parquet" for f in matching]
-
-    def query(self, sql: str) -> pd.DataFrame:
-        """
-        Executa query SQL nos arquivos parquet usando DuckDB.
-
-        Permite consultas eficientes sem carregar todos os dados na memoria.
-
-        Args:
-            sql: Query SQL. Use glob patterns para os arquivos, ex:
-                'data/raw/mte/caged/cagedmov_2025-*.parquet'
-
-        Returns:
-            DataFrame com resultado da query
-
-        Exemplo:
-            collector.query('''
-                SELECT uf, COUNT(*) as total
-                FROM 'data/raw/mte/caged/cagedmov_2025-*.parquet'
-                GROUP BY uf
-            ''')
-
-        Requires:
-            pip install duckdb
-        """
-        try:
-            import duckdb
-        except ImportError:
-            raise ImportError(
-                "duckdb e necessario para usar query(). "
-                "Instale com: pip install duckdb"
-            )
-        return duckdb.sql(sql).df()
-
-    def read(
-        self,
-        indicator: str = "cagedmov",
-        year: int | list[int] | None = None,
-        months: list[int] | None = None,
-        columns: list[str] | None = None,
-    ) -> pd.DataFrame:
-        """
-        Le dados do CAGED com filtros opcionais.
-
-        Args:
-            indicator: cagedmov, cagedfor, cagedexc
-            year: Ano(s) para filtrar (None = todos)
-            months: Meses para filtrar (None = todos do(s) ano(s))
-            columns: Colunas para carregar (None = todas)
-
-        Returns:
-            DataFrame com dados filtrados
-        """
-        subdir = "mte/caged"
-        files = self.data_manager.list_files(subdir)
-        prefix = f"{indicator}_"
-
-        # Filtra arquivos mensais
-        matching = [f for f in files if f.startswith(prefix)]
-
-        # Filtra por ano
-        if year is not None:
-            years = [year] if isinstance(year, int) else year
-            matching = [
-                f for f in matching
-                if any(f.startswith(f"{prefix}{y}-") for y in years)
-            ]
-
-        # Filtra por mes
-        if months is not None:
-            filtered = []
-            for f in matching:
-                try:
-                    _, date_part = f.rsplit("_", 1)
-                    _, m = map(int, date_part.split("-"))
-                    if m in months:
-                        filtered.append(f)
-                except (ValueError, IndexError):
-                    pass
-            matching = filtered
-
-        matching.sort()
-
-        if not matching:
-            return pd.DataFrame()
-
-        # Carrega arquivos
-        dfs = []
-        for f in matching:
-            df = self.data_manager.read(f, subdir)
-            if columns is not None:
-                # Filtra colunas existentes
-                cols = [c for c in columns if c in df.columns]
-                df = df[cols]
-            dfs.append(df)
-
-        return pd.concat(dfs, ignore_index=True)
 
     def get_status(self) -> pd.DataFrame:
         """Status dos dados locais."""

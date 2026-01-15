@@ -24,6 +24,7 @@ Orquestra a coleta de microdados do CAGED com suporte a downloads paralelos.
 
 ```python
 from src.mte import CAGEDCollector
+from core.data import QueryEngine
 
 collector = CAGEDCollector(data_path='data/')
 
@@ -33,21 +34,43 @@ results = collector.collect(['cagedmov', 'cagedfor'])  # Lista
 results = collector.collect()                       # Todos (default='all')
 # Retorna: dict[str, int] com contagem de registros
 
-# Leitura com filtros
-df = collector.read('cagedmov', year=2024)
-df = collector.read('cagedmov', year=[2023, 2024], months=[1, 2, 3])
-df = collector.read('cagedmov', columns=['uf', 'saldomovimentacao'])
-
-# Query SQL com DuckDB
-df = collector.query('''
-    SELECT uf, COUNT(*) as total
-    FROM 'data/raw/mte/caged/cagedmov_2024-*.parquet'
-    GROUP BY uf
-''')
-
 # Status
 collector.get_status()
 ```
+
+### Leitura e Queries com QueryEngine
+
+Para leitura e consultas SQL nos dados coletados, use o `QueryEngine` (separacao de responsabilidades):
+
+```python
+from core.data import QueryEngine
+
+qe = QueryEngine('data/')
+
+# Leitura com filtros
+df = qe.read_glob('cagedmov_2024-*.parquet', subdir='mte/caged')
+df = qe.read_glob('cagedmov_*.parquet', subdir='mte/caged',
+                  columns=['uf', 'saldomovimentacao'],
+                  where="uf = 35")  # SP
+
+# Query SQL com DuckDB
+df = qe.sql('''
+    SELECT uf, COUNT(*) as total
+    FROM '{raw}/mte/caged/cagedmov_2024-*.parquet'
+    GROUP BY uf
+''')
+
+# Agregacao eficiente
+df = qe.sql('''
+    SELECT uf, SUM(saldomovimentacao) as saldo
+    FROM '{raw}/mte/caged/cagedmov_*.parquet'
+    WHERE competenciamov >= '2024-01'
+    GROUP BY uf
+    ORDER BY saldo DESC
+''')
+```
+
+Veja [data.md](data.md) para documentacao completa do QueryEngine.
 
 ### Metodos
 
@@ -69,42 +92,6 @@ Coleta dados do CAGED. Salva arquivos mensais individuais para evitar MemoryErro
 - Cada mes e salvo imediatamente apos download (baixo uso de memoria)
 - Se falhar no meio, meses ja salvos permanecem (resiliencia)
 - Downloads paralelos usam conexoes FTP independentes por thread
-
-#### read(indicator='cagedmov', year=None, months=None, columns=None)
-
-Le dados do CAGED com filtros opcionais.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| indicator | str | cagedmov, cagedfor, cagedexc |
-| year | int\|list | Ano(s) para filtrar |
-| months | list | Meses para filtrar |
-| columns | list | Colunas para carregar |
-
-**Retorno:** DataFrame concatenado
-
-#### get_files(indicator='cagedmov', year=None)
-
-Retorna lista de paths dos arquivos parquet. Util para uso com DuckDB, PyArrow, etc.
-
-**Retorno:** list[Path]
-
-#### query(sql)
-
-Executa query SQL nos arquivos parquet usando DuckDB.
-
-```python
-# Agregacao por UF
-df = collector.query('''
-    SELECT uf, SUM(saldomovimentacao) as saldo
-    FROM 'data/raw/mte/caged/cagedmov_*.parquet'
-    WHERE competenciamov >= '2024-01'
-    GROUP BY uf
-    ORDER BY saldo DESC
-''')
-```
-
-**Requer:** `pip install duckdb`
 
 #### get_status()
 
@@ -215,6 +202,5 @@ data/
 ## Notas Importantes
 
 1. **Volume de dados**: CAGED tem milhoes de registros. Evite carregar tudo na memoria.
-2. **DuckDB**: Use `query()` para agregacoes eficientes sem carregar dados.
-3. **Filtros**: Use `read()` com filtros de ano/mes para limitar dados carregados.
-4. **Parallelismo**: Downloads paralelos reduzem tempo significativamente (~4x mais rapido).
+2. **QueryEngine**: Use `QueryEngine.sql()` ou `read_glob()` para queries eficientes sem carregar dados.
+3. **Separacao de responsabilidades**: CAGEDCollector apenas coleta. Para leitura/queries, use `QueryEngine`.
