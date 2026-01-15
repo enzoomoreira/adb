@@ -1,4 +1,3 @@
-from .base import BaseCollector
 from .sgs import (
     SGSClient,
     SGSCollector,
@@ -12,8 +11,6 @@ from .expectations import (
 )
 
 __all__ = [
-    # Base
-    'BaseCollector',
     # SGS
     'SGSClient',
     'SGSCollector',

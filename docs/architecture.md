@@ -4,7 +4,7 @@ Visao geral da estrutura e funcionamento do repositorio.
 
 ## Visao Geral
 
-Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta quatro fontes de dados:
+Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta cinco fontes de dados:
 
 | Fonte | Modulo | Descricao | Docs |
 |-------|--------|-----------|------|
@@ -12,6 +12,7 @@ Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta qua
 | BCB - Focus | `src/bacen/expectations/` | Expectativas de mercado | [bacen.md](bacen.md) |
 | MTE - CAGED | `src/mte/caged/` | Microdados de emprego formal | [mte.md](mte.md) |
 | IPEA | `src/ipea/` | Dados agregados de emprego | [ipea.md](ipea.md) |
+| Bloomberg Terminal | `src/bloomberg/` | Dados de mercado financeiro | [bloomberg.md](bloomberg.md) |
 
 ---
 
@@ -20,8 +21,15 @@ Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta qua
 ```
 agora-database/
 ├── src/
+│   ├── core/                     # Utilitarios compartilhados
+│   │   ├── indicators.py         # Funcoes centralizadas para indicadores
+│   │   ├── parallel.py           # ParallelFetcher
+│   │   ├── collectors/           # Base classes para collectors
+│   │   │   └── base.py           # BaseCollector
+│   │   └── data/
+│   │       ├── storage.py        # DataManager (persistencia)
+│   │       └── query.py          # QueryEngine (consultas SQL)
 │   ├── bacen/                    # Modulo BCB
-│   │   ├── base.py               # BaseCollector (classe base)
 │   │   ├── sgs/                  # Series temporais SGS
 │   │   │   ├── client.py         # SGSClient
 │   │   │   ├── collector.py      # SGSCollector
@@ -39,10 +47,10 @@ agora-database/
 │   │   ├── client.py             # IPEAClient
 │   │   ├── collector.py          # IPEACollector
 │   │   └── indicators.py         # IPEA_CONFIG
-│   └── core/                     # Utilitarios compartilhados
-│       ├── parallel.py           # ParallelFetcher
-│       └── data/
-│           └── manager.py        # DataManager
+│   └── bloomberg/                # Modulo Bloomberg Terminal
+│       ├── client.py             # BloombergClient
+│       ├── collector.py          # BloombergCollector
+│       └── indicators.py         # BLOOMBERG_CONFIG
 ├── data/                         # Dados coletados
 │   ├── raw/                      # Dados brutos
 │   │   ├── bacen/
@@ -52,8 +60,10 @@ agora-database/
 │   │   │   └── expectations/     # expectativas Focus
 │   │   ├── mte/
 │   │   │   └── caged/            # microdados mensais
-│   │   └── ipea/
-│   │       └── monthly/          # dados agregados
+│   │   ├── ipea/
+│   │   │   └── monthly/          # dados agregados
+│   │   └── bloomberg/
+│   │       └── daily/            # dados do Bloomberg Terminal
 │   └── processed/                # Dados consolidados
 ├── notebooks/                    # Jupyter notebooks
 ├── scripts/                      # Scripts utilitarios
@@ -65,15 +75,19 @@ agora-database/
 ## Hierarquia de Classes
 
 ```
-BaseCollector (src/bacen/base.py)
+BaseCollector (src/core/collectors/base.py)
 ├── SGSCollector (src/bacen/sgs/collector.py)
-└── ExpectationsCollector (src/bacen/expectations/collector.py)
+├── ExpectationsCollector (src/bacen/expectations/collector.py)
+├── CAGEDCollector (src/mte/caged/collector.py)
+├── IPEACollector (src/ipea/collector.py)
+└── BloombergCollector (src/bloomberg/collector.py)
 
-CAGEDCollector (src/mte/caged/collector.py)  # Independente
-IPEACollector (src/ipea/collector.py)        # Independente
-
-DataManager (src/core/data/manager.py)  # Usado por todos os collectors
+DataManager (src/core/data/storage.py)  # Usado por todos os collectors
+QueryEngine (src/core/data/query.py)    # Consultas SQL via DuckDB
 ParallelFetcher (src/core/parallel.py)  # Usado pelo CAGEDCollector
+
+# Funcoes centralizadas
+core.indicators (src/core/indicators.py)  # list_indicators(), get_indicator_config(), filter_by_field()
 ```
 
 ---
@@ -81,41 +95,41 @@ ParallelFetcher (src/core/parallel.py)  # Usado pelo CAGEDCollector
 ## Fluxo de Dados
 
 ```
-    API BCB          API Focus          FTP MTE           API IPEA
-    (SGS)           (Expectations)      (CAGED)          (ipeadatapy)
-        │                  │                │                  │
-        ▼                  ▼                ▼                  ▼
-   SGSClient      ExpectationsClient   CAGEDClient       IPEAClient
-        │                  │                │                  │
-        ▼                  ▼                ▼                  ▼
-   SGSCollector   ExpectationsCollector CAGEDCollector   IPEACollector
-        │                  │                │                  │
-        └──────────────────┴────────────────┴──────────────────┘
-                                    │
-                                    ▼
-                             DataManager
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-            data/raw/{subdir}/*.parquet    data/processed/*.parquet
+    API BCB         API Focus         FTP MTE         API IPEA      Bloomberg Terminal
+    (SGS)          (Expectations)     (CAGED)        (ipeadatapy)        (xbbg)
+        │                │                │                │                │
+        ▼                ▼                ▼                ▼                ▼
+   SGSClient    ExpectationsClient   CAGEDClient      IPEAClient     BloombergClient
+        │                │                │                │                │
+        ▼                ▼                ▼                ▼                ▼
+   SGSCollector ExpectationsCollector CAGEDCollector IPEACollector BloombergCollector
+        │                │                │                │                │
+        └────────────────┴────────────────┴────────────────┴────────────────┘
+                                            │
+                                            ▼
+                                      DataManager (storage.py)
+                                            │
+                            ┌───────────────┴───────────────┐
+                            ▼                               ▼
+                    data/raw/{subdir}/*.parquet    data/processed/*.parquet
+                            │
+                            ▼
+                      QueryEngine (query.py)
+                    SQL queries via DuckDB
 ```
 
 ---
 
 ## Padrao de Uso
 
-### API de Dois Niveis
+### API Publica
 
 Todos os collectors seguem o mesmo padrao:
 
 ```python
-# Nivel 1: Controle total
-df = collector.collect_series(code=432, filename='selic', frequency='daily')
-
-# Nivel 2: API simplificada
 results = collector.collect('selic')              # Um indicador
 results = collector.collect(['selic', 'cdi'])     # Lista
-results = collector.collect()                      # Todos
+results = collector.collect()                      # Todos (default)
 ```
 
 ### Coleta e Consolidacao
@@ -191,10 +205,10 @@ IPEA_CONFIG['novo_indicador'] = {
 
 ## Comparacao de Collectors
 
-| Aspecto | SGS/Expectations | CAGED | IPEA |
-|---------|------------------|-------|------|
-| Protocolo | HTTP (REST) | FTP + 7z | HTTP (ipeadatapy) |
-| Volume/periodo | ~KB | ~500MB-1GB | ~KB |
-| Retorno collect() | DataFrame | int (contagem) | DataFrame |
-| Parallelismo | Nao | Sim (threads) | Nao |
-| Heranca | BaseCollector | Independente | Independente |
+| Aspecto | SGS/Expectations | CAGED | IPEA | Bloomberg |
+|---------|------------------|-------|------|-----------|
+| Protocolo | HTTP (REST) | FTP + 7z | HTTP (ipeadatapy) | Bloomberg Terminal (xbbg) |
+| Volume/periodo | ~KB | ~500MB-1GB | ~KB | ~KB-MB |
+| Retorno collect() | DataFrame | int (contagem) | DataFrame | DataFrame |
+| Parallelismo | Nao | Sim (threads) | Nao | Nao |
+| Heranca | BaseCollector | BaseCollector | BaseCollector | BaseCollector |

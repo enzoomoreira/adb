@@ -11,9 +11,10 @@ O modulo `src/bacen/` contem dois coletores principais:
 | SGSCollector | API SGS | Series temporais (Selic, CDI, IPCA, cambio, etc) |
 | ExpectationsCollector | API Focus | Expectativas de mercado (relatorio Focus) |
 
-Ambos seguem o padrao de **dois niveis de API**:
-- **Nivel 1**: Controle total (collect_series / collect_endpoint)
-- **Nivel 2**: API simplificada (collect)
+Ambos seguem a mesma **API simplificada**:
+- **collect()**: Coleta um ou mais indicadores usando configuracao predefinida
+- **consolidate()**: Consolida arquivos em DataFrame unico
+- **get_status()**: Retorna status dos arquivos salvos
 
 ---
 
@@ -28,35 +29,19 @@ from src.bacen import SGSCollector
 
 collector = SGSCollector(data_path='data/')
 
-# Nivel 2: API simplificada
+# Coleta de indicadores
 results = collector.collect('selic')              # Um indicador
 results = collector.collect(['selic', 'cdi'])     # Lista
 results = collector.collect()                      # Todos (default='all')
 
-# Nivel 1: Controle total
-df = collector.collect_series(code=432, filename='selic', frequency='daily')
-
 # Consolidacao (gera cdi_anualizado)
 results = collector.consolidate()
+
+# Status dos arquivos
+collector.get_status()
 ```
 
 ### Metodos
-
-#### collect_series(code, filename, name=None, frequency='daily', subdir=None, save=True, verbose=True)
-
-Coleta uma serie temporal com controle total. Suporta atualizacao incremental.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| code | int | Codigo SGS do indicador |
-| filename | str | Nome do arquivo (sem extensao) |
-| name | str | Nome para logs (default: filename) |
-| frequency | str | 'daily' ou 'monthly' |
-| subdir | str | Subdiretorio (default: bacen/sgs/{frequency}) |
-| save | bool | Salvar em Parquet |
-| verbose | bool | Imprimir progresso |
-
-**Retorno:** DataFrame com dados coletados
 
 #### collect(indicators='all', save=True, verbose=True)
 
@@ -81,6 +66,19 @@ cdi_anualizado = ((1 + cdi_diario/100) ** 252 - 1) * 100
 
 **Retorno:** dict[str, DataFrame] com dados consolidados
 
+### Metodos Herdados de BaseCollector
+
+SGSCollector herda funcionalidades comuns de `BaseCollector`:
+- `get_status()` - Status dos arquivos salvos
+- `_normalize_indicators_list()` - Normaliza entrada de indicadores
+- `_normalize_subdirs_list()` - Normaliza entrada de subdirs
+- `_log_collect_start()`, `_log_collect_end()` - Banners padronizados de coleta
+- `_log_consolidate_start()` - Banner de consolidacao
+- `_save_parquet_to_processed()` - Salva em processed/
+- `_collect_with_sync()` - Template para coleta incremental
+
+Ver [utils.md](utils.md) para documentacao completa de BaseCollector.
+
 ### SGS_CONFIG
 
 Indicadores disponiveis em `src/bacen/sgs/indicators.py`:
@@ -97,12 +95,15 @@ Indicadores disponiveis em `src/bacen/sgs/indicators.py`:
 
 ### Funcoes Auxiliares
 
-```python
-from src.bacen import SGS_CONFIG, get_indicator_config, list_indicators
+**Nota:** As funcoes auxiliares agora sao fornecidas pelo modulo centralizado `core`.
 
-list_indicators()              # Lista chaves disponiveis
-get_indicator_config('selic')  # Retorna config do indicador
-get_by_frequency('daily')      # Filtra por frequencia
+```python
+from src.bacen import SGS_CONFIG
+from core import list_indicators, get_indicator_config, filter_by_field
+
+list_indicators(SGS_CONFIG)                  # Lista chaves disponiveis
+get_indicator_config(SGS_CONFIG, 'selic')    # Retorna config do indicador
+filter_by_field(SGS_CONFIG, 'frequency', 'daily')  # Filtra por frequencia
 ```
 
 ---
@@ -118,35 +119,19 @@ from src.bacen import ExpectationsCollector
 
 collector = ExpectationsCollector(data_path='data/')
 
-# Nivel 2: API simplificada
+# Coleta de indicadores
 results = collector.collect('ipca_anual')          # Um indicador
 results = collector.collect(['ipca_anual', 'selic'])  # Lista
 results = collector.collect()                       # Todos
 
-# Nivel 1: Controle total
-df = collector.collect_endpoint(endpoint='selic', filename='selic_exp', indicator='Selic')
-
 # Consolidacao (adiciona _source por padrao)
 results = collector.consolidate(add_source=True)
+
+# Status dos arquivos
+collector.get_status()
 ```
 
 ### Metodos
-
-#### collect_endpoint(endpoint, filename, indicator=None, start_date=None, end_date=None, limit=None, subdir=None, save=True, verbose=True)
-
-Coleta dados de um endpoint com controle total.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| endpoint | str | Chave do endpoint ('top5_anuais', 'selic', etc) |
-| filename | str | Nome do arquivo |
-| indicator | str | Filtrar por indicador (ex: 'IPCA') |
-| start_date | str | Data inicial 'YYYY-MM-DD' |
-| end_date | str | Data final |
-| limit | int | Limite de registros |
-| subdir | str | Subdiretorio (default: bacen/expectations) |
-
-**Retorno:** DataFrame
 
 #### collect(indicators='all', start_date=None, limit=None, save=True, verbose=True)
 
@@ -159,6 +144,18 @@ Coleta um ou mais indicadores.
 Consolida arquivos. Converte coluna 'Data' para DatetimeIndex para fatiamento temporal.
 
 **Retorno:** dict[str, DataFrame]
+
+### Metodos Herdados de BaseCollector
+
+ExpectationsCollector herda funcionalidades comuns de `BaseCollector`:
+- `get_status()` - Status dos arquivos salvos
+- `_normalize_indicators_list()` - Normaliza entrada de indicadores
+- `_normalize_subdirs_list()` - Normaliza entrada de subdirs
+- `_log_collect_start()`, `_log_collect_end()` - Banners padronizados de coleta
+- `_log_consolidate_start()` - Banner de consolidacao
+- `_save_parquet_to_processed()` - Salva em processed/
+
+Ver [utils.md](utils.md) para documentacao completa de BaseCollector.
 
 ### EXPECTATIONS_CONFIG
 
@@ -246,15 +243,19 @@ from src.bacen import (
 
     # Configuracoes SGS
     SGS_CONFIG,
-    get_indicator_config,  # SGS
-    list_indicators,       # SGS
 
     # Configuracoes Expectations
     EXPECTATIONS_CONFIG,
     ENDPOINTS,
+)
 
-    # Base
+# Funcoes auxiliares (centralizadas em core)
+from core import (
+    list_indicators,
+    get_indicator_config,
+    filter_by_field,
     BaseCollector,
+    DataManager,
 )
 ```
 

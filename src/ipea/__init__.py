@@ -6,13 +6,7 @@ Coleta de dados agregados (CAGED, desemprego, etc).
 
 from .client import IPEAClient
 from .collector import IPEACollector
-from .indicators import (
-    IPEA_CONFIG,
-    get_indicator_config,
-    list_indicators,
-    get_by_frequency,
-    get_indicator_keys,
-)
+from .indicators import IPEA_CONFIG
 
 __all__ = [
     # Classes
@@ -20,9 +14,4 @@ __all__ = [
     "IPEACollector",
     # Config
     "IPEA_CONFIG",
-    # Helpers
-    "get_indicator_config",
-    "list_indicators",
-    "get_by_frequency",
-    "get_indicator_keys",
 ]

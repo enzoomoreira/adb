@@ -1,19 +1,30 @@
-# DataManager - Persistencia de Dados
+# Modulo Core Data - Persistencia e Consultas
 
-Documentacao do gerenciador centralizado de persistencia.
+Documentacao do gerenciador centralizado de persistencia e consultas SQL.
 
 ## Visao Geral
 
-O `DataManager` fornece API unificada para salvar, ler e consolidar dados em formato Parquet. E usado por todos os collectors do projeto.
+O modulo `src/core/data/` contem dois componentes principais:
 
-**Localização:** `src/core/data/manager.py`
+| Componente | Arquivo | Descricao |
+|------------|---------|-----------|
+| DataManager | `storage.py` | Persistencia de dados em Parquet (save, read, append, consolidate) |
+| QueryEngine | `query.py` | Consultas SQL via DuckDB em arquivos Parquet |
+
+---
+
+# DataManager (storage.py)
+
+API unificada para salvar, ler e consolidar dados em formato Parquet. Usado por todos os collectors do projeto.
+
+**Localização:** `src/core/data/storage.py`
 
 ---
 
 ## Inicializacao
 
 ```python
-from src.core.data import DataManager
+from core.data import DataManager
 
 dm = DataManager(base_path='data/')
 
@@ -259,8 +270,212 @@ Wrappers para API antiga (uso desencorajado):
 
 ---
 
-## Import
+## Import DataManager
 
 ```python
-from src.core.data import DataManager
+from core.data import DataManager
 ```
+
+---
+
+# QueryEngine (query.py)
+
+Motor de consultas SQL para arquivos Parquet usando DuckDB.
+
+**Localização:** `src/core/data/query.py`
+
+## Visao Geral
+
+O `QueryEngine` permite executar consultas SQL eficientes em arquivos Parquet sem carregar tudo em memoria. Usa DuckDB para queries com pushdown de filtros e otimizacao automatica.
+
+**Beneficios:**
+- Queries SQL em Parquet sem carregar dados em memoria
+- Filtros pushdown (colunas, WHERE) para performance
+- Suporte a glob patterns (`data/raw/**/*.parquet`)
+- Variaveis de template para paths dinamicos
+
+---
+
+## Inicializacao
+
+```python
+from core.data import QueryEngine
+
+qe = QueryEngine(base_path='data/')
+
+# Atributos disponiveis
+qe.base_path       # Path('data/')
+qe.raw_path        # Path('data/raw/')
+qe.processed_path  # Path('data/processed/')
+```
+
+---
+
+## Metodos Principais
+
+### sql(query, params=None)
+
+Executa query SQL arbitraria em arquivos Parquet.
+
+```python
+def sql(
+    query: str,
+    params: dict = None
+) -> pd.DataFrame
+```
+
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| query | str | Query SQL (pode usar paths relativos ou glob patterns) |
+| params | dict | Parametros para substituicao (opcional) |
+
+**Exemplo:**
+```python
+df = qe.sql('''
+    SELECT uf, SUM(saldomovimentacao) as saldo
+    FROM 'data/raw/mte/caged/cagedmov_2024-*.parquet'
+    WHERE competenciamov >= '2024-01-01'
+    GROUP BY uf
+    ORDER BY saldo DESC
+''')
+```
+
+### read(filename, subdir='daily', columns=None, where=None)
+
+Le um arquivo Parquet com filtros opcionais.
+
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| filename | str | Nome do arquivo (sem extensao) |
+| subdir | str | Subdiretorio dentro de raw/ |
+| columns | list | Colunas especificas para carregar |
+| where | str | Clausula WHERE SQL para filtrar |
+
+**Exemplo:**
+```python
+# Ler arquivo completo
+df = qe.read('selic', 'bacen/sgs/daily')
+
+# Apenas colunas especificas
+df = qe.read('selic', 'bacen/sgs/daily', columns=['value'])
+
+# Com filtro WHERE
+df = qe.read('selic', 'bacen/sgs/daily', where="value > 10")
+```
+
+### read_glob(pattern, columns=None, where=None)
+
+Le multiplos arquivos usando glob pattern.
+
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| pattern | str | Glob pattern (ex: `mte/caged/cagedmov_2024-*.parquet`) |
+| columns | list | Colunas especificas para carregar |
+| where | str | Clausula WHERE SQL para filtrar |
+
+**Exemplo:**
+```python
+# Todos os arquivos CAGED de 2024
+df = qe.read_glob('mte/caged/cagedmov_2024-*.parquet')
+
+# Filtrado por UF
+df = qe.read_glob(
+    'mte/caged/cagedmov_2024-*.parquet',
+    columns=['uf', 'saldomovimentacao'],
+    where="uf = 'SP'"
+)
+```
+
+### aggregate(filename, subdir, agg_expr, group_by=None, where=None)
+
+Executa agregacoes eficientes sem carregar dados completos.
+
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| filename | str | Nome do arquivo ou glob pattern |
+| subdir | str | Subdiretorio |
+| agg_expr | str | Expressao de agregacao SQL (ex: 'COUNT(*)', 'SUM(value)') |
+| group_by | str | Clausula GROUP BY |
+| where | str | Clausula WHERE |
+
+**Exemplo:**
+```python
+# Contar registros
+count = qe.aggregate('selic', 'bacen/sgs/daily', 'COUNT(*)')
+
+# Media por grupo
+df = qe.aggregate(
+    'cagedmov_*',
+    'mte/caged',
+    'AVG(saldomovimentacao) as media',
+    group_by='uf',
+    where="competenciamov >= '2024-01-01'"
+)
+```
+
+---
+
+## Variaveis de Template
+
+Use variaveis de template em queries para paths dinamicos:
+
+| Variavel | Valor | Descricao |
+|----------|-------|-----------|
+| `{raw}` | `data/raw/` | Path do diretorio raw |
+| `{processed}` | `data/processed/` | Path do diretorio processed |
+| `{subdir}` | (dinamico) | Subdiretorio especificado |
+
+**Exemplo:**
+```python
+df = qe.sql('''
+    SELECT *
+    FROM '{raw}bacen/sgs/daily/selic.parquet'
+    WHERE value > 10
+''')
+```
+
+---
+
+## Performance Tips
+
+**Filtros pushdown:**
+- Use `columns` para carregar apenas colunas necessarias
+- Use `where` para filtrar antes de carregar em memoria
+- DuckDB aplica otimizacoes automaticamente
+
+**Glob patterns:**
+- Eficiente para ler multiplos arquivos particionados
+- DuckDB processa em streaming
+
+**Agregacoes:**
+- Use `aggregate()` para operacoes de resumo
+- Mais rapido que carregar e agregar em pandas
+
+---
+
+## Comparacao: QueryEngine vs DataManager
+
+| Operacao | DataManager | QueryEngine |
+|----------|-------------|-------------|
+| Ler arquivo completo | `read()` | `read()` ou `sql()` |
+| Ler com filtros | - | `read(where=...)` |
+| Agregacoes | Carregar + pandas | `aggregate()` (mais eficiente) |
+| Multiplos arquivos | `consolidate()` | `read_glob()` ou `sql()` |
+| Queries complexas | - | `sql()` |
+
+---
+
+## Import QueryEngine
+
+```python
+from core.data import QueryEngine
+```
+
+---
+
+## Dependencias
+
+- **DuckDB**: Motor SQL para Parquet
+  ```bash
+  pip install duckdb
+  ```

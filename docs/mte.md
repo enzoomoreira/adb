@@ -147,17 +147,15 @@ client.disconnect()
 
 ## Funcoes Auxiliares
 
-```python
-from src.mte import (
-    CAGED_CONFIG,
-    list_indicators,
-    get_indicator_config,
-    get_available_periods,
-)
+**Nota:** As funcoes auxiliares agora sao fornecidas pelo modulo centralizado `core`.
 
-list_indicators()                    # ['cagedmov', 'cagedfor', 'cagedexc']
-get_indicator_config('cagedmov')     # Retorna config do indicador
-get_available_periods(start_year=2023)  # Lista (ano, mes) disponiveis
+```python
+from src.mte import CAGED_CONFIG, get_available_periods
+from core import list_indicators, get_indicator_config
+
+list_indicators(CAGED_CONFIG)              # ['cagedmov', 'cagedfor', 'cagedexc']
+get_indicator_config(CAGED_CONFIG, 'cagedmov')  # Retorna config do indicador
+get_available_periods(start_year=2023)     # Lista (ano, mes) disponiveis (especifico do CAGED)
 ```
 
 ---
@@ -174,9 +172,16 @@ from src.mte import (
 
     # Configuracoes
     CAGED_CONFIG,
+    get_available_periods,  # Especifico do CAGED
+)
+
+# Funcoes auxiliares (centralizadas em core)
+from core import (
     list_indicators,
     get_indicator_config,
-    get_available_periods,
+    filter_by_field,
+    BaseCollector,
+    DataManager,
 )
 ```
 

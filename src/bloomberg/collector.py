@@ -1,7 +1,7 @@
 """
-Coletor de dados IPEA.
+Coletor de dados Bloomberg.
 
-Orquestra a coleta de series temporais do IPEADATA.
+Orquestra a coleta de series temporais do Bloomberg Terminal via xbbg.
 """
 
 from pathlib import Path
@@ -10,13 +10,13 @@ import pandas as pd
 
 from core.collectors import BaseCollector
 from core.indicators import get_indicator_config
-from .client import IPEAClient
-from .indicators import IPEA_CONFIG
+from .client import BloombergClient
+from .indicators import BLOOMBERG_CONFIG
 
 
-class IPEACollector(BaseCollector):
+class BloombergCollector(BaseCollector):
     """
-    Orquestrador de coleta de dados IPEA (IPEADATA).
+    Orquestrador de coleta de dados Bloomberg.
 
     API publica:
     - collect() - Coleta um ou mais indicadores usando config predefinida
@@ -26,18 +26,22 @@ class IPEACollector(BaseCollector):
     Herda de BaseCollector para logging padronizado e get_status().
     """
 
-    default_subdir = 'ipea/monthly'
-    default_consolidate_subdirs = ['ipea/monthly']
+    default_subdir = "bloomberg/daily"
+    default_consolidate_subdirs = ["bloomberg/daily"]
 
-    def __init__(self, data_path: Path):
+    def __init__(self, data_path: Path, check_connection: bool = True):
         """
         Inicializa o coletor.
 
         Args:
             data_path: Caminho para diretorio data/
+            check_connection: Se True, valida conexao Bloomberg no init
+
+        Raises:
+            RuntimeError: Se Bloomberg nao disponivel e check_connection=True
         """
         super().__init__(data_path)
-        self.client = IPEAClient()
+        self.client = BloombergClient(check_connection=check_connection)
 
     # =========================================================================
     # Metodo interno de coleta
@@ -45,26 +49,28 @@ class IPEACollector(BaseCollector):
 
     def _collect_series(
         self,
-        code: str,
+        ticker: str,
+        field: str,
         filename: str,
         name: str = None,
-        frequency: str = "monthly",
+        frequency: str = "daily",
         subdir: str = None,
         save: bool = True,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """
-        Coleta uma serie temporal com controle total.
+        Coleta uma serie temporal Bloomberg.
 
         Suporta atualizacao incremental: se ja existem dados salvos,
         busca apenas registros novos desde a ultima data.
 
         Args:
-            code: Codigo IPEA da serie (ex: 'CAGED12_SALDON12')
+            ticker: Bloomberg ticker (ex: 'MXWD Index')
+            field: Bloomberg field (ex: 'PX_LAST')
             filename: Nome do arquivo para salvar (sem extensao)
             name: Nome da serie para logs (default: usa filename)
-            frequency: 'daily', 'monthly' ou 'quarterly'
-            subdir: Subdiretorio dentro de raw/ (default: ipea/{frequency})
+            frequency: 'daily' (Bloomberg padrao)
+            subdir: Subdiretorio dentro de raw/ (default: bloomberg/{frequency})
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
 
@@ -72,25 +78,23 @@ class IPEACollector(BaseCollector):
             DataFrame com dados coletados
         """
         name = name or filename
-        subdir = subdir or f"ipea/{frequency}"
+        subdir = subdir or f"bloomberg/{frequency}"
 
         def fetch(start_date: str | None) -> pd.DataFrame:
             return self.client.get_data(
-                code=code,
+                ticker=ticker,
+                field=field,
                 name=name,
                 start_date=start_date,
                 verbose=False,
             )
-
-        # Para quarterly, usar monthly (DataManager pula para proximo mes)
-        effective_freq = "monthly" if frequency == "quarterly" else frequency
 
         return self._collect_with_sync(
             fetch_fn=fetch,
             filename=filename,
             name=name,
             subdir=subdir,
-            frequency=effective_freq,
+            frequency=frequency,
             save=save,
             verbose=verbose,
         )
@@ -106,13 +110,13 @@ class IPEACollector(BaseCollector):
         verbose: bool = True,
     ) -> dict[str, pd.DataFrame]:
         """
-        Coleta um ou mais indicadores.
+        Coleta um ou mais indicadores Bloomberg.
 
         Args:
             indicators: Indicadores a coletar:
-                - 'all': todos de IPEA_CONFIG
-                - lista: ['caged_saldo', 'caged_admissoes', ...]
-                - string: 'caged_saldo' (um unico)
+                - 'all': todos de BLOOMBERG_CONFIG
+                - lista: ['msci_acwi_pe', 'ibov_points', ...]
+                - string: 'msci_acwi_pe' (um unico)
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
 
@@ -120,10 +124,10 @@ class IPEACollector(BaseCollector):
             Dict {indicator_key: DataFrame} com dados coletados
         """
         # Normalizar para lista
-        keys = self._normalize_indicators_list(indicators, IPEA_CONFIG)
+        keys = self._normalize_indicators_list(indicators, BLOOMBERG_CONFIG)
 
         self._log_collect_start(
-            title="IPEA - Instituto de Pesquisa Economica Aplicada",
+            title="BLOOMBERG - Market Data",
             num_indicators=len(keys),
             verbose=verbose,
         )
@@ -131,10 +135,19 @@ class IPEACollector(BaseCollector):
         results = {}
 
         for key in keys:
-            config = get_indicator_config(IPEA_CONFIG, key)
+            config = get_indicator_config(BLOOMBERG_CONFIG, key)
+
+            # Bloomberg CONFIG tem 'fields' como lista, pegar primeiro field
+            # (cada indicador tem exatamente 1 field por design)
+            field = (
+                config["fields"][0]
+                if isinstance(config["fields"], list)
+                else config["fields"]
+            )
 
             df = self._collect_series(
-                code=config["code"],
+                ticker=config["ticker"],
+                field=field,
                 filename=key,
                 name=config["name"],
                 frequency=config["frequency"],
@@ -154,13 +167,13 @@ class IPEACollector(BaseCollector):
 
     def consolidate(
         self,
-        subdir: str = "ipea/monthly",
-        output_filename: str = "ipea_monthly_consolidated",
+        subdir: str = "bloomberg/daily",
+        output_filename: str = "bloomberg_daily_consolidated",
         save: bool = True,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """
-        Consolida arquivos de um subdiretorio.
+        Consolida arquivos Bloomberg.
 
         Faz join horizontal dos arquivos por indice (data).
 
@@ -174,7 +187,7 @@ class IPEACollector(BaseCollector):
             DataFrame consolidado
         """
         self._log_consolidate_start(
-            title="CONSOLIDANDO DADOS IPEA",
+            title="CONSOLIDANDO DADOS BLOOMBERG",
             subdir=subdir,
             verbose=verbose,
         )
@@ -188,7 +201,9 @@ class IPEACollector(BaseCollector):
 
         if verbose:
             if not df.empty:
-                print(f"\nConsolidado: {len(df):,} registros, {len(df.columns)} colunas")
+                print(
+                    f"\nConsolidado: {len(df):,} registros, {len(df.columns)} colunas"
+                )
             print("Consolidacao concluida!")
 
         return df

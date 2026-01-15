@@ -1,6 +1,6 @@
 # agora-database
 
-Coleta e armazenamento de dados economicos brasileiros. Suporta quatro fontes:
+Coleta e armazenamento de dados economicos brasileiros. Suporta cinco fontes:
 
 | Fonte | Modulo | Dados |
 |-------|--------|-------|
@@ -8,6 +8,7 @@ Coleta e armazenamento de dados economicos brasileiros. Suporta quatro fontes:
 | BCB - Focus | `src/bacen/expectations/` | Expectativas de mercado |
 | MTE - CAGED | `src/mte/caged/` | Microdados de emprego formal |
 | IPEA | `src/ipea/` | Dados agregados de emprego |
+| Bloomberg Terminal | `src/bloomberg/` | Dados de mercado financeiro |
 
 ## Instalacao
 
@@ -75,6 +76,22 @@ collector.collect()
 collector.consolidate()
 ```
 
+### Bloomberg Terminal
+
+```python
+from src.bloomberg import BloombergCollector
+
+collector = BloombergCollector('data/')
+
+# Coleta (requer Bloomberg Terminal ativo)
+collector.collect()                      # Todos os tickers
+collector.collect('bz1_comdty')          # Um ticker
+collector.collect(['bz1_comdty', 'cl1_comdty'])  # Lista
+
+# Consolidacao
+collector.consolidate()
+```
+
 ## Estrutura de Dados
 
 ```
@@ -87,8 +104,10 @@ data/
 │   │   └── expectations/         # expectativas Focus
 │   ├── mte/
 │   │   └── caged/                # microdados mensais
-│   └── ipea/
-│       └── monthly/              # dados agregados
+│   ├── ipea/
+│   │   └── monthly/              # dados agregados
+│   └── bloomberg/
+│       └── daily/                # dados do Bloomberg Terminal
 └── processed/                    # Dados consolidados
 ```
 
@@ -132,5 +151,6 @@ Documentacao detalhada em `docs/`:
 - [bacen.md](docs/bacen.md) - SGSCollector, ExpectationsCollector
 - [mte.md](docs/mte.md) - CAGEDCollector, downloads paralelos
 - [ipea.md](docs/ipea.md) - IPEACollector
-- [data.md](docs/data.md) - DataManager, persistencia
-- [utils.md](docs/utils.md) - ParallelFetcher, BaseCollector
+- [bloomberg.md](docs/bloomberg.md) - BloombergCollector, integracao com Terminal
+- [data.md](docs/data.md) - DataManager (storage.py), QueryEngine (query.py)
+- [utils.md](docs/utils.md) - ParallelFetcher, BaseCollector, core.indicators

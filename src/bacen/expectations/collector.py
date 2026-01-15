@@ -7,22 +7,22 @@ Orquestra a coleta de dados de expectativas com flexibilidade de parametros.
 from pathlib import Path
 import pandas as pd
 
-from ..base import BaseCollector
+from core.collectors import BaseCollector
+from core.indicators import get_indicator_config
 from .client import ExpectationsClient
-from .indicators import EXPECTATIONS_CONFIG, get_indicator_config
+from .indicators import EXPECTATIONS_CONFIG
 
 
 class ExpectationsCollector(BaseCollector):
     """
-    Orquestrador de coleta de expectativas do BCB.
+    Orquestrador de coleta de expectativas do BCB (Relatorio Focus).
 
-    Oferece dois niveis de uso:
-    1. collect_endpoint() - Controle total, usuario define tudo
-    2. collect() - Usa config predefinida, coleta um ou mais indicadores
+    API publica:
+    - collect() - Coleta um ou mais indicadores usando config predefinida
+    - consolidate() - Consolida arquivos em DataFrame unico
+    - get_status() - Status dos arquivos salvos
 
-    Herda de BaseCollector:
-    - save(), read(), list_files() - delegacoes para DataManager
-    - get_status() - status dos arquivos salvos
+    Herda de BaseCollector para logging padronizado e get_status().
     """
 
     default_subdir = 'bacen/expectations'
@@ -39,10 +39,10 @@ class ExpectationsCollector(BaseCollector):
         self.client = ExpectationsClient()
 
     # =========================================================================
-    # NIVEL 1: Controle Total
+    # Metodo interno de coleta
     # =========================================================================
 
-    def collect_endpoint(
+    def _collect_endpoint(
         self,
         endpoint: str,
         filename: str,
@@ -107,7 +107,7 @@ class ExpectationsCollector(BaseCollector):
         return df
 
     # =========================================================================
-    # NIVEL 2: API Simplificada
+    # API Publica
     # =========================================================================
 
     def collect(
@@ -135,29 +135,21 @@ class ExpectationsCollector(BaseCollector):
             Dict {key: DataFrame} com dados coletados
         """
         # Normalizar entrada
-        if indicators == 'all':
-            keys = list(EXPECTATIONS_CONFIG.keys())
-        elif isinstance(indicators, str):
-            keys = [indicators]
-        else:
-            keys = list(indicators)
+        keys = self._normalize_indicators_list(indicators, EXPECTATIONS_CONFIG)
 
-        if verbose:
-            is_first_run = self.data_manager.is_first_run(self.default_subdir)
-            print("=" * 70)
-            if is_first_run:
-                print("PRIMEIRA EXECUCAO - Download Completo")
-            else:
-                print("ATUALIZACAO INCREMENTAL")
-            print("=" * 70)
-            print(f"Indicadores a coletar: {len(keys)}")
-            print()
+        self._log_collect_start(
+            title="BACEN - Expectativas (Relatorio Focus)",
+            num_indicators=len(keys),
+            subdir=self.default_subdir,
+            check_first_run=True,
+            verbose=verbose,
+        )
 
         results = {}
         for key in keys:
-            config = get_indicator_config(key)
+            config = get_indicator_config(EXPECTATIONS_CONFIG, key)
 
-            df = self.collect_endpoint(
+            df = self._collect_endpoint(
                 endpoint=config['endpoint'],
                 filename=key,
                 indicator=config['indicator'],
@@ -172,11 +164,7 @@ class ExpectationsCollector(BaseCollector):
             if verbose:
                 print()
 
-        if verbose:
-            print("=" * 70)
-            total = sum(len(df) for df in results.values())
-            print(f"Coleta concluida! Total: {total:,} registros")
-            print("=" * 70)
+        self._log_collect_end(results=results, verbose=verbose)
 
         return results
 
@@ -209,18 +197,12 @@ class ExpectationsCollector(BaseCollector):
             Dict {subdir: DataFrame} com dados consolidados
         """
         # Normalizar entrada
-        if subdirs is None:
-            subdirs_list = self.default_consolidate_subdirs
-        elif isinstance(subdirs, str):
-            subdirs_list = [subdirs]
-        else:
-            subdirs_list = list(subdirs)
+        subdirs_list = self._normalize_subdirs_list(subdirs)
 
-        if verbose:
-            print("=" * 70)
-            print("CONSOLIDANDO EXPECTATIVAS")
-            print("=" * 70)
-            print()
+        self._log_consolidate_start(
+            title="CONSOLIDANDO EXPECTATIVAS",
+            verbose=verbose,
+        )
 
         results = {}
         for subdir in subdirs_list:
@@ -256,11 +238,7 @@ class ExpectationsCollector(BaseCollector):
             # Salvar arquivo processado
             if save and not df.empty:
                 output_name = f"{output_prefix}_consolidated"
-                output_path = self.data_manager.processed_path / f"{output_name}.parquet"
-                self.data_manager.processed_path.mkdir(parents=True, exist_ok=True)
-                df.to_parquet(output_path, engine='pyarrow', compression='snappy', index=True)
-                if verbose:
-                    print(f"  Salvo: {output_path.relative_to(self.data_manager.base_path)}")
+                self._save_parquet_to_processed(df, output_name, verbose=verbose)
 
             results[subdir] = df
 

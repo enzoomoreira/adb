@@ -1,8 +1,8 @@
 """
-Gerenciador centralizado de dados para o projeto dados-bcb.
+Gerenciador de persistencia de dados em formato Parquet.
 
-Fornece API flexivel para salvar, ler e consolidar dados em formato Parquet.
-Usado por todos os modulos (SGS, Expectations, etc).
+Responsavel por operacoes de CRUD em arquivos Parquet.
+Usado por todos os collectors do projeto.
 """
 
 from pathlib import Path
@@ -14,12 +14,14 @@ import pandas as pd
 
 class DataManager:
     """
-    Gerenciador de dados Parquet para indicadores economicos.
+    Gerenciador de persistencia em Parquet para indicadores economicos.
 
-    Oferece API flexivel onde o usuario pode escolher:
-    - filename: nome do arquivo
-    - subdir: subdiretorio dentro de raw/
-    - format: formato do arquivo (parquet ou csv)
+    Responsabilidades:
+    - Salvar/ler/append de arquivos Parquet
+    - Consolidacao de multiplos arquivos
+    - Controle de coleta incremental (fetch_and_sync)
+
+    Para queries SQL, use QueryEngine de core.data.query.
     """
 
     def __init__(self, base_path: Path):
@@ -34,7 +36,7 @@ class DataManager:
         self.processed_path = self.base_path / 'processed'
 
     # =========================================================================
-    # API FLEXIVEL (Principal)
+    # CRUD Principal
     # =========================================================================
 
     def save(
@@ -98,6 +100,9 @@ class DataManager:
 
         Returns:
             DataFrame com dados (vazio se arquivo nao existe)
+
+        Note:
+            Para leitura com filtros SQL, use QueryEngine.read_filtered()
         """
         filepath = self.raw_path / subdir / f"{filename}.parquet"
 
@@ -160,6 +165,10 @@ class DataManager:
         combined.attrs['last_update'] = datetime.now().isoformat()
 
         self.save(combined, filename, subdir, metadata=combined.attrs, verbose=verbose)
+
+    # =========================================================================
+    # Listagem e Metadados
+    # =========================================================================
 
     def list_files(
         self,
@@ -226,6 +235,23 @@ class DataManager:
             return True
         return len(list(path.glob('*.parquet'))) == 0
 
+    def get_file_path(self, filename: str, subdir: str) -> Path:
+        """
+        Retorna o caminho completo do arquivo.
+
+        Args:
+            filename: Nome do arquivo (sem extensao)
+            subdir: Subdiretorio
+
+        Returns:
+            Path do arquivo Parquet
+        """
+        return self.raw_path / subdir / f"{filename}.parquet"
+
+    # =========================================================================
+    # Coleta Incremental
+    # =========================================================================
+
     def fetch_and_sync(
         self,
         filename: str,
@@ -279,6 +305,10 @@ class DataManager:
                 self.append(df, filename, subdir, verbose=verbose)
 
         return df, is_first_run
+
+    # =========================================================================
+    # Consolidacao
+    # =========================================================================
 
     def consolidate(
         self,
@@ -361,91 +391,3 @@ class DataManager:
             print(f"Total: {len(result):,} registros, {len(result.columns)} colunas")
 
         return result
-
-    # =========================================================================
-    # METODOS DE CONVENIENCIA (Compatibilidade com API antiga)
-    # =========================================================================
-
-    def save_indicator(
-        self,
-        df: pd.DataFrame,
-        indicator_key: str,
-        frequency: str,
-        metadata: dict = None
-    ):
-        """
-        Salva DataFrame de um indicador (wrapper de compatibilidade).
-
-        Args:
-            df: DataFrame com dados do indicador
-            indicator_key: Identificador unico do indicador
-            frequency: Frequencia dos dados ('daily', 'monthly', 'expectations')
-            metadata: Dicionario com metadata adicional
-        """
-        self.save(df, filename=indicator_key, subdir=frequency, metadata=metadata)
-
-    def read_indicator(self, indicator_key: str, frequency: str) -> pd.DataFrame:
-        """
-        Le dados de um indicador (wrapper de compatibilidade).
-
-        Args:
-            indicator_key: Identificador unico do indicador
-            frequency: Frequencia dos dados
-
-        Returns:
-            DataFrame com dados do indicador
-        """
-        return self.read(filename=indicator_key, subdir=frequency)
-
-    def append_indicator(
-        self,
-        new_df: pd.DataFrame,
-        indicator_key: str,
-        frequency: str
-    ):
-        """
-        Adiciona novos dados a um indicador existente (wrapper de compatibilidade).
-
-        Args:
-            new_df: DataFrame com novos dados
-            indicator_key: Identificador unico do indicador
-            frequency: Frequencia dos dados
-        """
-        self.append(new_df, filename=indicator_key, subdir=frequency)
-
-    def list_indicators(self, frequency: str) -> list[str]:
-        """
-        Lista indicadores disponiveis (wrapper de compatibilidade).
-
-        Args:
-            frequency: Frequencia dos dados
-
-        Returns:
-            Lista de nomes de indicadores
-        """
-        return self.list_files(subdir=frequency)
-
-    def consolidate_daily(self) -> pd.DataFrame:
-        """Consolida indicadores diarios (wrapper de compatibilidade)."""
-        return self.consolidate(subdir='daily', save=False)
-
-    def consolidate_monthly(self) -> pd.DataFrame:
-        """Consolida indicadores mensais (wrapper de compatibilidade)."""
-        return self.consolidate(subdir='monthly', save=False)
-
-    # =========================================================================
-    # METODOS INTERNOS
-    # =========================================================================
-
-    def _get_file_path(self, filename: str, subdir: str) -> Path:
-        """
-        Retorna o caminho do arquivo.
-
-        Args:
-            filename: Nome do arquivo
-            subdir: Subdiretorio
-
-        Returns:
-            Path do arquivo Parquet
-        """
-        return self.raw_path / subdir / f"{filename}.parquet"

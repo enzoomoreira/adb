@@ -27,29 +27,6 @@ CAGED_CONFIG = {
 }
 
 
-def list_indicators() -> list[str]:
-    """Retorna lista de indicadores disponiveis."""
-    return list(CAGED_CONFIG.keys())
-
-
-def get_indicator_config(key: str) -> dict:
-    """
-    Retorna configuracao de um indicador.
-
-    Args:
-        key: Chave do indicador (cagedmov, cagedfor, cagedexc)
-
-    Returns:
-        Dict com prefix, name, description, start_year
-
-    Raises:
-        KeyError: Se indicador nao existir
-    """
-    if key not in CAGED_CONFIG:
-        raise KeyError(f"Indicador '{key}' nao encontrado. Disponiveis: {list_indicators()}")
-    return CAGED_CONFIG[key]
-
-
 def get_available_periods(start_year: int = 2020, lag_months: int = 2) -> list[tuple[int, int]]:
     """
     Retorna lista de periodos (ano, mes) disponiveis.

@@ -9,14 +9,30 @@ from pathlib import Path
 
 import pandas as pd
 
-from core.data import DataManager
+from core.collectors import BaseCollector
+from core.indicators import get_indicator_config
 from core.parallel import ParallelFetcher
 from .client import CAGEDClient
-from .indicators import CAGED_CONFIG, get_indicator_config, get_available_periods
+from .indicators import CAGED_CONFIG, get_available_periods
 
 
-class CAGEDCollector:
-    """Orquestra coleta de dados do Novo CAGED."""
+class CAGEDCollector(BaseCollector):
+    """
+    Orquestra coleta de dados do Novo CAGED.
+
+    API publica:
+    - collect() - Coleta microdados do CAGED via FTP
+    - consolidate() - Consolida arquivos mensais (via DuckDB)
+    - get_status() - Status dos dados locais (override - usa periodos)
+    - query() - Executa SQL nos parquets via DuckDB
+    - read() - Le dados com filtros opcionais
+    - get_files() - Retorna paths dos arquivos
+
+    Herda de BaseCollector para padronizacao de logging.
+    """
+
+    default_subdir = 'mte/caged'
+    default_consolidate_subdirs = ['mte/caged']
 
     def __init__(self, data_path: Path):
         """
@@ -25,8 +41,7 @@ class CAGEDCollector:
         Args:
             data_path: Caminho para diretorio data/
         """
-        self.data_path = Path(data_path)
-        self.data_manager = DataManager(data_path)
+        super().__init__(data_path)
         self.client = CAGEDClient()
 
     def _get_last_period(self, filename: str, subdir: str) -> tuple[int, int] | None:
@@ -88,7 +103,7 @@ class CAGEDCollector:
         de conexao FTP em threads separadas.
         """
         # Recupera config aqui (dentro da thread)
-        config = get_indicator_config(indicator_key)
+        config = get_indicator_config(CAGED_CONFIG, indicator_key)
 
         # Cliente dedicado para esta thread/task
         client = CAGEDClient()
@@ -135,7 +150,6 @@ class CAGEDCollector:
             keys = list(indicators)
 
         subdir = "mte/caged"
-        is_first_run = self.data_manager.is_first_run(subdir)
 
         if verbose:
             print("=" * 70)
@@ -154,7 +168,7 @@ class CAGEDCollector:
 
         try:
             for key in keys:
-                config = get_indicator_config(key)
+                config = get_indicator_config(CAGED_CONFIG, key)
 
                 missing = self._get_missing_periods(key, subdir, config["start_year"])
 

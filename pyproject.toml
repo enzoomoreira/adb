@@ -5,6 +5,7 @@ description = "Coleta e gestao de dados economicos do BCB e outras fontes"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "blpapi>=3.25.12.1",
     "duckdb>=1.4.2",
     "fastparquet>=2024.11.0",
     "ipeadatapy>=0.1.9",
@@ -18,6 +19,7 @@ dependencies = [
     "scipy>=1.16.3",
     "seaborn>=0.13.2",
     "statsmodels>=0.14.5",
+    "xbbg>=0.10.3",
 ]
 
 [build-system]
@@ -26,3 +28,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bacen", "src/data", "src/mte"]
+
+[[tool.uv.index]]
+name = "bloomberg"
+url = "https://blpapi.bloomberg.com/repository/releases/python/simple/"

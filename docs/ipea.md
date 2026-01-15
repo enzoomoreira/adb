@@ -30,17 +30,10 @@ from src.ipea import IPEACollector
 
 collector = IPEACollector(data_path='data/')
 
-# Nivel 2: API simplificada
+# Coleta de indicadores
 results = collector.collect('caged_saldo')              # Um indicador
 results = collector.collect(['caged_saldo', 'taxa_desemprego'])  # Lista
 results = collector.collect()                            # Todos (default='all')
-
-# Nivel 1: Controle total
-df = collector.collect_series(
-    code='CAGED12_SALDON12',
-    filename='caged_saldo',
-    frequency='monthly'
-)
 
 # Consolidacao
 df = collector.consolidate()
@@ -50,24 +43,6 @@ collector.get_status()
 ```
 
 ### Metodos
-
-#### collect_series(code, filename, name=None, frequency='monthly', subdir=None, save=True, verbose=True)
-
-Coleta uma serie temporal com controle total. Suporta atualizacao incremental.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| code | str | Codigo IPEA da serie (ex: 'CAGED12_SALDON12') |
-| filename | str | Nome do arquivo (sem extensao) |
-| name | str | Nome para logs (default: filename) |
-| frequency | str | 'daily', 'monthly' ou 'quarterly' |
-| subdir | str | Subdiretorio (default: ipea/{frequency}) |
-| save | bool | Salvar em Parquet |
-| verbose | bool | Imprimir progresso |
-
-**Retorno:** DataFrame com dados coletados
-
-**Nota:** Frequencia 'quarterly' usa 'monthly' internamente para calculo de proxima data.
 
 #### collect(indicators='all', save=True, verbose=True)
 
@@ -92,6 +67,17 @@ Consolida arquivos de um subdiretorio via join horizontal por indice (data).
 Retorna status dos arquivos salvos (registros, datas, status).
 
 **Retorno:** DataFrame
+
+### Metodos Herdados de BaseCollector
+
+IPEACollector herda funcionalidades comuns de `BaseCollector`:
+- `get_status()` - Status dos arquivos salvos
+- `_normalize_indicators_list()` - Normaliza entrada de indicadores
+- `_log_collect_start()`, `_log_collect_end()` - Banners padronizados de coleta
+- `_log_consolidate_start()` - Banner de consolidacao
+- `_collect_with_sync()` - Template para coleta incremental
+
+Ver [utils.md](utils.md) para documentacao completa de BaseCollector.
 
 ---
 
@@ -143,19 +129,15 @@ series = client.list_series(keyword='CAGED')
 
 ## Funcoes Auxiliares
 
-```python
-from src.ipea import (
-    IPEA_CONFIG,
-    list_indicators,
-    get_indicator_config,
-    get_by_frequency,
-    get_indicator_keys,
-)
+**Nota:** As funcoes auxiliares agora sao fornecidas pelo modulo centralizado `core`.
 
-list_indicators()                    # Lista chaves disponiveis
-get_indicator_config('caged_saldo')  # Retorna config completa
-get_by_frequency('monthly')          # Filtra por frequencia
-get_indicator_keys('monthly')        # Lista chaves por frequencia
+```python
+from src.ipea import IPEA_CONFIG
+from core import list_indicators, get_indicator_config, filter_by_field
+
+list_indicators(IPEA_CONFIG)                     # Lista chaves disponiveis
+get_indicator_config(IPEA_CONFIG, 'caged_saldo') # Retorna config completa
+filter_by_field(IPEA_CONFIG, 'frequency', 'monthly')  # Filtra por frequencia
 ```
 
 ---
@@ -172,10 +154,15 @@ from src.ipea import (
 
     # Configuracoes
     IPEA_CONFIG,
+)
+
+# Funcoes auxiliares (centralizadas em core)
+from core import (
     list_indicators,
     get_indicator_config,
-    get_by_frequency,
-    get_indicator_keys,
+    filter_by_field,
+    BaseCollector,
+    DataManager,
 )
 ```
 

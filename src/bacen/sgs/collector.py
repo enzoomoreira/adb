@@ -7,22 +7,22 @@ Orquestra a coleta de series temporais com flexibilidade de parametros.
 from pathlib import Path
 import pandas as pd
 
-from ..base import BaseCollector
+from core.collectors import BaseCollector
+from core.indicators import get_indicator_config
 from .client import SGSClient
-from .indicators import SGS_CONFIG, get_indicator_config
+from .indicators import SGS_CONFIG
 
 
 class SGSCollector(BaseCollector):
     """
     Orquestrador de coleta de dados SGS.
 
-    Oferece dois niveis de uso:
-    1. collect_series() - Controle total, usuario define codigo SGS e filename
-    2. collect() - Usa config predefinida, coleta um ou mais indicadores
+    API publica:
+    - collect() - Coleta um ou mais indicadores usando config predefinida
+    - consolidate() - Consolida arquivos em DataFrame unico
+    - get_status() - Status dos arquivos salvos
 
-    Herda de BaseCollector:
-    - save(), read(), list_files() - delegacoes para DataManager
-    - get_status() - status dos arquivos salvos
+    Herda de BaseCollector para logging padronizado e get_status().
     """
 
     default_subdir = 'bacen/sgs/daily'
@@ -39,10 +39,10 @@ class SGSCollector(BaseCollector):
         self.client = SGSClient()
 
     # =========================================================================
-    # NIVEL 1: Controle Total
+    # Metodo interno de coleta
     # =========================================================================
 
-    def collect_series(
+    def _collect_series(
         self,
         code: int,
         filename: str,
@@ -76,33 +76,26 @@ class SGSCollector(BaseCollector):
             subdir = f"bacen/sgs/{frequency}"
 
         def fetch(start_date: str | None) -> pd.DataFrame:
-            self._log_fetch_start(name, start_date, verbose)
             return self.client.get_data(
                 code=code,
                 name=name,
                 frequency=frequency,
                 start_date=start_date,
-                verbose=False,  # Client silencioso, collector controla logs
-            )
-
-        if save:
-            df, _ = self.data_manager.fetch_and_sync(
-                filename=filename,
-                subdir=subdir,
-                fetch_fn=fetch,
-                frequency=frequency,
                 verbose=False,
             )
-        else:
-            df = fetch(None)
 
-        # Log resultado
-        self._log_fetch_result(name, len(df), verbose)
-
-        return df
+        return self._collect_with_sync(
+            fetch_fn=fetch,
+            filename=filename,
+            name=name,
+            subdir=subdir,
+            frequency=frequency,
+            save=save,
+            verbose=verbose,
+        )
 
     # =========================================================================
-    # NIVEL 2: API Simplificada
+    # API Publica
     # =========================================================================
 
     def collect(
@@ -126,32 +119,22 @@ class SGSCollector(BaseCollector):
             Dict {indicator_key: DataFrame} com dados coletados
         """
         # Normalizar entrada
-        if indicators == 'all':
-            keys = list(SGS_CONFIG.keys())
-        elif isinstance(indicators, str):
-            keys = [indicators]
-        else:
-            keys = list(indicators)
+        keys = self._normalize_indicators_list(indicators, SGS_CONFIG)
 
-        # Verificar se e primeiro run
-        is_first_run = self.data_manager.is_first_run('bacen/sgs/daily')
-
-        if verbose:
-            print("=" * 70)
-            if is_first_run:
-                print("PRIMEIRA EXECUCAO - Download de Historico Completo")
-            else:
-                print("ATUALIZACAO INCREMENTAL")
-            print("=" * 70)
-            print(f"Indicadores a coletar: {len(keys)}")
-            print()
+        self._log_collect_start(
+            title="BACEN - Sistema Gerenciador de Series",
+            num_indicators=len(keys),
+            subdir='bacen/sgs/daily',
+            check_first_run=True,
+            verbose=verbose,
+        )
 
         results = {}
         for key in keys:
-            config = get_indicator_config(key)
+            config = get_indicator_config(SGS_CONFIG, key)
             subdir = f"bacen/sgs/{config['frequency']}"
 
-            df = self.collect_series(
+            df = self._collect_series(
                 code=config['code'],
                 filename=key,
                 name=config['name'],
@@ -165,10 +148,7 @@ class SGSCollector(BaseCollector):
             if verbose:
                 print()
 
-        if verbose:
-            print("=" * 70)
-            print("Coleta concluida!")
-            print("=" * 70)
+        self._log_collect_end(verbose=verbose)
 
         return results
 
@@ -214,18 +194,9 @@ class SGSCollector(BaseCollector):
             Dict {subdir: DataFrame} com dados consolidados
         """
         # Normalizar entrada
-        if subdirs is None:
-            subdirs_list = self.default_consolidate_subdirs
-        elif isinstance(subdirs, str):
-            subdirs_list = [subdirs]
-        else:
-            subdirs_list = list(subdirs)
+        subdirs_list = self._normalize_subdirs_list(subdirs)
 
-        if verbose:
-            print("=" * 70)
-            print("CONSOLIDANDO DADOS")
-            print("=" * 70)
-            print()
+        self._log_consolidate_start(verbose=verbose)
 
         results = {}
         for subdir in subdirs_list:
@@ -248,17 +219,8 @@ class SGSCollector(BaseCollector):
                     print("  + Adicionada coluna 'cdi_anualizado'")
 
             # Salvar se solicitado
-            if save and output_name and not df.empty:
-                self.data_manager.processed_path.mkdir(parents=True, exist_ok=True)
-                filepath = self.data_manager.processed_path / f"{output_name}.parquet"
-                df.to_parquet(
-                    filepath,
-                    engine='pyarrow',
-                    compression='snappy',
-                    index=True
-                )
-                if verbose:
-                    print(f"  Salvo: {filepath.relative_to(self.data_manager.base_path)}")
+            if save and output_name:
+                self._save_parquet_to_processed(df, output_name, verbose=verbose)
 
             results[subdir] = df
 

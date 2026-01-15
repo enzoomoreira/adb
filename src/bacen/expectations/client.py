@@ -1,6 +1,6 @@
 from bcb import Expectativas
 import pandas as pd
-from typing import Callable, Optional
+from typing import Callable
 from .indicators import ENDPOINTS
 
 

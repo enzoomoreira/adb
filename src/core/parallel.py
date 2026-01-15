@@ -3,7 +3,7 @@ Módulo utilitário para execução paralela de tarefas.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable, Iterable, TypeVar, Any
+from typing import Callable, Iterable, TypeVar
 
 T = TypeVar("T")  # Tipo do item de entrada
 R = TypeVar("R")  # Tipo do resultado
