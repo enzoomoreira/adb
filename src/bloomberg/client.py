@@ -88,11 +88,21 @@ class BloombergClient:
             Retorna DataFrame vazio em caso de erro
         """
         try:
+            # Defesa minima: trata NaT como None
+            if pd.isna(start_date):
+                start_date = None
+            if pd.isna(end_date):
+                end_date = None
+
             # Se start_date=None, limitar a LOOKBACK_DAYS para evitar quotas
             if start_date is None:
                 start_date = (datetime.today() - timedelta(days=LOOKBACK_DAYS)).strftime(
                     "%Y-%m-%d"
                 )
+
+            # Se end_date=None, usa hoje
+            if end_date is None:
+                end_date = datetime.today().strftime("%Y-%m-%d")
 
             # xbbg.blp.bdh retorna DataFrame com:
             # - Index: DatetimeIndex
@@ -157,6 +167,7 @@ class BloombergClient:
         3. Renomeia para 'value'
         4. Remove NaN
         5. Ordena por data
+        6. Define nome do indice como 'date'
 
         Args:
             df: DataFrame retornado por xbbg.blp.bdh
@@ -201,5 +212,8 @@ class BloombergClient:
 
         # 4. Ordenar por data
         df = df.sort_index()
+
+        # 5. Garantir nome do indice para Parquet
+        df.index.name = 'date'
 
         return df

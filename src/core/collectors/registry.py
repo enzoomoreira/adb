@@ -15,6 +15,7 @@ _COLLECTOR_MAP = {
     'caged': ('mte.caged.collector', 'CAGEDCollector'),
     'ipea': ('ipea.collector', 'IPEACollector'),
     'bloomberg': ('bloomberg.collector', 'BloombergCollector'),
+    'sidra': ('ibge.sidra.collector', 'SidraCollector'),
 }
 
 

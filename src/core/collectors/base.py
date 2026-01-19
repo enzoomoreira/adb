@@ -202,7 +202,8 @@ class BaseCollector:
         """Calcula data de inicio baseada na ultima data salva."""
         from datetime import timedelta
         
-        if last_date is None:
+        # Trata None e pd.NaT (Not-a-Time) como ausencia de dados
+        if last_date is None or pd.isna(last_date):
             return None
             
         if frequency == 'monthly':

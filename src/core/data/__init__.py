@@ -22,11 +22,12 @@ _caged = None
 _expectations = None
 _ipea = None
 _bloomberg = None
+_sidra = None
 
 
 def __getattr__(name):
     """Lazy loading dos explorers."""
-    global _sgs, _caged, _expectations, _ipea, _bloomberg
+    global _sgs, _caged, _expectations, _ipea, _bloomberg, _sidra
 
     if name == 'sgs':
         if _sgs is None:
@@ -58,6 +59,12 @@ def __getattr__(name):
             _bloomberg = BloombergExplorer()
         return _bloomberg
 
+    if name == 'sidra':
+        if _sidra is None:
+            from ibge.sidra.explorer import SidraExplorer
+            _sidra = SidraExplorer()
+        return _sidra
+
     raise AttributeError(f"module 'core.data' has no attribute '{name}'")
 
 
@@ -69,4 +76,5 @@ __all__ = [
     'expectations',
     'ipea',
     'bloomberg',
+    'sidra',
 ]
