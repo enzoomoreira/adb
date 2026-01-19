@@ -28,17 +28,17 @@ class BaseCollector:
     """
 
     default_subdir: str = 'raw'
-    default_consolidate_subdirs: list[str] = ['raw']
 
-    def __init__(self, data_path: Path):
+    def __init__(self, data_path: Path = None):
         """
         Inicializa o coletor base.
 
         Args:
-            data_path: Caminho para diretorio data/
+            data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
         """
-        self.data_path = Path(data_path)
-        self.data_manager = DataManager(data_path)
+        from core.config import DATA_PATH
+        self.data_path = Path(data_path) if data_path else DATA_PATH
+        self.data_manager = DataManager(self.data_path)
 
     # =========================================================================
     # Logging (output padronizado)
@@ -84,9 +84,12 @@ class BaseCollector:
 
         status_data = []
         for filename in files:
-            df = self.data_manager.read(filename, subdir)
-
-            if df.empty:
+            metadata = self.data_manager.get_metadata(filename, subdir)
+            
+            if metadata:
+                status_data.append(metadata)
+            else:
+                 # Fallback apenas se get_metadata falhar ou arquivo vazio
                 status_data.append({
                     'arquivo': filename,
                     'subdir': subdir,
@@ -94,30 +97,7 @@ class BaseCollector:
                     'colunas': 0,
                     'primeira_data': None,
                     'ultima_data': None,
-                    'status': 'Vazio',
-                })
-            else:
-                # Tentar identificar range de datas
-                primeira_data = None
-                ultima_data = None
-
-                # Verificar se indice e datetime
-                if pd.api.types.is_datetime64_any_dtype(df.index):
-                    primeira_data = df.index.min()
-                    ultima_data = df.index.max()
-                # Verificar coluna Data
-                elif 'Data' in df.columns and pd.api.types.is_datetime64_any_dtype(df['Data']):
-                    primeira_data = df['Data'].min()
-                    ultima_data = df['Data'].max()
-
-                status_data.append({
-                    'arquivo': filename,
-                    'subdir': subdir,
-                    'registros': len(df),
-                    'colunas': len(df.columns),
-                    'primeira_data': primeira_data,
-                    'ultima_data': ultima_data,
-                    'status': 'OK',
+                    'status': 'Erro/Vazio',
                 })
 
         return pd.DataFrame(status_data)
@@ -148,25 +128,6 @@ class BaseCollector:
         else:
             return list(indicators)
 
-    def _normalize_subdirs_list(
-        self,
-        subdirs: list[str] | str | None
-    ) -> list[str]:
-        """
-        Normaliza entrada de subdiretorios para lista.
-
-        Args:
-            subdirs: None (usa default), string unico, ou lista
-
-        Returns:
-            Lista de subdiretorios
-        """
-        if subdirs is None:
-            return self.default_consolidate_subdirs
-        elif isinstance(subdirs, str):
-            return [subdirs]
-        else:
-            return list(subdirs)
 
     def _log_collect_start(
         self,
@@ -224,72 +185,33 @@ class BaseCollector:
         print("=" * 70)
 
         if results:
-            total = sum(len(df) for df in results.values())
+            total = 0
+            for res in results.values():
+                if isinstance(res, int):
+                    total += res
+                elif hasattr(res, '__len__'):
+                    total += len(res)
             print(f"Coleta concluida! Total: {total:,} registros")
         else:
             print("Coleta concluida!")
 
         print("=" * 70)
 
-    def _log_consolidate_start(
-        self,
-        title: str = "CONSOLIDANDO DADOS",
-        subdir: str = None,
-        verbose: bool = True
-    ):
-        """
-        Loga inicio de consolidacao com banner padronizado.
 
-        Args:
-            title: Titulo da consolidacao
-            subdir: Subdiretorio sendo consolidado (opcional)
-            verbose: Se False, nao imprime nada
-        """
-        if not verbose:
-            return
-
-        print("=" * 70)
-        print(title)
-        if subdir:
-            print(f"Subdiretorio: {subdir}")
-        print("=" * 70)
-        print()
-
-    def _save_parquet_to_processed(
-        self,
-        df: pd.DataFrame,
-        filename: str,
-        verbose: bool = True
-    ) -> Path | None:
-        """
-        Salva DataFrame em processed_path como parquet.
-
-        Args:
-            df: DataFrame a salvar
-            filename: Nome do arquivo (sem extensao .parquet)
-            verbose: Se True, imprime caminho salvo
-
-        Returns:
-            Path do arquivo salvo, ou None se df vazio
-        """
-        if df.empty:
+    def _calculate_start_date(self, last_date: pd.Timestamp | None, frequency: str) -> str | None:
+        """Calcula data de inicio baseada na ultima data salva."""
+        from datetime import timedelta
+        
+        if last_date is None:
             return None
-
-        self.data_manager.processed_path.mkdir(parents=True, exist_ok=True)
-        filepath = self.data_manager.processed_path / f"{filename}.parquet"
-
-        df.to_parquet(
-            filepath,
-            engine='pyarrow',
-            compression='snappy',
-            index=True
-        )
-
-        if verbose:
-            rel_path = filepath.relative_to(self.data_manager.base_path)
-            print(f"  Salvo: {rel_path}")
-
-        return filepath
+            
+        if frequency == 'monthly':
+            # Proximo mes (primeiro dia)
+            next_month = (last_date.replace(day=1) + timedelta(days=32)).replace(day=1)
+            return next_month.strftime('%Y-%m-%d')
+        else:
+            # Proximo dia
+            return (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
 
     def _collect_with_sync(
         self,
@@ -297,50 +219,42 @@ class BaseCollector:
         filename: str,
         name: str,
         subdir: str,
-        frequency: str = None,
+        frequency: str = 'daily',
         save: bool = True,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """
-        Template pattern para coleta com suporte a fetch_and_sync.
-
-        Padroniza o fluxo:
-        1. Criar wrapper de fetch_fn que faz log
-        2. Usar fetch_and_sync se save=True
-        3. Log resultado
-        4. Retornar DataFrame
-
-        Args:
-            fetch_fn: Funcao(start_date) que retorna DataFrame
-                      Recebe start_date automatico ou None
-            filename: Nome do arquivo (sem extensao)
-            name: Nome para logs
-            subdir: Subdiretorio em raw/
-            frequency: 'daily', 'monthly', etc (para fetch_and_sync)
-            save: Se True, usa fetch_and_sync
-        verbose: Se True, imprime logs
-
-        Returns:
-            DataFrame coletado
+        Orquestra coleta incremental: verifica ultima data, busca dados, salva/append.
         """
-        # Wrapper que adiciona logging
-        def fetch_with_log(start_date: str | None) -> pd.DataFrame:
-            self._log_fetch_start(name, start_date, verbose)
-            return fetch_fn(start_date)
-
-        # Fetch com ou sem sync
+        # 1. Determinar data de inicio
+        is_first_run = True
+        start_date = None
+        
         if save and frequency:
-            df, _ = self.data_manager.fetch_and_sync(
-                filename=filename,
-                subdir=subdir,
-                fetch_fn=fetch_with_log,
-                frequency=frequency,
-                verbose=False,
-            )
-        else:
-            df = fetch_with_log(None)
+            last_date = self.data_manager.get_last_date(filename, subdir)
+            start_date = self._calculate_start_date(last_date, frequency)
+            is_first_run = last_date is None
 
-        # Log resultado
+        # 2. Wrapper de log
+        def fetch_with_log(date_param):
+            self._log_fetch_start(name, date_param, verbose)
+            return fetch_fn(date_param)
+
+        # 3. Executar fetch
+        try:
+            df = fetch_with_log(start_date)
+        except Exception as e:
+            print(f"  Erro ao buscar dados: {e}")
+            return pd.DataFrame()
+
+        # 4. Salvar resultados
+        if not df.empty and save:
+            if is_first_run:
+                self.data_manager.save(df, filename, subdir, verbose=verbose)
+            else:
+                self.data_manager.append(df, filename, subdir, verbose=verbose)
+
+        # 5. Log final
         self._log_fetch_result(name, len(df), verbose)
 
         return df

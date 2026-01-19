@@ -2,16 +2,22 @@
 Coletor de dados do Novo CAGED.
 
 Orquestra a coleta de microdados do CAGED via FTP,
-com suporte a atualizacoes incrementais.
+com suporte a atualizacoes incrementais e download paralelo.
 """
 
+import tempfile
+import shutil
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
+import py7zr
+import duckdb
 import pandas as pd
+from tqdm.auto import tqdm
 
 from core.collectors import BaseCollector
-from core.indicators import get_indicator_config
-from core.parallel import ParallelFetcher
+from core.utils import get_indicator_config
 from .client import CAGEDClient
 from .indicators import CAGED_CONFIG, get_available_periods
 
@@ -22,7 +28,6 @@ class CAGEDCollector(BaseCollector):
 
     API publica:
     - collect() - Coleta microdados do CAGED via FTP
-    - consolidate() - Consolida arquivos mensais (via DuckDB)
     - get_status() - Status dos dados locais (override - usa periodos)
 
     Para leitura e queries SQL nos dados coletados, use QueryEngine:
@@ -34,24 +39,23 @@ class CAGEDCollector(BaseCollector):
     """
 
     default_subdir = 'mte/caged'
-    default_consolidate_subdirs = ['mte/caged']
 
-    def __init__(self, data_path: Path):
+    def __init__(self, data_path: Path = None):
         """
         Inicializa o coletor.
 
         Args:
-            data_path: Caminho para diretorio data/
+            data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
         """
         super().__init__(data_path)
         self.client = CAGEDClient()
+        self._db_lock = Lock()
 
     def _get_last_period(self, filename: str, subdir: str) -> tuple[int, int] | None:
         """
         Retorna (ano, mes) do ultimo periodo salvo.
-        Verifica tanto arquivos mensais quanto o arquivo legado.
+        Verifica arquivos mensais no diretório.
         """
-        # 1. Verificar arquivos particionados (ex: cagedmov_2024-01.parquet)
         files = self.data_manager.list_files(subdir)
         prefix = f"{filename}_"
         candidates = [f for f in files if f.startswith(prefix)]
@@ -60,19 +64,11 @@ class CAGEDCollector(BaseCollector):
             candidates.sort()
             last_file = candidates[-1]
             try:
-                # Extrai data do nome: cagedmov_2024-01 -> 2024, 1
                 _, date_part = last_file.rsplit("_", 1)
                 year, month = map(int, date_part.split("-"))
                 return (year, month)
             except (ValueError, IndexError):
                 pass
-
-        # 2. Fallback: Verificar arquivo unico legado (ex: cagedmov.parquet)
-        if filename in files:
-            df = self.data_manager.read(filename, subdir)
-            if not df.empty and "ano_ref" in df.columns and "mes_ref" in df.columns:
-                last_row = df.iloc[-1]
-                return (int(last_row["ano_ref"]), int(last_row["mes_ref"]))
 
         return None
 
@@ -89,141 +85,167 @@ class CAGEDCollector(BaseCollector):
         if last is None:
             return all_periods
 
-        missing = []
-        for year, month in all_periods:
-            if (year, month) > last:
-                missing.append((year, month))
-        return missing
+        return [p for p in all_periods if p > last]
 
     def _fetch_single_period(
-        self, indicator_key: str, year: int, month: int, save: bool, verbose: bool
-    ) -> int:
+        self,
+        indicator_key: str,
+        year: int,
+        month: int,
+    ) -> tuple[int, int, int, str | None]:
         """
-        Baixa e salva um unico periodo (thread-safe).
+        Baixa, extrai e converte um unico periodo.
+        
+        Usa DuckDB para converter CSV -> Parquet de forma eficiente.
 
-        Cria uma nova instancia de CAGEDClient para garantir isolamento
-        de conexao FTP em threads separadas.
+        Returns:
+            Tupla (year, month, rows, error_msg)
         """
-        # Recupera config aqui (dentro da thread)
         config = get_indicator_config(CAGED_CONFIG, indicator_key)
-
-        # Cliente dedicado para esta thread/task
+        subdir = "mte/caged"
+        
+        # Criar diretório temporário para este período
+        temp_dir = Path(tempfile.mkdtemp(prefix=f"caged_{year}{month:02d}_"))
+        
         client = CAGEDClient()
         try:
             client.connect()
-            df = client.get_data(config["prefix"], year, month, verbose=verbose)
+            
+            # 1. Download 7z para temp
+            archive_path = temp_dir / f"{config['prefix']}{year}{month:02d}.7z"
+            client.download_to_file(config["prefix"], year, month, archive_path)
+            
+            # 2. Extrair 7z
+            with py7zr.SevenZipFile(archive_path, 'r') as archive:
+                archive.extractall(path=temp_dir)
+            
+            # 3. Encontrar CSV extraído
+            csv_files = list(temp_dir.glob("*.txt")) + list(temp_dir.glob("*.csv"))
+            if not csv_files:
+                return (year, month, 0, "Nenhum CSV encontrado no 7z")
+            
+            csv_path = next((f for f in csv_files if config['prefix'] in f.name.upper()), csv_files[0])
+            
+            # 4. Converter para Parquet usando DuckDB (ETL otimizado)
+            output_filename = f"{indicator_key}_{year}-{month:02d}.parquet"
+            output_path = self.data_manager.raw_path / subdir / output_filename
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # DuckDB consome muitos recursos, melhor serializar a conversao
+            # enquanto mantemos downloads em paralelo (via worker threads)
+            # Para isso usamos um lock global ou de classe, mas aqui usaremos connection isolada
+            
+            query = f"""
+                COPY (
+                    SELECT * 
+                    FROM read_csv('{str(csv_path)}', delim=';', header=True, encoding='utf-8', ignore_errors=True)
+                ) TO '{str(output_path)}' (FORMAT 'parquet', COMPRESSION 'snappy')
+            """
+            
+            # Serializar apenas a etapa de CPU heavy do DuckDB para evitar travamento
+            with self._db_lock:
+                # Desabilitar barra de progresso do DuckDB para nao poluir notebook
+                duckdb.sql("SET enable_progress_bar = false;")
+                duckdb.sql(query)
+                row_count = duckdb.sql(f"SELECT COUNT(*) FROM '{str(output_path)}'").fetchone()[0]
+            
+            return (year, month, row_count, None)
 
-            rows = 0
-            if not df.empty:
-                if save:
-                    file_name = f"{indicator_key}_{year}-{month:02d}"
-                    subdir = "mte/caged"
-                    self.data_manager.save(df, file_name, subdir, verbose=False)
-                rows = len(df)
+        except Exception as e:
+            return (year, month, 0, f"Erro: {str(e)}")
 
-            return rows
         finally:
-            client.disconnect()
+            # Garantir limpeza
+            try:
+                if 'client' in locals():
+                    client.disconnect()
+            except:
+                pass
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception:
+                pass
 
     def collect(
         self,
         indicators: list[str] | str = "all",
         save: bool = True,
         verbose: bool = True,
-        parallel: bool = True,
         max_workers: int = 4,
     ) -> dict[str, int]:
         """
         Coleta dados do CAGED (Raw Layer).
-        Salva arquivos mensais individuais para evitar MemoryError.
 
         Args:
             indicators: 'all', ou lista de chaves
-            save: Se True, salva os arquivos
+            save: Se True, salva os arquivos (sempre True, compatibilidade)
             verbose: Se True, imprime logs
-            parallel: Se True, baixa meses em paralelo
-            max_workers: Numero de threads (se parallel=True)
+            max_workers: Numero de threads para download paralelo
         """
-        if indicators == "all":
-            keys = list(CAGED_CONFIG.keys())
-        elif isinstance(indicators, str):
-            keys = [indicators]
-        else:
-            keys = list(indicators)
-
+        keys = self._normalize_indicators_list(indicators, CAGED_CONFIG)
         subdir = "mte/caged"
-
-        if verbose:
-            print("=" * 70)
-            print("CAGED - Ministerio do Trabalho e Emprego")
-            print("Estrategia: Arquivos Mensais (Raw) -> Consolidados (Processed)")
-            print(
-                f"Modo: {'Paralelo' if parallel else 'Sequencial'} (workers={max_workers})"
-            )
-            print("=" * 70)
-
-        # Se nao for paralelo, usa o client compartilhado (mantendo comportamento original)
-        if not parallel:
-            self.client.connect()
+        
+        # Log inicial padronizado
+        self._log_collect_start(
+            title="CAGED - Ministerio do Trabalho e Emprego",
+            num_indicators=len(keys),
+            subdir=subdir,
+            check_first_run=True,
+            verbose=verbose
+        )
 
         results = {}
 
-        try:
-            for key in keys:
-                config = get_indicator_config(CAGED_CONFIG, key)
+        for key in keys:
+            config = get_indicator_config(CAGED_CONFIG, key)
+            missing = self._get_missing_periods(key, subdir, config["start_year"])
 
-                missing = self._get_missing_periods(key, subdir, config["start_year"])
-
+            if not missing:
                 if verbose:
-                    if not missing:
-                        print(f"\n{config['name']}: Dados atualizados")
-                        results[key] = 0
-                        continue
+                    print(f"  {config['name']}: Dados atualizados")
+                results[key] = 0
+                continue
+
+            if verbose:
+                print(f"  {config['name']}: Baixando {len(missing)} meses...")
+
+            total_rows = 0
+            errors = []
+            
+            # Coleta Paralela com ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submeter todas as tarefas
+                future_to_period = {
+                    executor.submit(self._fetch_single_period, key, year, month): (year, month)
+                    for year, month in missing
+                }
+                
+                # Barra de progresso
+                pbar = tqdm(
+                    as_completed(future_to_period),
+                    total=len(missing),
+                    desc=f"  {config['prefix']}",
+                    unit="mês",
+                    disable=not verbose,
+                    leave=False
+                )
+                
+                for future in pbar:
+                    year, month, rows, error = future.result()
+                    
+                    if error:
+                        errors.append(f"{year}-{month:02d}: {error}")
                     else:
-                        print(f"\n{config['name']}: Baixando {len(missing)} meses...")
+                        total_rows += rows
+                
+                pbar.close()
 
-                total_rows = 0
+            if verbose and errors:
+                print(f"    Erros ({len(errors)}): {', '.join(errors[:3])}...")
 
-                if parallel:
-                    # Prepara tasks (tuplas devem ser hashable para o ParallelFetcher)
-                    # Passamos 'key' (str) em vez de 'config' (dict)
-                    tasks = [(key, y, m, save, verbose) for y, m in missing]
+            results[key] = total_rows
 
-                    # Funcao adapter para o ParallelFetcher
-                    def fetch_adapter(args):
-                        return self._fetch_single_period(*args)
-
-                    fetcher = ParallelFetcher(max_workers=max_workers)
-                    # O map/fetch_all retorna dict {item: result}
-                    # Aqui nossos itens sao tuplas de args
-                    batch_results = fetcher.fetch_all(tasks, fetch_adapter)
-
-                    # Soma linhas baixadas com sucesso (ignorando Nones)
-                    total_rows = sum(r for r in batch_results.values() if r is not None)
-
-                else:
-                    # Modo sequencial (original)
-                    for year, month in missing:
-                        df = self.client.get_data(
-                            config["prefix"], year, month, verbose=verbose
-                        )
-
-                        if not df.empty:
-                            if save:
-                                file_name = f"{key}_{year}-{month:02d}"
-                                self.data_manager.save(
-                                    df, file_name, subdir, verbose=False
-                                )
-                            total_rows += len(df)
-
-                results[key] = total_rows
-                if verbose and total_rows > 0:
-                    print(f"  Total coletado: {total_rows:,} registros")
-
-        finally:
-            if not parallel:
-                self.client.disconnect()
-
+        self._log_collect_end(results, verbose=verbose)
         return results
 
     def get_status(self) -> pd.DataFrame:
@@ -236,9 +258,7 @@ class CAGEDCollector(BaseCollector):
             status.append(
                 {
                     "indicador": key,
-                    "ultimo_periodo": f"{last[0]}-{last[1]:02d}"
-                    if last
-                    else "Nao iniciado",
+                    "ultimo_periodo": f"{last[0]}-{last[1]:02d}" if last else "Nao iniciado",
                     "status": "Ok" if last else "Pendente",
                 }
             )

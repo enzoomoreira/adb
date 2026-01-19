@@ -1,24 +1,10 @@
-from .client import ExpectationsClient
-from .collector import ExpectationsCollector
-from .indicators import (
-    ENDPOINTS,
-    ANNUAL_INDICATORS,
-    INFLATION_INDICATORS,
-    MONTHLY_INDICATORS,
-    INDICATOR_NAMES,
-    EXPECTATIONS_CONFIG,
-)
+"""
+Modulo Expectations (interno) - Relatorio Focus BCB.
 
-__all__ = [
-    # Classes
-    'ExpectationsClient',
-    'ExpectationsCollector',
-    # Endpoints e listas
-    'ENDPOINTS',
-    'ANNUAL_INDICATORS',
-    'INFLATION_INDICATORS',
-    'MONTHLY_INDICATORS',
-    'INDICATOR_NAMES',
-    # Config para coleta
-    'EXPECTATIONS_CONFIG',
-]
+Para coleta, use: from core.collectors import collect
+Para query, use: from core.data import expectations
+"""
+
+from .indicators import EXPECTATIONS_CONFIG
+
+__all__ = ['EXPECTATIONS_CONFIG']

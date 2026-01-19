@@ -4,22 +4,33 @@ Documentacao de componentes compartilhados do projeto.
 
 ---
 
-## core.indicators
+## Visao Geral
 
-Funcoes centralizadas para manipulacao de indicadores.
+O modulo `src/core/` contem os componentes centralizados do projeto:
 
-**Localizacao:** `src/core/indicators.py`
+| Componente | Localizacao | Descricao |
+|------------|-------------|-----------|
+| Funcoes de indicadores | `core/utils/indicators.py` | Manipulacao de configs |
+| Funcoes de datas | `core/utils/dates.py` | Parsing e normalizacao |
+| BaseCollector | `core/collectors/base.py` | Classe base para collectors |
+| Registry | `core/collectors/registry.py` | Interface centralizada de coleta |
+| Config | `core/config.py` | Configuracao global (paths) |
 
-### Visao Geral
+---
 
-Modulo com funcoes genericas para trabalhar com configuracoes de indicadores, eliminando duplicacao de codigo entre modulos (bacen, ipea, mte, bloomberg).
+## core.utils (Funcoes Auxiliares)
 
-**Funcoes disponiveis:**
-- `list_indicators(config)` - Lista chaves de indicadores
-- `get_indicator_config(config, key)` - Obtem configuracao de um indicador
-- `filter_by_field(config, field, value)` - Filtra indicadores por campo
+### Funcoes de Indicadores
 
-### list_indicators(config, frequency=None)
+**Localizacao:** `src/core/utils/indicators.py`
+
+```python
+from core import list_indicators, get_indicator_config, filter_by_field
+# ou
+from core.utils import list_indicators, get_indicator_config, filter_by_field
+```
+
+#### list_indicators(config, frequency=None)
 
 Lista chaves de indicadores disponiveis em uma configuracao.
 
@@ -30,21 +41,18 @@ Lista chaves de indicadores disponiveis em uma configuracao.
 
 **Retorno:** list[str]
 
-**Exemplo:**
 ```python
-from core.indicators import list_indicators
-from bacen.sgs import SGS_CONFIG
+from core import list_indicators
+from src.bacen import SGS_CONFIG
 
-# Todos os indicadores
 keys = list_indicators(SGS_CONFIG)
 # ['selic', 'cdi', 'dolar_ptax', 'euro_ptax', ...]
 
-# Apenas diarios
 daily_keys = list_indicators(SGS_CONFIG, frequency='daily')
 # ['selic', 'cdi', 'dolar_ptax', 'euro_ptax']
 ```
 
-### get_indicator_config(config, key)
+#### get_indicator_config(config, key)
 
 Obtem a configuracao completa de um indicador.
 
@@ -55,141 +63,102 @@ Obtem a configuracao completa de um indicador.
 
 **Retorno:** dict
 
-**Exemplo:**
 ```python
-from core.indicators import get_indicator_config
-from bacen.sgs import SGS_CONFIG
+from core import get_indicator_config
+from src.bacen import SGS_CONFIG
 
 cfg = get_indicator_config(SGS_CONFIG, 'selic')
 # {'code': 432, 'name': 'Meta Selic', 'frequency': 'daily'}
 ```
 
-### filter_by_field(config, field, value)
+#### filter_by_field(config, field, value)
 
 Filtra indicadores por valor de campo especifico.
 
 | Parametro | Tipo | Descricao |
 |-----------|------|-----------|
 | config | dict | Dicionario de configuracao |
-| field | str | Campo para filtrar (ex: 'frequency', 'name') |
+| field | str | Campo para filtrar (ex: 'frequency') |
 | value | any | Valor esperado do campo |
 
 **Retorno:** dict (subconjunto da config original)
 
-**Exemplo:**
 ```python
-from core.indicators import filter_by_field
-from bacen.sgs import SGS_CONFIG
+from core import filter_by_field
+from src.bacen import SGS_CONFIG
 
-# Apenas indicadores mensais
 monthly = filter_by_field(SGS_CONFIG, 'frequency', 'monthly')
-# {'ibc_br_bruto': {...}, 'ibc_br_dessaz': {...}, 'igp_m': {...}}
-```
-
-### Import
-
-```python
-from core.indicators import (
-    list_indicators,
-    get_indicator_config,
-    filter_by_field,
-)
+# {'ibc_br_bruto': {...}, 'ibc_br_dessaz': {...}, ...}
 ```
 
 ---
 
-## ParallelFetcher
+## core.collectors (Sistema de Coleta)
 
-Executor paralelo generico para tarefas I/O-bound.
+### Interface Centralizada (Registry)
 
-**Localizacao:** `src/core/parallel.py`
-
-### Uso Basico
+**Localizacao:** `src/core/collectors/registry.py`
 
 ```python
-from core.parallel import ParallelFetcher
-
-# Inicializa com numero de threads
-fetcher = ParallelFetcher(max_workers=4)
-
-# Executa funcao em paralelo para cada item
-results = fetcher.fetch_all(items, fetch_fn)
-# Retorna: dict[item, resultado]
+from core.collectors import collect, available_sources, get_status
+# ou
+from core import collect, available_sources, get_status
 ```
 
-### Construtor
+#### collect(source, indicators='all', save=True, verbose=True, **kwargs)
 
-```python
-ParallelFetcher(
-    max_workers: int = 4,
-    on_item_complete: Callable[[T, R], None] = None
-)
-```
+Interface unificada para coleta de dados.
 
 | Parametro | Tipo | Default | Descricao |
 |-----------|------|---------|-----------|
-| max_workers | int | 4 | Numero maximo de threads |
-| on_item_complete | Callable | None | Callback apos cada tarefa |
-
-### fetch_all(items, fetch_fn)
-
-Executa `fetch_fn` para cada item em paralelo.
+| source | str | - | Fonte de dados ('sgs', 'expectations', 'caged', 'ipea', 'bloomberg') |
+| indicators | str\|list | 'all' | Indicadores a coletar |
+| save | bool | True | Salvar em Parquet |
+| verbose | bool | True | Imprimir progresso |
+| **kwargs | - | - | Argumentos extras (ex: max_workers para caged) |
 
 ```python
-def fetch_all(
-    items: Iterable[T],
-    fetch_fn: Callable[[T], R]
-) -> dict[T, R]
+from core.collectors import collect
+
+# Coleta completa
+collect('sgs')
+collect('expectations')
+collect('caged')
+collect('ipea')
+collect('bloomberg')
+
+# Coleta parcial
+collect('sgs', indicators='selic')
+collect('sgs', indicators=['selic', 'cdi'])
+
+# Com parametros extras
+collect('caged', indicators='cagedmov', max_workers=4)
 ```
 
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| items | Iterable | Lista de itens para processar |
-| fetch_fn | Callable | Funcao que processa um item |
+#### available_sources()
 
-**Retorno:** `dict[item, resultado]`
+Lista fontes de dados disponiveis.
 
-### Comportamentos
-
-**Fallback sequencial:**
-- Se `max_workers <= 1`, executa sequencialmente
-- Util para debug
-
-**Tratamento de erros:**
-- Erros sao capturados e impressos
-- Retorna `None` para itens com falha
-- Continua processando outros itens
-
-### Exemplo: Download Paralelo
+**Retorno:** list[str]
 
 ```python
-def download(url):
-    response = requests.get(url)
-    return response.content
+from core.collectors import available_sources
 
-fetcher = ParallelFetcher(max_workers=8)
-results = fetcher.fetch_all(urls, download)
-
-for url, content in results.items():
-    if content is not None:
-        save(url, content)
+sources = available_sources()
+# ['sgs', 'expectations', 'caged', 'ipea', 'bloomberg']
 ```
 
-### Uso no Projeto
+#### get_status(source)
 
-Usado pelo `CAGEDCollector` para downloads FTP paralelos:
+Retorna status dos dados de uma fonte.
+
+**Retorno:** pd.DataFrame ou dict
 
 ```python
-# Em src/mte/caged/collector.py
-tasks = [(key, year, month, save, verbose) for year, month in missing]
+from core.collectors import get_status
 
-def fetch_adapter(args):
-    return self._fetch_single_period(*args)
-
-fetcher = ParallelFetcher(max_workers=4)
-batch_results = fetcher.fetch_all(tasks, fetch_adapter)
-
-total_rows = sum(r for r in batch_results.values() if r is not None)
+status = get_status('sgs')
+status = get_status('caged')
 ```
 
 ---
@@ -202,7 +171,7 @@ Classe base para todos os coletores do projeto.
 
 ### Visao Geral
 
-Fornece funcionalidades comuns herdadas por todos os collectors do projeto:
+Fornece funcionalidades comuns herdadas por todos os collectors:
 - Delegacoes para DataManager
 - Logging padronizado
 - Metodo `get_status()` unificado
@@ -222,27 +191,13 @@ Subclasses devem definir:
 ```python
 class SGSCollector(BaseCollector):
     default_subdir = 'bacen/sgs/daily'
-    default_consolidate_subdirs = ['bacen/sgs/daily', 'bacen/sgs/monthly']
 ```
 
 | Atributo | Tipo | Descricao |
 |----------|------|-----------|
 | default_subdir | str | Subdiretorio padrao para operacoes |
-| default_consolidate_subdirs | list[str] | Subdiretorios para consolidacao |
 
-### Metodos Herdados
-
-#### save(df, filename, subdir=None, **kwargs)
-
-Delega para `DataManager.save()`. Usa `default_subdir` se `subdir` nao especificado.
-
-#### read(filename, subdir=None)
-
-Delega para `DataManager.read()`. Retorna DataFrame vazio se arquivo nao existe.
-
-#### list_files(subdir=None)
-
-Delega para `DataManager.list_files()`. Retorna lista de nomes (sem extensao).
+### Metodos Publicos
 
 #### get_status(subdir=None)
 
@@ -258,27 +213,139 @@ Retorna DataFrame com status de cada arquivo:
 | ultima_data | Data final |
 | status | 'OK' ou 'Vazio' |
 
-### Metodos de Logging
+### Metodos Helper (Internos)
 
-Usados internamente para output padronizado:
+Metodos com prefixo `_` que padronizam comportamentos comuns:
 
-```python
-# Inicio de busca
-self._log_fetch_start('SELIC', start_date='2024-01-01', verbose=True)
-# Output: "  Buscando SELIC desde 2024-01-01..."
+#### _normalize_indicators_list(indicators, config)
 
-self._log_fetch_start('SELIC', start_date=None, verbose=True)
-# Output: "  Buscando SELIC (historico completo)..."
+Normaliza entrada de indicadores para lista.
 
-# Resultado
-self._log_fetch_result('SELIC', count=252, verbose=True)
-# Output: "  252 registros"
+- `'all'` -> retorna todas as chaves da config
+- `'selic'` -> retorna `['selic']`
+- `['selic', 'cdi']` -> retorna como esta
 
-self._log_fetch_result('SELIC', count=0, verbose=True)
-# Output: "  Sem dados disponiveis"
+#### _log_collect_start(title, num_indicators, subdir=None, check_first_run=False, verbose=True)
+
+Imprime banner padronizado de inicio de coleta.
+
+```
+================================================================================
+                           COLETA: BACEN - SGS
+                         ATUALIZACAO | 7 indicadores
+================================================================================
 ```
 
-### Hierarquia
+#### _log_collect_end(results, verbose=True)
+
+Imprime banner padronizado de fim de coleta.
+
+```
+================================================================================
+                        COLETA CONCLUIDA: 1,523 registros
+================================================================================
+```
+
+#### _log_fetch_start(name, start_date=None, verbose=True)
+
+Log de inicio de busca de um indicador.
+
+```
+  Buscando SELIC desde 2024-01-01...
+  Buscando SELIC (historico completo)...
+```
+
+#### _log_fetch_result(name, count, verbose=True)
+
+Log de resultado de busca.
+
+```
+  252 registros
+  Sem dados disponiveis
+```
+
+#### _calculate_start_date(last_date, frequency)
+
+Calcula data inicial para coleta incremental.
+
+#### _collect_with_sync(fetch_fn, filename, name, subdir, frequency, save=True, verbose=True)
+
+Template pattern para coleta com suporte a atualizacao incremental.
+
+---
+
+## core.config
+
+**Localizacao:** `src/core/config.py`
+
+Configuracao global do projeto.
+
+```python
+from core import PROJECT_ROOT, DATA_PATH
+# ou
+from core.config import PROJECT_ROOT, DATA_PATH
+
+print(PROJECT_ROOT)  # Path do diretorio raiz do projeto
+print(DATA_PATH)     # Path do diretorio de dados (default: data/)
+```
+
+---
+
+## Estrutura de Modulos
+
+```
+src/
+├── core/
+│   ├── __init__.py           # API centralizada
+│   ├── config.py             # PROJECT_ROOT, DATA_PATH
+│   ├── collectors/
+│   │   ├── __init__.py       # collect, available_sources, get_status, BaseCollector
+│   │   ├── base.py           # BaseCollector
+│   │   └── registry.py       # Funcoes de registro
+│   ├── data/
+│   │   ├── __init__.py       # DataManager, QueryEngine, Explorers
+│   │   ├── storage.py        # DataManager
+│   │   └── query.py          # QueryEngine
+│   └── utils/
+│       ├── __init__.py       # list_indicators, get_indicator_config, filter_by_field
+│       ├── indicators.py     # Funcoes de indicadores
+│       └── dates.py          # Funcoes de datas
+├── bacen/
+│   ├── __init__.py           # SGS_CONFIG, EXPECTATIONS_CONFIG
+│   ├── sgs/
+│   │   ├── client.py         # SGSClient
+│   │   ├── collector.py      # SGSCollector
+│   │   ├── explorer.py       # SGSExplorer
+│   │   └── indicators.py     # SGS_CONFIG
+│   └── expectations/
+│       ├── client.py         # ExpectationsClient
+│       ├── collector.py      # ExpectationsCollector
+│       ├── explorer.py       # ExpectationsExplorer
+│       └── indicators.py     # EXPECTATIONS_CONFIG
+├── mte/
+│   ├── __init__.py           # CAGED_CONFIG
+│   └── caged/
+│       ├── client.py         # CAGEDClient
+│       ├── collector.py      # CAGEDCollector
+│       ├── explorer.py       # CAGEDExplorer
+│       └── indicators.py     # CAGED_CONFIG
+├── ipea/
+│   ├── __init__.py           # IPEA_CONFIG
+│   ├── client.py             # IPEAClient
+│   ├── collector.py          # IPEACollector
+│   ├── explorer.py           # IPEAExplorer
+│   └── indicators.py         # IPEA_CONFIG
+└── bloomberg/
+    ├── __init__.py           # BLOOMBERG_CONFIG
+    ├── client.py             # BloombergClient
+    ├── collector.py          # BloombergCollector
+    ├── explorer.py           # BloombergExplorer
+    └── indicators.py         # BLOOMBERG_CONFIG
+```
+
+---
+
+## Hierarquia de Collectors
 
 ```
 BaseCollector (src/core/collectors/base.py)
@@ -289,225 +356,29 @@ BaseCollector (src/core/collectors/base.py)
 └── BloombergCollector (src/bloomberg/collector.py)
 ```
 
-**Nota:** Todos os collectors agora herdam de `BaseCollector` para aproveitar funcionalidades comuns como logging padronizado, delegacoes ao DataManager e metodo `get_status()`.
-
 ---
 
-### Metodos Helper para Collectors
+## Imports Centralizados
 
-Metodos internos (prefixo `_`) que padronizam comportamentos comuns entre collectors.
-
-#### _normalize_indicators_list(indicators, config)
-
-Normaliza entrada de indicadores para lista.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| indicators | str\|list | 'all', lista ou string unica |
-| config | dict | Dicionario de configuracao (ex: SGS_CONFIG) |
-
-**Retorno:** list[str]
-
-**Comportamento:**
-- `'all'` → retorna todas as chaves da config
-- `'selic'` → retorna `['selic']`
-- `['selic', 'cdi']` → retorna como esta
-
-**Exemplo:**
 ```python
-# 'all' -> todas as chaves da config
-keys = self._normalize_indicators_list('all', SGS_CONFIG)
+# Interface de coleta (recomendado)
+from core.collectors import collect, available_sources, get_status
 
-# string -> lista com um elemento
-keys = self._normalize_indicators_list('selic', SGS_CONFIG)
+# Leitura de dados (recomendado)
+from core.data import sgs, expectations, caged, ipea, bloomberg
 
-# lista -> mantem como lista
-keys = self._normalize_indicators_list(['selic', 'cdi'], SGS_CONFIG)
-```
+# Componentes de dados
+from core.data import DataManager, QueryEngine
 
-#### _normalize_subdirs_list(subdirs)
+# Funcoes auxiliares
+from core import list_indicators, get_indicator_config, filter_by_field
 
-Normaliza entrada de subdiretorios para lista.
+# Configuracao
+from core import PROJECT_ROOT, DATA_PATH
 
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| subdirs | str\|list\|None | None (usa default), string ou lista |
-
-**Retorno:** list[str]
-
-**Comportamento:**
-- `None` → retorna `default_consolidate_subdirs`
-- `'bacen/sgs/daily'` → retorna `['bacen/sgs/daily']`
-- `['daily', 'monthly']` → retorna como esta
-
-#### _log_collect_start(title, num_indicators, subdir=None, check_first_run=False, verbose=True)
-
-Imprime banner padronizado de inicio de coleta.
-
-| Parametro | Tipo | Default | Descricao |
-|-----------|------|---------|-----------|
-| title | str | - | Titulo (ex: "BACEN - SGS") |
-| num_indicators | int | - | Numero de indicadores |
-| subdir | str | None | Subdiretorio para checar first_run |
-| check_first_run | bool | False | Mostrar "PRIMEIRA EXECUCAO" vs "ATUALIZACAO" |
-| verbose | bool | True | Se False, nao imprime |
-
-**Output exemplo:**
-```
-================================================================================
-                           COLETA: BACEN - SGS
-                         ATUALIZACAO | 7 indicadores
-================================================================================
-```
-
-#### _log_collect_end(results, verbose=True)
-
-Imprime banner padronizado de fim de coleta com total de registros.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| results | dict | Dicionario {key: DataFrame} |
-| verbose | bool | Se False, nao imprime |
-
-**Output exemplo:**
-```
-================================================================================
-                        COLETA CONCLUIDA: 1,523 registros
-================================================================================
-```
-
-#### _log_consolidate_start(title, subdir=None, verbose=True)
-
-Imprime banner padronizado de inicio de consolidacao.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| title | str | Titulo (ex: "SGS Daily") |
-| subdir | str | Subdiretorio sendo consolidado |
-| verbose | bool | Se False, nao imprime |
-
-**Output exemplo:**
-```
---------------------------------------------------------------------------------
-                       CONSOLIDANDO: SGS Daily
-                       Subdir: bacen/sgs/daily
---------------------------------------------------------------------------------
-```
-
-#### _save_parquet_to_processed(df, filename, verbose=True)
-
-Salva DataFrame no diretorio `processed/` como Parquet.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| df | DataFrame | Dados a salvar |
-| filename | str | Nome do arquivo (sem extensao) |
-| verbose | bool | Se True, imprime caminho |
-
-**Retorno:** Path do arquivo salvo, ou None se df vazio
-
-**Exemplo:**
-```python
-path = self._save_parquet_to_processed(df, 'sgs_daily_consolidated')
-# Output: "  Salvo em: data/processed/sgs_daily_consolidated.parquet"
-```
-
-#### _collect_with_sync(fetch_fn, filename, name, subdir, frequency, save=True, verbose=True)
-
-Template pattern para coleta com suporte a `fetch_and_sync`.
-
-Padroniza o fluxo de coleta:
-1. Cria wrapper para `fetch_fn` com logging
-2. Usa `fetch_and_sync` se `save=True`
-3. Loga resultado
-4. Retorna DataFrame
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| fetch_fn | Callable | Funcao(start_date) -> DataFrame |
-| filename | str | Nome do arquivo |
-| name | str | Nome para logs |
-| subdir | str | Subdiretorio em raw/ |
-| frequency | str | 'daily', 'monthly', etc |
-| save | bool | Se True, usa fetch_and_sync |
-| verbose | bool | Imprimir logs |
-
-**Retorno:** DataFrame coletado
-
-**Exemplo de uso em collector:**
-```python
-def collect(self, indicators='all', save=True, verbose=True):
-    keys = self._normalize_indicators_list(indicators, MY_CONFIG)
-    self._log_collect_start("My Collector", len(keys), verbose=verbose)
-    
-    results = {}
-    for key in keys:
-        cfg = MY_CONFIG[key]
-        df = self._collect_with_sync(
-            fetch_fn=lambda sd: self.client.get(cfg['code'], start_date=sd),
-            filename=key,
-            name=cfg['name'],
-            subdir=self.default_subdir,
-            frequency=cfg['frequency'],
-            save=save,
-            verbose=verbose,
-        )
-        results[key] = df
-    
-    self._log_collect_end(results, verbose=verbose)
-    return results
-```
-
----
-
-### Tabela Resumo: Metodos Helper
-
-| Metodo | Usado Por | Proposito |
-|--------|-----------|----------|
-| `_normalize_indicators_list()` | Bloomberg, IPEA, Expectations, SGS | Normaliza entrada de indicadores |
-| `_normalize_subdirs_list()` | Expectations, SGS | Normaliza entrada de subdirs |
-| `_log_collect_start()` | Bloomberg, IPEA, Expectations, SGS | Banner de inicio |
-| `_log_collect_end()` | Bloomberg, IPEA, Expectations, SGS | Banner de conclusao |
-| `_log_consolidate_start()` | Bloomberg, IPEA, Expectations, SGS | Banner de consolidacao |
-| `_save_parquet_to_processed()` | Expectations, SGS | Salva em processed/ |
-| `_collect_with_sync()` | Bloomberg, IPEA, SGS | Template de coleta |
-
-**Nota:** CAGEDCollector nao usa estes helpers devido ao seu fluxo especifico de download FTP paralelo.
-
----
-
-## Estrutura de Modulos
-
-```
-src/
-├── core/
-│   ├── indicators.py         # Funcoes centralizadas para indicadores
-│   ├── parallel.py           # ParallelFetcher
-│   ├── collectors/
-│   │   └── base.py           # BaseCollector
-│   └── data/
-│       ├── storage.py        # DataManager
-│       └── query.py          # QueryEngine
-├── bacen/
-│   ├── sgs/
-│   │   ├── client.py        # SGSClient
-│   │   ├── collector.py     # SGSCollector
-│   │   └── indicators.py    # SGS_CONFIG
-│   └── expectations/
-│       ├── client.py        # ExpectationsClient
-│       ├── collector.py     # ExpectationsCollector
-│       └── indicators.py    # EXPECTATIONS_CONFIG
-├── mte/
-│   └── caged/
-│       ├── client.py        # CAGEDClient
-│       ├── collector.py     # CAGEDCollector
-│       └── indicators.py    # CAGED_CONFIG
-├── ipea/
-│   ├── client.py            # IPEAClient
-│   ├── collector.py         # IPEACollector
-│   └── indicators.py        # IPEA_CONFIG
-└── bloomberg/
-    ├── client.py            # BloombergClient
-    ├── collector.py         # BloombergCollector
-    └── indicators.py        # BLOOMBERG_CONFIG
+# Configs de indicadores
+from src.bacen import SGS_CONFIG, EXPECTATIONS_CONFIG
+from src.mte import CAGED_CONFIG
+from src.ipea import IPEA_CONFIG
+from src.bloomberg import BLOOMBERG_CONFIG
 ```

@@ -1,16 +1,10 @@
 """
-Modulo Bloomberg - Market Data.
+Modulo Bloomberg (interno) - Dados de mercado.
 
-Coleta de dados de mercado via Bloomberg Terminal (xbbg).
+Para coleta, use: from core.collectors import collect
+Para query, use: from core.data import bloomberg
 """
 
-from .client import BloombergClient
-from .collector import BloombergCollector
-from .indicators import BLOOMBERG_CONFIG, LOOKBACK_DAYS
+from .indicators import BLOOMBERG_CONFIG
 
-__all__ = [
-    "BloombergClient",
-    "BloombergCollector",
-    "BLOOMBERG_CONFIG",
-    "LOOKBACK_DAYS",
-]
+__all__ = ['BLOOMBERG_CONFIG']

@@ -1,17 +1,10 @@
 """
-Modulo IPEA - Series temporais do IPEADATA.
+Modulo IPEA (interno) - Series IPEADATA.
 
-Coleta de dados agregados (CAGED, desemprego, etc).
+Para coleta, use: from core.collectors import collect
+Para query, use: from core.data import ipea
 """
 
-from .client import IPEAClient
-from .collector import IPEACollector
 from .indicators import IPEA_CONFIG
 
-__all__ = [
-    # Classes
-    "IPEAClient",
-    "IPEACollector",
-    # Config
-    "IPEA_CONFIG",
-]
+__all__ = ['IPEA_CONFIG']

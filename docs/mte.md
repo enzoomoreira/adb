@@ -9,38 +9,49 @@ O modulo `src/mte/` coleta microdados de emprego formal via FTP do MTE.
 | Caracteristica | Valor |
 |----------------|-------|
 | Fonte | FTP pdet.mte.gov.br |
-| Formato origem | 7z -> CSV |
+| Formato origem | 7z -> CSV -> Parquet |
 | Periodo | 2020-presente (Novo CAGED) |
 | Volume | ~500MB-1GB por mes |
 | Atualizacao | Mensal (~2 meses de atraso) |
 
 ---
 
-## CAGEDCollector
+## Arquitetura de Uso
 
-Orquestra a coleta de microdados do CAGED com suporte a downloads paralelos.
-
-### Uso Basico
+### Para Coleta de Dados
 
 ```python
-from src.mte import CAGEDCollector
-from core.data import QueryEngine
+from core.collectors import collect
 
-collector = CAGEDCollector(data_path='data/')
-
-# Coleta (paralelo por padrao)
-results = collector.collect('cagedmov')            # Um indicador
-results = collector.collect(['cagedmov', 'cagedfor'])  # Lista
-results = collector.collect()                       # Todos (default='all')
+collect('caged')                                  # Todos indicadores
+collect('caged', indicators='cagedmov')           # Um indicador
+collect('caged', indicators=['cagedmov', 'cagedfor'])  # Lista
 # Retorna: dict[str, int] com contagem de registros
-
-# Status
-collector.get_status()
 ```
 
-### Leitura e Queries com QueryEngine
+### Para Leitura/Queries (Explorer)
 
-Para leitura e consultas SQL nos dados coletados, use o `QueryEngine` (separacao de responsabilidades):
+```python
+from core.data import caged
+
+# Leitura de microdados
+df = caged.read('cagedmov')                      # Todos os periodos
+df = caged.read('cagedmov', start='2024-01')     # A partir de janeiro/2024
+df = caged.read('cagedmov', start='2024-01', end='2024-06')
+
+# Consultas agregadas
+df = caged.saldo_mensal()                        # Saldo por mes
+df = caged.saldo_por_uf()                        # Saldo por UF
+df = caged.saldo_por_setor()                     # Saldo por setor
+
+# Informacoes
+print(caged.available_periods())                 # Periodos disponiveis
+print(caged.info('cagedmov'))                    # Info do indicador
+```
+
+### Queries SQL Diretas
+
+Para queries customizadas, use o QueryEngine:
 
 ```python
 from core.data import QueryEngine
@@ -55,13 +66,6 @@ df = qe.read_glob('cagedmov_*.parquet', subdir='mte/caged',
 
 # Query SQL com DuckDB
 df = qe.sql('''
-    SELECT uf, COUNT(*) as total
-    FROM '{raw}/mte/caged/cagedmov_2024-*.parquet'
-    GROUP BY uf
-''')
-
-# Agregacao eficiente
-df = qe.sql('''
     SELECT uf, SUM(saldomovimentacao) as saldo
     FROM '{raw}/mte/caged/cagedmov_*.parquet'
     WHERE competenciamov >= '2024-01'
@@ -71,31 +75,6 @@ df = qe.sql('''
 ```
 
 Veja [data.md](data.md) para documentacao completa do QueryEngine.
-
-### Metodos
-
-#### collect(indicators='all', save=True, verbose=True, parallel=True, max_workers=4)
-
-Coleta dados do CAGED. Salva arquivos mensais individuais para evitar MemoryError.
-
-| Parametro | Tipo | Default | Descricao |
-|-----------|------|---------|-----------|
-| indicators | str\|list | 'all' | Indicadores a coletar |
-| save | bool | True | Salvar em Parquet |
-| verbose | bool | True | Imprimir progresso |
-| parallel | bool | True | Baixar em paralelo |
-| max_workers | int | 4 | Numero de threads |
-
-**Retorno:** dict[str, int] com contagem de registros por indicador
-
-**Observacoes:**
-- Cada mes e salvo imediatamente apos download (baixo uso de memoria)
-- Se falhar no meio, meses ja salvos permanecem (resiliencia)
-- Downloads paralelos usam conexoes FTP independentes por thread
-
-#### get_status()
-
-Retorna DataFrame com status dos dados locais (ultimo periodo baixado).
 
 ---
 
@@ -109,67 +88,89 @@ Indicadores disponiveis em `src/mte/caged/indicators.py`:
 | cagedfor | CAGEDFOR | Declaracoes fora do prazo | 2020 |
 | cagedexc | CAGEDEXC | Exclusoes de movimentacoes | 2020 |
 
----
-
-## CAGEDClient
-
-Cliente FTP de baixo nivel para download e extracao de arquivos.
+### Funcoes Auxiliares
 
 ```python
-from src.mte import CAGEDClient
+from src.mte import CAGED_CONFIG
+from core import list_indicators, get_indicator_config
+
+list_indicators(CAGED_CONFIG)                    # ['cagedmov', 'cagedfor', 'cagedexc']
+get_indicator_config(CAGED_CONFIG, 'cagedmov')   # Config do indicador
+```
+
+---
+
+## Uso Avancado (Acesso Direto)
+
+Para casos especiais:
+
+```python
+# Collector (import direto - uso interno)
+from mte.caged.collector import CAGEDCollector
+
+collector = CAGEDCollector(data_path='data/')
+results = collector.collect('cagedmov', max_workers=4)
+# Retorna: dict[str, int] com contagem de registros
+collector.get_status()
+
+# Client (baixo nivel - download FTP)
+from mte.caged.client import CAGEDClient
 
 client = CAGEDClient()
 client.connect()
-
-# Baixa e extrai arquivo 7z automaticamente
-df = client.get_data(prefix='CAGEDMOV', year=2024, month=10)
-
-# Lista arquivos disponiveis no FTP
+file_path = client.download_to_file(prefix='CAGEDMOV', year=2024, month=10)
 files = client.list_files(year=2024)
-
 client.disconnect()
 ```
 
----
-
-## Funcoes Auxiliares
-
-**Nota:** As funcoes auxiliares agora sao fornecidas pelo modulo centralizado `core`.
+### CAGEDCollector.collect()
 
 ```python
-from src.mte import CAGED_CONFIG, get_available_periods
-from core import list_indicators, get_indicator_config
+def collect(
+    indicators: list[str] | str = 'all',
+    save: bool = True,
+    verbose: bool = True,
+    max_workers: int = 4,
+) -> dict[str, int]
+```
 
-list_indicators(CAGED_CONFIG)              # ['cagedmov', 'cagedfor', 'cagedexc']
-get_indicator_config(CAGED_CONFIG, 'cagedmov')  # Retorna config do indicador
-get_available_periods(start_year=2023)     # Lista (ano, mes) disponiveis (especifico do CAGED)
+**Arquitetura de Coleta:**
+1. **Download Paralelo**: ThreadPoolExecutor para baixar multiplos arquivos 7z
+2. **Conversao Otimizada**: DuckDB para conversao direta CSV -> Parquet
+3. **Resiliencia**: Cada mes salvo imediatamente apos conversao
+
+### CAGEDClient.download_to_file()
+
+```python
+def download_to_file(
+    prefix: str,
+    year: int,
+    month: int,
+    target_path: Path | str = None,
+) -> Path  # Retorna path do arquivo 7z baixado
+```
+
+### CAGEDCollector.get_status()
+
+```python
+def get_status() -> pd.DataFrame
+# Colunas: indicador, ultimo_periodo, status
 ```
 
 ---
 
-## Imports Publicos
+## Exports Publicos
 
 ```python
-from src.mte import (
-    # Collector
-    CAGEDCollector,
-
-    # Client
-    CAGEDClient,
-
-    # Configuracoes
-    CAGED_CONFIG,
-    get_available_periods,  # Especifico do CAGED
-)
+# Config (exportado)
+from src.mte import CAGED_CONFIG
 
 # Funcoes auxiliares (centralizadas em core)
-from core import (
-    list_indicators,
-    get_indicator_config,
-    filter_by_field,
-    BaseCollector,
-    DataManager,
-)
+from core import list_indicators, get_indicator_config
+
+# Interface centralizada (recomendado)
+from core.collectors import collect
+from core.data import caged
 ```
 
 ---
@@ -202,5 +203,5 @@ data/
 ## Notas Importantes
 
 1. **Volume de dados**: CAGED tem milhoes de registros. Evite carregar tudo na memoria.
-2. **QueryEngine**: Use `QueryEngine.sql()` ou `read_glob()` para queries eficientes sem carregar dados.
-3. **Separacao de responsabilidades**: CAGEDCollector apenas coleta. Para leitura/queries, use `QueryEngine`.
+2. **Use Explorers/QueryEngine**: Para queries eficientes sem carregar dados.
+3. **Separacao de responsabilidades**: Collector baixa dados, Explorer/QueryEngine consulta.

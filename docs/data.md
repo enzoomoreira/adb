@@ -8,18 +8,48 @@ O modulo `src/core/data/` contem dois componentes principais:
 
 | Componente | Arquivo | Descricao |
 |------------|---------|-----------|
-| DataManager | `storage.py` | Persistencia de dados em Parquet (save, read, append, consolidate) |
+| DataManager | `storage.py` | Persistencia de dados em Parquet (save, read, append) |
 | QueryEngine | `query.py` | Consultas SQL via DuckDB em arquivos Parquet |
+
+Alem disso, o modulo expoe **Explorers** para cada fonte de dados via lazy loading.
+
+---
+
+## Explorers (Interface Principal)
+
+A forma recomendada de ler dados e via Explorers:
+
+```python
+from core.data import sgs, expectations, caged, ipea, bloomberg
+
+# Leitura simples
+df = sgs.read('selic')
+df = expectations.read('ipca_anual')
+df = ipea.read('caged_saldo')
+df = bloomberg.read('brent')
+
+# Com filtros de data
+df = sgs.read('selic', start='2020')
+df = sgs.read('selic', start='2020', end='2024')
+
+# Multiplos indicadores
+df = sgs.read('selic', 'cdi')
+
+# Informacoes
+print(sgs.available())           # Lista indicadores
+print(sgs.info('selic'))         # Info do indicador
+
+# CAGED (microdados) - metodos especiais
+df = caged.saldo_mensal()
+df = caged.saldo_por_uf()
+print(caged.available_periods())
+```
 
 ---
 
 # DataManager (storage.py)
 
-API unificada para salvar, ler e consolidar dados em formato Parquet. Usado por todos os collectors do projeto.
-
-**Localização:** `src/core/data/storage.py`
-
----
+API unificada para salvar e ler dados em formato Parquet. Usado internamente por todos os collectors.
 
 ## Inicializacao
 
@@ -33,8 +63,6 @@ dm.base_path       # Path('data/')
 dm.raw_path        # Path('data/raw/')
 dm.processed_path  # Path('data/processed/')
 ```
-
----
 
 ## Metodos Principais
 
@@ -114,95 +142,125 @@ Verifica se e primeira execucao (subdiretorio vazio ou inexistente).
 
 **Retorno:** bool
 
----
+### get_file_path(filename, subdir)
 
-## fetch_and_sync() - Sincronizacao Incremental
+Retorna o path completo de um arquivo.
 
-Metodo centralizado que orquestra coleta incremental de dados.
+**Retorno:** Path
 
-```python
-def fetch_and_sync(
-    filename: str,
-    subdir: str,
-    fetch_fn: Callable[[str | None], pd.DataFrame],
-    frequency: str = 'daily',
-    verbose: bool = True,
-) -> tuple[pd.DataFrame, bool]
-```
+### get_metadata(filename, subdir='daily')
 
-**Fluxo:**
-1. Verifica ultima data salva (`get_last_date`)
-2. Calcula `start_date` para proxima busca:
-   - Primeira execucao: `None` (historico completo)
-   - Daily: dia seguinte
-   - Monthly: proximo mes
-3. Chama `fetch_fn(start_date)` para obter dados
-4. Salva (`save`) ou appenda (`append`) conforme necessario
-5. Retorna `(DataFrame, is_first_run)`
+Retorna metadados de um arquivo.
 
-**Exemplo de uso:**
-```python
-def fetch(start_date):
-    return client.get_data(code=432, start=start_date)
-
-df, is_first = dm.fetch_and_sync(
-    filename='selic',
-    subdir='bacen/sgs/daily',
-    fetch_fn=fetch,
-    frequency='daily'
-)
-```
-
-**Por que usar:**
-- Centraliza logica de coleta incremental
-- Evita duplicacao de codigo em cada collector
-- Trata automaticamente primeira execucao vs. atualizacao
+**Retorno:** dict
 
 ---
 
-## consolidate() - Consolidacao de Dados
+# QueryEngine (query.py)
 
-Consolida multiplos arquivos em um DataFrame.
+Motor de consultas SQL otimizado para arquivos Parquet usando DuckDB.
 
-```python
-def consolidate(
-    files: list[str] = None,
-    output_filename: str = None,
-    subdir: str = 'daily',
-    save: bool = True,
-    verbose: bool = False,
-    add_source: bool = False,
-) -> pd.DataFrame
-```
+## Visao Geral
 
-| Parametro | Tipo | Default | Descricao |
-|-----------|------|---------|-----------|
-| files | list | None | Arquivos a consolidar (default: todos) |
-| output_filename | str | None | Nome do arquivo consolidado |
-| subdir | str | 'daily' | Subdiretorio fonte |
-| save | bool | True | Salvar em processed/ |
-| add_source | bool | False | Adicionar coluna '_source' |
+O `QueryEngine` e o mecanismo principal de leitura do projeto. Abstrai o DuckDB para permitir consultas SQL diretas em arquivos Parquet.
 
-**Comportamento:**
-- `add_source=False`: Join horizontal por indice. Renomeia coluna 'value' para nome do arquivo.
-- `add_source=True`: Concat vertical. Adiciona coluna '_source' com nome do arquivo origem.
+**Principais Features:**
+- **DuckDB-first:** Utiliza DuckDB para todas as leituras, garantindo performance superior.
+- **Pushdown Optimization:** Aplica filtros (`WHERE`) e selecao de colunas antes de carregar dados.
+- **Glob Support:** Le diretorios inteiros (`*.parquet`) como tabela unica.
+- **Date Normalization:** Garante consistencia de indices temporais.
+
+## Inicializacao
 
 ```python
-# Join horizontal (series temporais)
-df = dm.consolidate(
-    subdir='bacen/sgs/daily',
-    output_filename='sgs_daily_consolidated'
-)
-# Resultado: colunas [selic, cdi, dolar_ptax, ...]
+from core.data import QueryEngine
 
-# Concat vertical (expectativas)
-df = dm.consolidate(
-    subdir='bacen/expectations',
-    output_filename='expectations_consolidated',
-    add_source=True
-)
-# Resultado: todas as linhas + coluna _source
+qe = QueryEngine(base_path='data/')
 ```
+
+## Metodos Principais
+
+### read(filename, subdir='daily', columns=None, where=None)
+
+Le um arquivo Parquet de forma eficiente.
+
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| filename | str | Nome do arquivo (sem extensao) |
+| subdir | str | Subdiretorio (ex: 'bacen/sgs/daily') |
+| columns | list | Selecao de colunas (None = todas) |
+| where | str | Filtro SQL (ex: "value > 10") |
+
+```python
+# Leitura simples
+df = qe.read('selic', 'bacen/sgs/daily')
+
+# Leitura otimizada
+df = qe.read(
+    'cagedmov_202401',
+    'mte/caged',
+    columns=['uf', 'saldomovimentacao'],
+    where="uf = 35"
+)
+```
+
+### read_glob(pattern, subdir=None, columns=None, where=None)
+
+Le multiplos arquivos que correspondem a um padrao.
+
+```python
+# Le todo historico do CAGED de 2024
+df = qe.read_glob('cagedmov_2024*.parquet', subdir='mte/caged')
+
+# Com filtros
+df = qe.read_glob(
+    'cagedmov_*.parquet',
+    subdir='mte/caged',
+    columns=['uf', 'saldomovimentacao'],
+    where="uf = 35"
+)
+```
+
+### sql(query, subdir=None)
+
+Executa SQL arbitrario do DuckDB. Suporta variaveis de template `{raw}` e `{processed}`.
+
+```python
+df = qe.sql("""
+    SELECT uf, SUM(saldomovimentacao) as saldo
+    FROM '{raw}/mte/caged/cagedmov_*.parquet'
+    GROUP BY uf
+    ORDER BY saldo DESC
+""")
+```
+
+### aggregate(filename, subdir, group_by, agg, where=None)
+
+Executa agregacao otimizada no banco de dados (DuckDB).
+
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| agg | dict | Dicionario `{coluna: funcao}` (ex: `{'value': 'AVG'}`) |
+
+```python
+df = qe.aggregate(
+    filename='cagedmov_*.parquet',
+    subdir='mte/caged',
+    group_by='uf',
+    agg={'saldomovimentacao': 'SUM'},
+    where="competenciamov >= '2024-01-01'"
+)
+```
+
+### get_metadata(filename, subdir)
+
+Retorna metadados do arquivo (contagem de linhas, datas e colunas) sem ler o arquivo inteiro.
+
+### connection()
+
+Retorna conexao DuckDB configurada.
+
+**Retorno:** duckdb.DuckDBPyConnection
 
 ---
 
@@ -218,14 +276,24 @@ data/
 │   │   └── expectations/    # ipca_anual.parquet, ...
 │   ├── mte/
 │   │   └── caged/           # cagedmov_2024-01.parquet, ...
-│   └── ipea/
-│       └── monthly/         # caged_saldo.parquet, ...
-└── processed/               # Dados consolidados
-    ├── bacen_sgs_daily_consolidated.parquet
-    ├── bacen_sgs_monthly_consolidated.parquet
-    ├── expectations_consolidated.parquet
-    └── ipea_monthly_consolidated.parquet
+│   ├── ipea/
+│   │   └── monthly/         # caged_saldo.parquet, ...
+│   └── bloomberg/
+│       └── daily/           # brent.parquet, ...
+└── processed/               # (Opcional - uso futuro)
 ```
+
+---
+
+## Comparacao: QueryEngine vs DataManager
+
+| Operacao | DataManager | QueryEngine |
+|----------|-------------|-------------|
+| **Foco** | I/O (Salvar, Append) | Leitura / Analytics |
+| **Backend** | PyArrow / Pandas | DuckDB |
+| **Leitura** | `read()` (Arquivo unico) | `read()`, `read_glob()`, `sql()` |
+| **Filtros** | Nao suporta | Sim (`where=...`) |
+| **Performance** | Padrao | Otimizada (Colunar) |
 
 ---
 
@@ -233,206 +301,14 @@ data/
 
 ### Parquet
 
-- **Engine:** PyArrow
+- **Engine:** PyArrow (escrita) / DuckDB (leitura)
 - **Compressao:** Snappy
-- **Indice:** Preservado (DatetimeIndex)
+- **Indice:** Preservado (DatetimeIndex) quando aplicavel
 
 ### Convencoes
 
-- **Indice:** DatetimeIndex para series temporais
+- **Indice:** DatetimeIndex para series temporais (normalizado para naive datetime)
 - **Coluna de valor:** `value` (normalizado pelos clients)
-- **Metadata:** Armazenada em `df.attrs`
-
-```python
-df.attrs = {
-    'filename': 'selic',
-    'subdir': 'bacen/sgs/daily',
-    'saved_at': '2024-12-06T10:30:00',
-    'last_update': '2024-12-06T15:00:00',
-    # ... metadata adicional
-}
-```
-
----
-
-## Metodos de Compatibilidade
-
-Wrappers para API antiga (uso desencorajado):
-
-| Metodo Antigo | Equivalente Novo |
-|---------------|------------------|
-| `save_indicator(df, key, freq)` | `save(df, filename=key, subdir=freq)` |
-| `read_indicator(key, freq)` | `read(filename=key, subdir=freq)` |
-| `append_indicator(df, key, freq)` | `append(df, filename=key, subdir=freq)` |
-| `list_indicators(freq)` | `list_files(subdir=freq)` |
-| `consolidate_daily()` | `consolidate(subdir='daily')` |
-| `consolidate_monthly()` | `consolidate(subdir='monthly')` |
-
----
-
-## Import DataManager
-
-```python
-from core.data import DataManager
-```
-
----
-
-# QueryEngine (query.py)
-
-Motor de consultas SQL para arquivos Parquet usando DuckDB.
-
-**Localização:** `src/core/data/query.py`
-
-## Visao Geral
-
-O `QueryEngine` permite executar consultas SQL eficientes em arquivos Parquet sem carregar tudo em memoria. Usa DuckDB para queries com pushdown de filtros e otimizacao automatica.
-
-**Beneficios:**
-- Queries SQL em Parquet sem carregar dados em memoria
-- Filtros pushdown (colunas, WHERE) para performance
-- Suporte a glob patterns (`data/raw/**/*.parquet`)
-- Variaveis de template para paths dinamicos
-
----
-
-## Inicializacao
-
-```python
-from core.data import QueryEngine
-
-qe = QueryEngine(base_path='data/')
-
-# Atributos disponiveis
-qe.base_path       # Path('data/')
-qe.raw_path        # Path('data/raw/')
-qe.processed_path  # Path('data/processed/')
-```
-
----
-
-## Metodos Principais
-
-### sql(query, params=None)
-
-Executa query SQL arbitraria em arquivos Parquet.
-
-```python
-def sql(
-    query: str,
-    params: dict = None
-) -> pd.DataFrame
-```
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| query | str | Query SQL (pode usar paths relativos ou glob patterns) |
-| params | dict | Parametros para substituicao (opcional) |
-
-**Exemplo:**
-```python
-df = qe.sql('''
-    SELECT uf, SUM(saldomovimentacao) as saldo
-    FROM 'data/raw/mte/caged/cagedmov_2024-*.parquet'
-    WHERE competenciamov >= '2024-01-01'
-    GROUP BY uf
-    ORDER BY saldo DESC
-''')
-```
-
-### read(filename, subdir='daily', columns=None, where=None)
-
-Le um arquivo Parquet com filtros opcionais.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| filename | str | Nome do arquivo (sem extensao) |
-| subdir | str | Subdiretorio dentro de raw/ |
-| columns | list | Colunas especificas para carregar |
-| where | str | Clausula WHERE SQL para filtrar |
-
-**Exemplo:**
-```python
-# Ler arquivo completo
-df = qe.read('selic', 'bacen/sgs/daily')
-
-# Apenas colunas especificas
-df = qe.read('selic', 'bacen/sgs/daily', columns=['value'])
-
-# Com filtro WHERE
-df = qe.read('selic', 'bacen/sgs/daily', where="value > 10")
-```
-
-### read_glob(pattern, columns=None, where=None)
-
-Le multiplos arquivos usando glob pattern.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| pattern | str | Glob pattern (ex: `mte/caged/cagedmov_2024-*.parquet`) |
-| columns | list | Colunas especificas para carregar |
-| where | str | Clausula WHERE SQL para filtrar |
-
-**Exemplo:**
-```python
-# Todos os arquivos CAGED de 2024
-df = qe.read_glob('mte/caged/cagedmov_2024-*.parquet')
-
-# Filtrado por UF
-df = qe.read_glob(
-    'mte/caged/cagedmov_2024-*.parquet',
-    columns=['uf', 'saldomovimentacao'],
-    where="uf = 'SP'"
-)
-```
-
-### aggregate(filename, subdir, agg_expr, group_by=None, where=None)
-
-Executa agregacoes eficientes sem carregar dados completos.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| filename | str | Nome do arquivo ou glob pattern |
-| subdir | str | Subdiretorio |
-| agg_expr | str | Expressao de agregacao SQL (ex: 'COUNT(*)', 'SUM(value)') |
-| group_by | str | Clausula GROUP BY |
-| where | str | Clausula WHERE |
-
-**Exemplo:**
-```python
-# Contar registros
-count = qe.aggregate('selic', 'bacen/sgs/daily', 'COUNT(*)')
-
-# Media por grupo
-df = qe.aggregate(
-    'cagedmov_*',
-    'mte/caged',
-    'AVG(saldomovimentacao) as media',
-    group_by='uf',
-    where="competenciamov >= '2024-01-01'"
-)
-```
-
----
-
-## Variaveis de Template
-
-Use variaveis de template em queries para paths dinamicos:
-
-| Variavel | Valor | Descricao |
-|----------|-------|-----------|
-| `{raw}` | `data/raw/` | Path do diretorio raw |
-| `{processed}` | `data/processed/` | Path do diretorio processed |
-| `{subdir}` | (dinamico) | Subdiretorio especificado |
-
-**Exemplo:**
-```python
-df = qe.sql('''
-    SELECT *
-    FROM '{raw}bacen/sgs/daily/selic.parquet'
-    WHERE value > 10
-''')
-```
 
 ---
 
@@ -453,29 +329,20 @@ df = qe.sql('''
 
 ---
 
-## Comparacao: QueryEngine vs DataManager
-
-| Operacao | DataManager | QueryEngine |
-|----------|-------------|-------------|
-| Ler arquivo completo | `read()` | `read()` ou `sql()` |
-| Ler com filtros | - | `read(where=...)` |
-| Agregacoes | Carregar + pandas | `aggregate()` (mais eficiente) |
-| Multiplos arquivos | `consolidate()` | `read_glob()` ou `sql()` |
-| Queries complexas | - | `sql()` |
-
----
-
-## Import QueryEngine
+## Imports
 
 ```python
-from core.data import QueryEngine
+# Componentes principais
+from core.data import DataManager, QueryEngine
+
+# Explorers (recomendado para leitura)
+from core.data import sgs, expectations, caged, ipea, bloomberg
 ```
 
 ---
 
 ## Dependencias
 
-- **DuckDB**: Motor SQL para Parquet
-  ```bash
-  pip install duckdb
-  ```
+```bash
+pip install duckdb pandas pyarrow
+```

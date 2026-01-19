@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from core.collectors import BaseCollector
-from core.indicators import get_indicator_config
+from core.utils import get_indicator_config
 from .client import BloombergClient
 from .indicators import BLOOMBERG_CONFIG
 
@@ -27,14 +27,13 @@ class BloombergCollector(BaseCollector):
     """
 
     default_subdir = "bloomberg/daily"
-    default_consolidate_subdirs = ["bloomberg/daily"]
 
-    def __init__(self, data_path: Path, check_connection: bool = True):
+    def __init__(self, data_path: Path = None, check_connection: bool = True):
         """
         Inicializa o coletor.
 
         Args:
-            data_path: Caminho para diretorio data/
+            data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
             check_connection: Se True, valida conexao Bloomberg no init
 
         Raises:
@@ -161,49 +160,3 @@ class BloombergCollector(BaseCollector):
 
         return results
 
-    # =========================================================================
-    # Consolidacao
-    # =========================================================================
-
-    def consolidate(
-        self,
-        subdir: str = "bloomberg/daily",
-        output_filename: str = "bloomberg_daily_consolidated",
-        save: bool = True,
-        verbose: bool = True,
-    ) -> pd.DataFrame:
-        """
-        Consolida arquivos Bloomberg.
-
-        Faz join horizontal dos arquivos por indice (data).
-
-        Args:
-            subdir: Subdiretorio a consolidar
-            output_filename: Nome do arquivo consolidado
-            save: Se True, salva em processed/
-            verbose: Se True, imprime progresso
-
-        Returns:
-            DataFrame consolidado
-        """
-        self._log_consolidate_start(
-            title="CONSOLIDANDO DADOS BLOOMBERG",
-            subdir=subdir,
-            verbose=verbose,
-        )
-
-        df = self.data_manager.consolidate(
-            subdir=subdir,
-            output_filename=output_filename,
-            save=save,
-            verbose=verbose,
-        )
-
-        if verbose:
-            if not df.empty:
-                print(
-                    f"\nConsolidado: {len(df):,} registros, {len(df.columns)} colunas"
-                )
-            print("Consolidacao concluida!")
-
-        return df

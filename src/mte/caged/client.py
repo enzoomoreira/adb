@@ -1,36 +1,13 @@
 """
 Cliente FTP para download de microdados do Novo CAGED.
 
-Baixa arquivos 7z diretamente em memoria (sem salvar no disco)
-e extrai CSVs para DataFrames.
+Baixa arquivos 7z diretamente para disco.
+A conversão para Parquet é feita pelo CAGEDCollector usando PyArrow streaming.
 """
 
 from ftplib import FTP
-from io import BytesIO
-import tempfile
 from pathlib import Path
-
-import py7zr
-import pandas as pd
-
-
-# Colunas que podem ter formato inconsistente (com/sem virgula decimal)
-# dependendo do mes. Precisam ser convertidas para float explicitamente.
-NUMERIC_COLUMNS = [
-    'horascontratuais',
-    'salário',
-    'valorsaláriofixo',
-]
-
-
-def _convert_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Converte colunas para numerico de forma robusta."""
-    for col in NUMERIC_COLUMNS:
-        if col in df.columns:
-            if df[col].dtype == 'object':
-                df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-    return df
+import tempfile
 
 
 class CAGEDClient:
@@ -96,110 +73,47 @@ class CAGEDClient:
         ym = f"{year}{month:02d}"
         return f"{self.BASE_PATH}/{year}/{ym}/{prefix}{ym}.7z"
 
-    def download_to_memory(self, filepath: str) -> BytesIO:
-        """
-        Baixa arquivo para memoria (BytesIO).
-
-        Args:
-            filepath: Caminho do arquivo no FTP
-
-        Returns:
-            BytesIO com conteudo do arquivo
-        """
-        self._ensure_connected()
-        buffer = BytesIO()
-        self._ftp.retrbinary(f"RETR {filepath}", buffer.write)
-        buffer.seek(0)
-        return buffer
-
-    def read_7z_from_buffer(
-        self,
-        buffer: BytesIO,
-        encoding: str = "utf-8",
-        **read_csv_kwargs,
-    ) -> pd.DataFrame:
-        """
-        Extrai CSV do buffer 7z e retorna DataFrame.
-
-        Args:
-            buffer: BytesIO com arquivo 7z
-            encoding: Encoding do CSV (default: utf-8)
-            **read_csv_kwargs: Args adicionais para pd.read_csv
-
-        Returns:
-            DataFrame com dados do CSV
-        """
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Extrai para diretorio temporario
-            with py7zr.SevenZipFile(buffer, mode='r') as archive:
-                archive.extractall(path=tmpdir)
-
-            # Encontra o arquivo CSV extraido
-            tmppath = Path(tmpdir)
-            csv_files = list(tmppath.glob("*.txt")) + list(tmppath.glob("*.csv"))
-
-            if not csv_files:
-                raise ValueError("Nenhum arquivo CSV/TXT encontrado no 7z")
-
-            csv_path = csv_files[0]
-
-            # Le o CSV
-            df = pd.read_csv(
-                csv_path,
-                encoding=encoding,
-                sep=";",
-                decimal=",",  # Padrao brasileiro
-                low_memory=False,
-                **read_csv_kwargs,
-            )
-
-        return df
-
-    def get_data(
+    def download_to_file(
         self,
         prefix: str,
         year: int,
         month: int,
-        verbose: bool = False,
-    ) -> pd.DataFrame:
+        target_path: Path | str = None,
+    ) -> Path:
         """
-        Baixa e retorna dados de um periodo.
+        Baixa arquivo 7z diretamente para disco.
 
         Args:
             prefix: CAGEDMOV, CAGEDFOR ou CAGEDEXC
             year: Ano (2020+)
             month: Mes (1-12)
-            verbose: Imprimir progresso
+            target_path: Caminho de destino (opcional, usa temp se None)
 
         Returns:
-            DataFrame com dados do periodo (vazio se erro)
+            Path do arquivo baixado
+
+        Raises:
+            Exception: Propaga erros de conexao/download
         """
+        self._ensure_connected()
+        
         filepath = self._build_filepath(prefix, year, month)
-
-        if verbose:
-            print(f"  Baixando {prefix} {year}-{month:02d}...")
-
-        try:
-            buffer = self.download_to_memory(filepath)
-            # Dados CAGED usam UTF-8
-            df = self.read_7z_from_buffer(buffer, encoding='utf-8')
-
-            # Garante tipos numericos consistentes
-            df = _convert_numeric_columns(df)
-
-            # Adiciona colunas de referencia
-            df['ano_ref'] = year
-            df['mes_ref'] = month
-
-            if verbose:
-                print(f"    {len(df):,} registros")
-
-            return df
-
-        except Exception as e:
-            if verbose:
-                print(f"    Erro: {e}")
-            return pd.DataFrame()
+        
+        # Se não especificou destino, usa arquivo temporário
+        if target_path is None:
+            ym = f"{year}{month:02d}"
+            target_path = Path(tempfile.gettempdir()) / f"{prefix}{ym}.7z"
+        else:
+            target_path = Path(target_path)
+        
+        # Garantir que diretório existe
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Download direto para arquivo
+        with open(target_path, 'wb') as f:
+            self._ftp.retrbinary(f"RETR {filepath}", f.write)
+        
+        return target_path
 
     def list_files(self, year: int = None) -> list[str]:
         """

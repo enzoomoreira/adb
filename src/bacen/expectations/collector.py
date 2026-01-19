@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from core.collectors import BaseCollector
-from core.indicators import get_indicator_config
+from core.utils import get_indicator_config
 from .client import ExpectationsClient
 from .indicators import EXPECTATIONS_CONFIG
 
@@ -26,14 +26,13 @@ class ExpectationsCollector(BaseCollector):
     """
 
     default_subdir = 'bacen/expectations'
-    default_consolidate_subdirs = ['bacen/expectations']
 
-    def __init__(self, data_path: Path):
+    def __init__(self, data_path: Path = None):
         """
         Inicializa o coletor.
 
         Args:
-            data_path: Caminho base para diretorio data/
+            data_path: Caminho base para diretorio data/ (opcional, usa DATA_PATH se None)
         """
         super().__init__(data_path)
         self.client = ExpectationsClient()
@@ -82,7 +81,6 @@ class ExpectationsCollector(BaseCollector):
         def fetch(auto_start_date: str | None) -> pd.DataFrame:
             # start_date manual tem prioridade sobre automatico
             effective_start = start_date or auto_start_date
-            self._log_fetch_start(log_name, effective_start, verbose)
             return self.client.query(
                 endpoint_key=endpoint,
                 indicator=indicator,
@@ -91,20 +89,15 @@ class ExpectationsCollector(BaseCollector):
                 limit=limit,
             )
 
-        if save:
-            df, _ = self.data_manager.fetch_and_sync(
-                filename=filename,
-                subdir=subdir,
-                fetch_fn=fetch,
-                verbose=False,
-            )
-        else:
-            df = fetch(start_date)
-
-        # Log resultado
-        self._log_fetch_result(log_name, len(df), verbose)
-
-        return df
+        return self._collect_with_sync(
+            fetch_fn=fetch,
+            filename=filename,
+            name=log_name,
+            subdir=subdir,
+            frequency='daily', # Focus updates are effectively daily events
+            save=save,
+            verbose=verbose
+        )
 
     # =========================================================================
     # API Publica
@@ -168,85 +161,3 @@ class ExpectationsCollector(BaseCollector):
 
         return results
 
-    # =========================================================================
-    # Consolidacao
-    # =========================================================================
-
-    def consolidate(
-        self,
-        subdirs: list[str] | str = None,
-        output_prefix: str = 'expectations',
-        add_source: bool = True,
-        save: bool = True,
-        verbose: bool = True,
-    ) -> dict[str, pd.DataFrame]:
-        """
-        Consolida arquivos de um ou mais subdiretorios.
-
-        Args:
-            subdirs: Subdiretorios a consolidar:
-                - None: usa default_consolidate_subdirs (['expectations'])
-                - lista: ['expectations']
-                - string: 'expectations' (um unico)
-            output_prefix: Prefixo para nomes de arquivo (default: 'expectations')
-            add_source: Se True, adiciona coluna '_source' com nome do arquivo
-            save: Se True, salva em processed/
-            verbose: Se True, imprime progresso
-
-        Returns:
-            Dict {subdir: DataFrame} com dados consolidados
-        """
-        # Normalizar entrada
-        subdirs_list = self._normalize_subdirs_list(subdirs)
-
-        self._log_consolidate_start(
-            title="CONSOLIDANDO EXPECTATIVAS",
-            verbose=verbose,
-        )
-
-        results = {}
-        for subdir in subdirs_list:
-            # Consolidar sem salvar - precisamos processar antes
-            df = self.data_manager.consolidate(
-                subdir=subdir,
-                output_filename=None,
-                save=False,
-                verbose=verbose,
-                add_source=add_source,
-            )
-
-            # ---------------------------------------------------------------------
-            # Converter coluna 'Data' para DatetimeIndex
-            #
-            # Por que fazer isso:
-            # - Padroniza com o resto do projeto (SGS usa DatetimeIndex)
-            # - Facilita fatiamento temporal: df.loc['2025-01']
-            #
-            # Por que indices duplicados sao aceitaveis:
-            # - Cada data tem multiplos registros (projecoes para diferentes anos)
-            # - Exemplo: 2025-11-28 tem projecoes para 2025, 2026, 2027, 2028, 2029
-            # - Pandas lida bem com isso, permite filtrar por DataReferencia
-            #
-            # Por que fazer apenas no consolidado (nao no raw):
-            # - Arquivos raw preservam estrutura original da API
-            # - Consolidado e otimizado para analise
-            # ---------------------------------------------------------------------
-            if 'Data' in df.columns and not df.empty:
-                df = df.set_index('Data').sort_index()
-                df.index.name = 'Date'  # Padronizar nome do indice
-
-            # Salvar arquivo processado
-            if save and not df.empty:
-                output_name = f"{output_prefix}_consolidated"
-                self._save_parquet_to_processed(df, output_name, verbose=verbose)
-
-            results[subdir] = df
-
-            if verbose and not df.empty:
-                print(f"  {subdir}: {len(df):,} registros")
-                print()
-
-        if verbose:
-            print("Consolidacao concluida!")
-
-        return results

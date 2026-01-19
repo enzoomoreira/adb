@@ -18,97 +18,118 @@ uv sync
 
 ## Uso Rapido
 
-### BCB - Series Temporais (SGS)
+### Coleta de Dados
 
 ```python
-from src.bacen import SGSCollector
+from core.collectors import collect, available_sources
 
-collector = SGSCollector('data/')
+# Ver fontes disponiveis
+available_sources()
+# ['sgs', 'expectations', 'caged', 'ipea', 'bloomberg']
 
-# Coleta
-collector.collect()                      # Todos os indicadores
-collector.collect('selic')               # Um indicador
-collector.collect(['selic', 'cdi'])      # Lista
+# Coleta completa
+collect('sgs')
+collect('expectations')
+collect('caged')
+collect('ipea')
 
-# Consolidacao (gera cdi_anualizado)
-collector.consolidate()
+# Coleta parcial
+collect('sgs', indicators='selic')
+collect('sgs', indicators=['selic', 'cdi'])
 ```
 
-### BCB - Expectativas Focus
+### Leitura de Dados (Explorers)
 
 ```python
-from src.bacen import ExpectationsCollector
+from core.data import sgs, expectations, caged, ipea, bloomberg
 
-collector = ExpectationsCollector('data/')
-collector.collect()
-collector.consolidate()
+# SGS - Series Temporais BCB
+df = sgs.read('selic')                    # Leitura simples
+df = sgs.read('selic', start='2020')      # Com filtro de data
+df = sgs.read('selic', 'cdi')             # Multiplos indicadores
+sgs.available()                           # Lista indicadores
+
+# Expectations - Relatorio Focus
+df = expectations.read('ipca_anual')
+df = expectations.read('ipca_anual', start='2024')
+
+# IPEA - Dados Agregados
+df = ipea.read('caged_saldo')
+df = ipea.read('taxa_desemprego')
+
+# CAGED - Microdados
+df = caged.read(year=2024, month=10)      # Mes especifico
+df = caged.saldo_mensal(year=2024)        # Agregacao por mes
+df = caged.saldo_por_uf(year=2024)        # Agregacao por UF
+caged.available_periods()                 # Periodos disponiveis
+
+# Bloomberg (requer terminal)
+df = bloomberg.read('brent')
+df = bloomberg.read('ibov_points', start='2024')
 ```
 
-### MTE - CAGED (Microdados)
+### Queries SQL Diretas (QueryEngine)
+
+Para queries mais complexas, use o QueryEngine com DuckDB:
 
 ```python
-from src.mte import CAGEDCollector
+from core.data import QueryEngine
 
-collector = CAGEDCollector('data/')
+qe = QueryEngine()
 
-# Coleta (downloads paralelos)
-collector.collect()
+# Leitura com filtros pushdown
+df = qe.read(
+    'cagedmov_202410',
+    subdir='mte/caged',
+    columns=['uf', 'saldomovimentacao'],
+    where="uf = 35"  # SP
+)
 
-# Leitura com filtros
-df = collector.read('cagedmov', year=2024)
-df = collector.read('cagedmov', year=[2023, 2024], columns=['uf', 'saldomovimentacao'])
-
-# Query SQL com DuckDB
-df = collector.query('''
+# SQL arbitrario
+df = qe.sql('''
     SELECT uf, SUM(saldomovimentacao) as saldo
-    FROM 'data/raw/mte/caged/cagedmov_*.parquet'
+    FROM '{raw}/mte/caged/cagedmov_2024*.parquet'
     GROUP BY uf
+    ORDER BY saldo DESC
+''')
+
+# Media anual da Selic
+df = qe.sql('''
+    SELECT
+        strftime(date, '%Y') as ano,
+        AVG(value) as media_selic
+    FROM '{raw}/bacen/sgs/daily/selic.parquet'
+    GROUP BY ano
+    ORDER BY ano
 ''')
 ```
 
-### IPEA - Dados Agregados
+### Status da Coleta
 
 ```python
-from src.ipea import IPEACollector
+from core.collectors import get_status
 
-collector = IPEACollector('data/')
-collector.collect()
-collector.consolidate()
-```
-
-### Bloomberg Terminal
-
-```python
-from src.bloomberg import BloombergCollector
-
-collector = BloombergCollector('data/')
-
-# Coleta (requer Bloomberg Terminal ativo)
-collector.collect()                      # Todos os tickers
-collector.collect('bz1_comdty')          # Um ticker
-collector.collect(['bz1_comdty', 'cl1_comdty'])  # Lista
-
-# Consolidacao
-collector.consolidate()
+get_status('sgs')
+get_status('caged')
+get_status('expectations')
 ```
 
 ## Estrutura de Dados
 
 ```
 data/
-├── raw/                          # Dados brutos
-│   ├── bacen/
-│   │   ├── sgs/
-│   │   │   ├── daily/            # selic, cdi, ptax
-│   │   │   └── monthly/          # ibc-br, igp-m
-│   │   └── expectations/         # expectativas Focus
-│   ├── mte/
-│   │   └── caged/                # microdados mensais
-│   ├── ipea/
-│   │   └── monthly/              # dados agregados
-│   └── bloomberg/
-│       └── daily/                # dados do Bloomberg Terminal
-└── processed/                    # Dados consolidados
+└── raw/                          # Dados brutos em Parquet
+    ├── bacen/
+    │   ├── sgs/
+    │   │   ├── daily/            # selic.parquet, cdi.parquet...
+    │   │   └── monthly/          # ibc_br_bruto.parquet...
+    │   └── expectations/         # ipca_anual.parquet...
+    ├── mte/
+    │   └── caged/                # cagedmov_2024-01.parquet...
+    ├── ipea/
+    │   └── monthly/              # caged_saldo.parquet...
+    └── bloomberg/
+        └── daily/                # brent.parquet, ibov_points.parquet...
 ```
 
 ## Indicadores Disponiveis
@@ -120,7 +141,6 @@ data/
 ### Expectations (Focus)
 - `ipca_anual`, `igpm_anual`, `pib_anual`, `cambio_anual`, `selic_anual`
 - `ipca_mensal`, `igpm_mensal`, `cambio_mensal`
-- `selic`, `ipca_12m`, `ipca_24m`, `igpm_12m`
 
 ### CAGED
 - `cagedmov` - Movimentacoes (admissoes/desligamentos)
@@ -131,26 +151,22 @@ data/
 - `caged_saldo`, `caged_admissoes`, `caged_desligamentos`
 - `taxa_desemprego`
 
+### Bloomberg
+- `msci_acwi_mktcap`, `msci_acwi_pe`, `msci_acwi_dividend` (global equities)
+- `ibov_points`, `ibov_usd`, `ifix` (brasil equities)
+- `brent`, `iron_ore`, `gold` (commodities)
+
 ## Extensibilidade
 
-Adicione novos indicadores editando o arquivo `indicators.py` do modulo:
-
-```python
-# src/bacen/sgs/indicators.py
-SGS_CONFIG['novo'] = {'code': 12345, 'name': 'Nome', 'frequency': 'daily'}
-
-# src/ipea/indicators.py
-IPEA_CONFIG['novo'] = {'code': 'CODIGO_IPEA', 'name': 'Nome', 'frequency': 'monthly'}
-```
+Adicione novos indicadores editando o arquivo `indicators.py` do modulo correspondente.
 
 ## Documentacao
 
 Documentacao detalhada em `docs/`:
 
-- [architecture.md](docs/architecture.md) - Visao geral e estrutura
-- [bacen.md](docs/bacen.md) - SGSCollector, ExpectationsCollector
-- [mte.md](docs/mte.md) - CAGEDCollector, downloads paralelos
-- [ipea.md](docs/ipea.md) - IPEACollector
-- [bloomberg.md](docs/bloomberg.md) - BloombergCollector, integracao com Terminal
-- [data.md](docs/data.md) - DataManager (storage.py), QueryEngine (query.py)
-- [utils.md](docs/utils.md) - ParallelFetcher, BaseCollector, core.indicators
+- [bacen.md](docs/bacen.md) - SGS e Expectations
+- [mte.md](docs/mte.md) - CAGED (microdados)
+- [ipea.md](docs/ipea.md) - Dados agregados IPEA
+- [bloomberg.md](docs/bloomberg.md) - Dados de mercado
+- [data.md](docs/data.md) - QueryEngine, DataManager, Explorers
+- [utils.md](docs/utils.md) - BaseCollector, funcoes auxiliares

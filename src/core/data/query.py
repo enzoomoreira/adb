@@ -1,114 +1,85 @@
 """
-Interface de consultas SQL via DuckDB.
+Interface de consultas para arquivos Parquet.
 
-Permite queries eficientes em arquivos Parquet sem carregar tudo em memoria.
-Ideal para exploracao de dados e analises ad-hoc.
+Design Simplificado (DuckDB-first):
+- Usa DuckDB como motor único para leitura e consultas
+- Aproveita o otimizador nativo do DuckDB para pushdown de filtros
+- Elimina complexidade de parsing manual de SQL
 """
 
 from pathlib import Path
-
 import pandas as pd
 import duckdb
+import pyarrow.parquet as pq
+
+from core.utils.dates import normalize_date_index, DATE_COLUMNS
 
 
 class QueryEngine:
     """
-    Motor de consultas SQL sobre arquivos Parquet usando DuckDB.
+    Motor de consultas unificado sobre arquivos Parquet.
 
-    Responsabilidades:
-    - Executar queries SQL em arquivos Parquet
-    - Fornecer conexao DuckDB para queries avancadas
-    - Leitura filtrada de dados (colunas, where)
-
-    Para operacoes de persistencia (save/append), use DataManager.
+    Simplificado para delegar a complexidade de otimização de queries
+    para o DuckDB, mantendo uma interface Pythonica simples.
     """
 
-    def __init__(self, base_path: Path):
+    def __init__(self, base_path: Path = None, progress_bar: bool = False):
         """
         Inicializa o motor de consultas.
 
         Args:
-            base_path: Caminho base para diretorio data/
+            base_path: Caminho base para diretorio data/ (opcional, usa DATA_PATH se None)
+            progress_bar: Se True, exibe barra de progresso do DuckDB (default: False)
         """
-        self.base_path = Path(base_path)
+        from core.config import DATA_PATH
+        self.base_path = Path(base_path) if base_path else DATA_PATH
         self.raw_path = self.base_path / 'raw'
         self.processed_path = self.base_path / 'processed'
 
-    def sql(
-        self,
-        query: str,
-        subdir: str = None,
-    ) -> pd.DataFrame:
+        self._conn = duckdb.connect()
+        self._conn.execute(f"SET enable_progress_bar = {str(progress_bar).lower()}")
+
+    def _ensure_date_columns(self, path_or_glob: str, columns: list[str]) -> list[str]:
         """
-        Executa query SQL nos arquivos parquet usando DuckDB.
-
-        Permite consultas eficientes sem carregar todos os dados na memoria.
-        Os paths podem ser especificados diretamente no SQL ou usar variaveis.
-
-        Args:
-            query: Query SQL. Pode usar:
-                - Paths absolutos/relativos: 'data/raw/bacen/sgs/daily/*.parquet'
-                - Glob patterns: '*.parquet'
-                - Variavel {raw}: substitui pelo caminho raw/
-                - Variavel {processed}: substitui pelo caminho processed/
-                - Variavel {subdir}: substitui pelo subdir se fornecido
-            subdir: Subdiretorio para substituir na variavel {subdir}
-
-        Returns:
-            DataFrame com resultado da query
-
-        Examples:
-            # Query direta com path
-            qe.sql("SELECT * FROM 'data/raw/bacen/sgs/daily/selic.parquet' LIMIT 10")
-
-            # Usando variaveis
-            qe.sql("SELECT * FROM '{subdir}/selic.parquet'", subdir='bacen/sgs/daily')
-
-            # Agregacao
-            qe.sql('''
-                SELECT strftime(date, '%Y') as ano, AVG(value) as media
-                FROM '{raw}/bacen/sgs/daily/selic.parquet'
-                GROUP BY ano
-            ''')
-
-            # Multiplos arquivos com glob
-            qe.sql("SELECT * FROM '{raw}/mte/caged/cagedmov_2025-*.parquet'")
+        Garante que colunas de data sejam incluídas na seleção para indexação correta.
         """
-        # Substituir variaveis no SQL
-        query = query.replace('{raw}', str(self.raw_path))
-        query = query.replace('{processed}', str(self.processed_path))
-        if subdir:
-            query = query.replace('{subdir}', str(self.raw_path / subdir))
+        if not columns:
+            return None  # Select *
 
-        return duckdb.sql(query).df()
+        # Verifica se já solicitou alguma data
+        columns_lower = {c.lower() for c in columns}
+        if any(d.lower() in columns_lower for d in DATE_COLUMNS):
+            return columns
 
-    def connection(self, subdir: str = None) -> duckdb.DuckDBPyConnection:
-        """
-        Retorna conexao DuckDB para queries avancadas.
+        # Se não, precisamos descobrir se existe coluna de data no arquivo
+        try:
+            # DuckDB DESCRIBE é rápido
+            schema_df = duckdb.sql(f"DESCRIBE SELECT * FROM '{path_or_glob}' LIMIT 0").df()
+            available_cols = set(schema_df['column_name'].values)
+            
+            for date_col in DATE_COLUMNS:
+                if date_col in available_cols:
+                    return [date_col] + columns
+        except Exception:
+            # Em caso de erro (ex: glob vazio), retornamos as colunas originais
+            # e deixamos o erro propagar na execução real se for o caso
+            pass
+            
+        return columns
 
-        Util para queries complexas, transacoes ou quando precisa de mais controle.
-
-        Args:
-            subdir: Subdiretorio para registrar como variavel (opcional)
-
-        Returns:
-            Conexao DuckDB
-
-        Example:
-            con = qe.connection('bacen/sgs/daily')
-            result = con.execute('''
-                SELECT * FROM read_parquet('{}/*.parquet')
-            '''.format(qe.raw_path / 'bacen/sgs/daily')).df()
-        """
-        con = duckdb.connect()
-
-        # Registrar paths como variaveis para facilitar uso
-        con.execute(f"SET VARIABLE raw_path = '{self.raw_path}'")
-        con.execute(f"SET VARIABLE processed_path = '{self.processed_path}'")
-        if subdir:
-            con.execute(f"SET VARIABLE subdir_path = '{self.raw_path / subdir}'")
-
-        return con
+    def _build_query(self, source: str, columns: list[str] = None, where: str = None) -> str:
+        """Constrói a query SQL para o DuckDB."""
+        
+        # Seleção de colunas com garantia de data
+        cols_to_select = self._ensure_date_columns(source, columns)
+        select_clause = ", ".join(cols_to_select) if cols_to_select else "*"
+        
+        query = f"SELECT {select_clause} FROM '{source}'"
+        
+        if where:
+            query += f" WHERE {where}"
+            
+        return query
 
     def read(
         self,
@@ -118,43 +89,30 @@ class QueryEngine:
         where: str = None,
     ) -> pd.DataFrame:
         """
-        Le arquivo de dados com filtros opcionais via DuckDB.
-
-        Mais eficiente que carregar o arquivo inteiro quando precisa
-        apenas de algumas colunas ou linhas filtradas.
+        Lê arquivo Parquet de forma eficiente.
 
         Args:
-            filename: Nome do arquivo (sem extensao)
-            subdir: Subdiretorio dentro de raw/
-            columns: Lista de colunas para carregar (None = todas)
-            where: Clausula WHERE para filtrar dados (ex: "value > 10")
+            filename: Nome do arquivo (sem extensão)
+            subdir: Subdiretório dentro de raw/
+            columns: Lista de colunas para carregar
+            where: Filtro SQL (ex: "uf = 35 AND date >= '2023-01-01'")
 
         Returns:
-            DataFrame com dados filtrados (vazio se arquivo nao existe)
-
-        Examples:
-            # Apenas algumas colunas
-            df = qe.read('selic', 'bacen/sgs/daily', columns=['value'])
-
-            # Com filtro
-            df = qe.read('selic', 'bacen/sgs/daily', where="value > 10")
-
-            # Ambos
-            df = qe.read('cagedmov_2025-01', 'mte/caged',
-                         columns=['uf', 'salário', 'saldomovimentação'],
-                         where="uf = 35")  # SP
+            DataFrame Pandas com índice de data normalizado.
         """
         filepath = self.raw_path / subdir / f"{filename}.parquet"
-
+        
         if not filepath.exists():
             return pd.DataFrame()
 
-        cols = ', '.join(columns) if columns else '*'
-        sql = f"SELECT {cols} FROM '{filepath}'"
-        if where:
-            sql += f" WHERE {where}"
-
-        return duckdb.sql(sql).df()
+        sql = self._build_query(str(filepath), columns, where)
+        
+        try:
+            df = duckdb.sql(sql).df()
+            return normalize_date_index(df)
+        except Exception as e:
+            print(f"Erro lendo {filename}: {e}")
+            return pd.DataFrame()
 
     def read_glob(
         self,
@@ -164,37 +122,44 @@ class QueryEngine:
         where: str = None,
     ) -> pd.DataFrame:
         """
-        Le multiplos arquivos usando glob pattern.
+        Lê múltiplos arquivos Parquet usando glob pattern.
 
         Args:
             pattern: Glob pattern (ex: 'cagedmov_2025-*.parquet')
-            subdir: Subdiretorio dentro de raw/ (opcional)
-            columns: Lista de colunas para carregar (None = todas)
-            where: Clausula WHERE para filtrar dados
-
-        Returns:
-            DataFrame com dados de todos os arquivos combinados
-
-        Examples:
-            # Todos os arquivos CAGED de 2025
-            df = qe.read_glob('cagedmov_2025-*.parquet', subdir='mte/caged')
-
-            # Com filtro
-            df = qe.read_glob('cagedmov_*.parquet', subdir='mte/caged',
-                              columns=['uf', 'saldomovimentação'],
-                              where="uf = 35")
+            subdir: Subdiretório (opcional)
         """
         if subdir:
             full_pattern = str(self.raw_path / subdir / pattern)
         else:
             full_pattern = pattern
 
-        cols = ', '.join(columns) if columns else '*'
-        sql = f"SELECT {cols} FROM '{full_pattern}'"
-        if where:
-            sql += f" WHERE {where}"
+        try:
+            # Verifica se existem arquivos correspondentes antes de tentar ler
+            # (DuckDB lançaria erro em glob vazio)
+            has_files = bool(list(Path(self.raw_path).glob(f"{subdir}/{pattern}"))) if subdir else bool(list(Path('.').glob(pattern)))
+            # A verificação acima pode ser imprecisa dependendo do CWD vs absolute path.
+            # Vamos confiar no DuckDB, mas tratar erro.
+            if subdir and not list((self.raw_path / subdir).glob(pattern)):
+                 return pd.DataFrame()
 
-        return duckdb.sql(sql).df()
+            sql = self._build_query(full_pattern, columns, where)
+            df = duckdb.sql(sql).df()
+            return normalize_date_index(df)
+        except Exception as e:
+            # Glob vazio ou erro de leitura
+            return pd.DataFrame()
+
+    def sql(self, query: str, subdir: str = None) -> pd.DataFrame:
+        """
+        Executa SQL arbitrário com substituição de variáveis de caminho.
+        """
+        # Substituir variaveis no SQL
+        query = query.replace('{raw}', str(self.raw_path))
+        query = query.replace('{processed}', str(self.processed_path))
+        if subdir:
+            query = query.replace('{subdir}', str(self.raw_path / subdir))
+
+        return duckdb.sql(query).df()
 
     def aggregate(
         self,
@@ -202,35 +167,18 @@ class QueryEngine:
         subdir: str,
         group_by: str | list[str],
         agg: dict[str, str],
-        where: str = None,
+        where: str = None
     ) -> pd.DataFrame:
         """
-        Executa agregacao em um arquivo.
-
+        Executa agregação otimizada.
         Args:
-            filename: Nome do arquivo (sem extensao, aceita glob)
-            subdir: Subdiretorio dentro de raw/
-            group_by: Coluna(s) para agrupar
-            agg: Dict de {coluna: funcao} (ex: {'value': 'AVG', 'count': 'COUNT(*)'})
-            where: Clausula WHERE opcional
-
-        Returns:
-            DataFrame com resultado da agregacao
-
-        Examples:
-            # Media de selic por ano
-            df = qe.aggregate('selic', 'bacen/sgs/daily',
-                              group_by='strftime(date, "%Y")',
-                              agg={'value': 'AVG'})
-
-            # Saldo CAGED por UF
-            df = qe.aggregate('cagedmov_2025-*.parquet', 'mte/caged',
-                              group_by='uf',
-                              agg={'saldomovimentação': 'SUM'})
+            agg: Dict {coluna: funcao} (ex: {'value': 'AVG'})
         """
         filepath = self.raw_path / subdir / filename
-        if not filename.endswith('.parquet'):
-            filepath = self.raw_path / subdir / f"{filename}.parquet"
+        if not filename.endswith('.parquet') and '*' not in filename:
+             filepath = self.raw_path / subdir / f"{filename}.parquet"
+        
+        path_str = str(filepath)
 
         # Construir SELECT
         if isinstance(group_by, str):
@@ -239,13 +187,63 @@ class QueryEngine:
             group_cols = ', '.join(group_by)
 
         agg_exprs = ', '.join([
-            f"{func}({col}) as {col}" if func != 'COUNT(*)' else f"COUNT(*) as {col}"
+            f"{func}({col}) as {col}" if func.upper() != 'COUNT(*)' else f"COUNT(*) as {col}"
             for col, func in agg.items()
         ])
 
-        sql = f"SELECT {group_cols}, {agg_exprs} FROM '{filepath}'"
+        sql = f"SELECT {group_cols}, {agg_exprs} FROM '{path_str}'"
         if where:
             sql += f" WHERE {where}"
         sql += f" GROUP BY {group_cols}"
 
         return duckdb.sql(sql).df()
+
+    def get_metadata(self, filename: str, subdir: str) -> dict:
+        """Retorna metadados básicos do arquivo."""
+        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        if not filepath.exists():
+            return None
+            
+        try:
+            # DuckDB consegue ler metadata de parquet de forma eficiente
+            # porem o COUNT(*) requer varredura de row groups (rapido, mas nao instantaneo)
+            # Para metadata puro (k/v), pyarrow é melhor. Para estatisticas de dados, DuckDB.
+            
+            # 1. Discover date column
+            schema = duckdb.sql(f"DESCRIBE SELECT * FROM '{filepath}' LIMIT 0").df()
+            cols = set(schema['column_name'].tolist())
+            
+            date_col = None
+            if 'date' in cols:
+                date_col = 'date'
+            elif 'Data' in cols:
+                date_col = 'Data'
+                
+            # 2. Build Query
+            if date_col:
+                sql = f"SELECT COUNT(*) as total, MIN({date_col}) as min_date, MAX({date_col}) as max_date FROM '{filepath}'"
+            else:
+                sql = f"SELECT COUNT(*) as total, NULL as min_date, NULL as max_date FROM '{filepath}'"
+                
+            # 3. Execute
+            res = duckdb.sql(sql).fetchone()
+            total, min_d, max_d = res
+            
+            return {
+                'arquivo': filename,
+                'subdir': subdir,
+                'registros': total,
+                'colunas': len(cols),
+                'primeira_data': pd.to_datetime(min_d) if min_d else None,
+                'ultima_data': pd.to_datetime(max_d) if max_d else None,
+                'status': 'OK'
+            }
+        except Exception as e:
+             return {'arquivo': filename, 'status': 'Erro', 'error': str(e)}
+
+    def connection(self) -> duckdb.DuckDBPyConnection:
+        """Retorna uma conexão DuckDB configurada com variáveis de ambiente."""
+        con = duckdb.connect()
+        con.execute(f"SET VARIABLE raw_path = '{self.raw_path}'")
+        con.execute(f"SET VARIABLE processed_path = '{self.processed_path}'")
+        return con

@@ -1,19 +1,16 @@
 """
-Modulo CAGED - Cadastro Geral de Empregados e Desempregados.
+Modulo CAGED (interno) - Microdados do MTE.
 
-Coleta de microdados do Novo CAGED via FTP do MTE.
+Para coleta, use: from core.collectors import collect
+Para query, use: from core.data import caged
+
+Exemplo:
+    from core.data import caged
+    
+    df = caged.read(year=2025)
+    periodos = caged.available_periods()
 """
 
-from .client import CAGEDClient
-from .collector import CAGEDCollector
-from .indicators import (
-    CAGED_CONFIG,
-    get_available_periods,
-)
+from .indicators import CAGED_CONFIG
 
-__all__ = [
-    'CAGEDClient',
-    'CAGEDCollector',
-    'CAGED_CONFIG',
-    'get_available_periods',
-]
+__all__ = ['CAGED_CONFIG']

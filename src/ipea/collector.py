@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from core.collectors import BaseCollector
-from core.indicators import get_indicator_config
+from core.utils import get_indicator_config
 from .client import IPEAClient
 from .indicators import IPEA_CONFIG
 
@@ -27,14 +27,13 @@ class IPEACollector(BaseCollector):
     """
 
     default_subdir = 'ipea/monthly'
-    default_consolidate_subdirs = ['ipea/monthly']
 
-    def __init__(self, data_path: Path):
+    def __init__(self, data_path: Path = None):
         """
         Inicializa o coletor.
 
         Args:
-            data_path: Caminho para diretorio data/
+            data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
         """
         super().__init__(data_path)
         self.client = IPEAClient()
@@ -125,6 +124,8 @@ class IPEACollector(BaseCollector):
         self._log_collect_start(
             title="IPEA - Instituto de Pesquisa Economica Aplicada",
             num_indicators=len(keys),
+            subdir=self.default_subdir,
+            check_first_run=True,
             verbose=verbose,
         )
 
@@ -144,51 +145,10 @@ class IPEACollector(BaseCollector):
 
             results[key] = df
 
-        self._log_collect_end(verbose=verbose)
+            if verbose:
+                print()
+
+        self._log_collect_end(results=results, verbose=verbose)
 
         return results
 
-    # =========================================================================
-    # Consolidacao
-    # =========================================================================
-
-    def consolidate(
-        self,
-        subdir: str = "ipea/monthly",
-        output_filename: str = "ipea_monthly_consolidated",
-        save: bool = True,
-        verbose: bool = True,
-    ) -> pd.DataFrame:
-        """
-        Consolida arquivos de um subdiretorio.
-
-        Faz join horizontal dos arquivos por indice (data).
-
-        Args:
-            subdir: Subdiretorio a consolidar
-            output_filename: Nome do arquivo consolidado
-            save: Se True, salva em processed/
-            verbose: Se True, imprime progresso
-
-        Returns:
-            DataFrame consolidado
-        """
-        self._log_consolidate_start(
-            title="CONSOLIDANDO DADOS IPEA",
-            subdir=subdir,
-            verbose=verbose,
-        )
-
-        df = self.data_manager.consolidate(
-            subdir=subdir,
-            output_filename=output_filename,
-            save=save,
-            verbose=verbose,
-        )
-
-        if verbose:
-            if not df.empty:
-                print(f"\nConsolidado: {len(df):,} registros, {len(df.columns)} colunas")
-            print("Consolidacao concluida!")
-
-        return df

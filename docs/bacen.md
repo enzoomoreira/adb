@@ -11,153 +11,69 @@ O modulo `src/bacen/` contem dois coletores principais:
 | SGSCollector | API SGS | Series temporais (Selic, CDI, IPCA, cambio, etc) |
 | ExpectationsCollector | API Focus | Expectativas de mercado (relatorio Focus) |
 
-Ambos seguem a mesma **API simplificada**:
-- **collect()**: Coleta um ou mais indicadores usando configuracao predefinida
-- **consolidate()**: Consolida arquivos em DataFrame unico
-- **get_status()**: Retorna status dos arquivos salvos
+---
+
+## Arquitetura de Uso
+
+O projeto usa uma arquitetura centralizada. Os modulos internos (`src/bacen/`, `src/ipea/`, etc) nao exportam Collectors/Clients diretamente.
+
+### Para Coleta de Dados
+
+```python
+from core.collectors import collect
+
+# Coleta SGS
+collect('sgs')                           # Todos indicadores
+collect('sgs', indicators='selic')       # Um indicador
+collect('sgs', indicators=['selic', 'cdi'])  # Lista
+
+# Coleta Expectations
+collect('expectations')                  # Todos
+collect('expectations', indicators='ipca_anual')
+```
+
+### Para Leitura/Queries (Explorers)
+
+```python
+from core.data import sgs, expectations
+
+# SGS Explorer
+df = sgs.read('selic')                   # Leitura simples
+df = sgs.read('selic', start='2020')     # Com filtro de data
+df = sgs.read('selic', 'cdi')            # Multiplos indicadores
+print(sgs.available())                   # Lista indicadores disponiveis
+print(sgs.info('selic'))                 # Info do indicador
+
+# Expectations Explorer
+df = expectations.read('ipca_anual')
+df = expectations.read('ipca_anual', start='2024')
+print(expectations.available())
+```
 
 ---
 
-## SGSCollector
-
-Coleta series temporais do Sistema Gerenciador de Series do BCB.
-
-### Uso Basico
-
-```python
-from src.bacen import SGSCollector
-
-collector = SGSCollector(data_path='data/')
-
-# Coleta de indicadores
-results = collector.collect('selic')              # Um indicador
-results = collector.collect(['selic', 'cdi'])     # Lista
-results = collector.collect()                      # Todos (default='all')
-
-# Consolidacao (gera cdi_anualizado)
-results = collector.consolidate()
-
-# Status dos arquivos
-collector.get_status()
-```
-
-### Metodos
-
-#### collect(indicators='all', save=True, verbose=True)
-
-Coleta um ou mais indicadores da configuracao predefinida.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| indicators | str\|list | 'all', lista ou string unica |
-| save | bool | Salvar em Parquet |
-| verbose | bool | Imprimir progresso |
-
-**Retorno:** dict[str, DataFrame]
-
-#### consolidate(subdirs=None, output_prefix=None, save=True, verbose=True)
-
-Consolida arquivos de subdiretorios. Para dados diarios, adiciona coluna `cdi_anualizado`.
-
-**Formula CDI anualizado:**
-```
-cdi_anualizado = ((1 + cdi_diario/100) ** 252 - 1) * 100
-```
-
-**Retorno:** dict[str, DataFrame] com dados consolidados
-
-### Metodos Herdados de BaseCollector
-
-SGSCollector herda funcionalidades comuns de `BaseCollector`:
-- `get_status()` - Status dos arquivos salvos
-- `_normalize_indicators_list()` - Normaliza entrada de indicadores
-- `_normalize_subdirs_list()` - Normaliza entrada de subdirs
-- `_log_collect_start()`, `_log_collect_end()` - Banners padronizados de coleta
-- `_log_consolidate_start()` - Banner de consolidacao
-- `_save_parquet_to_processed()` - Salva em processed/
-- `_collect_with_sync()` - Template para coleta incremental
-
-Ver [utils.md](utils.md) para documentacao completa de BaseCollector.
-
-### SGS_CONFIG
+## SGS_CONFIG
 
 Indicadores disponiveis em `src/bacen/sgs/indicators.py`:
 
-| Chave | Codigo | Nome | Frequencia |
-|-------|--------|------|------------|
-| selic | 432 | Meta Selic | daily |
-| cdi | 12 | CDI | daily |
-| dolar_ptax | 10813 | Dolar PTAX | daily |
-| euro_ptax | 21619 | Euro PTAX | daily |
-| ibc_br_bruto | 24363 | IBC-Br Bruto | monthly |
-| ibc_br_dessaz | 24364 | IBC-Br Dessazonalizado | monthly |
-| igp_m | 189 | IGP-M | monthly |
+**Diarios:** `selic`, `cdi`, `dolar_ptax`, `euro_ptax`
+
+**Mensais:** `ibc_br_bruto`, `ibc_br_dessaz`, `igp_m`, ...
 
 ### Funcoes Auxiliares
-
-**Nota:** As funcoes auxiliares agora sao fornecidas pelo modulo centralizado `core`.
 
 ```python
 from src.bacen import SGS_CONFIG
 from core import list_indicators, get_indicator_config, filter_by_field
 
-list_indicators(SGS_CONFIG)                  # Lista chaves disponiveis
-get_indicator_config(SGS_CONFIG, 'selic')    # Retorna config do indicador
+list_indicators(SGS_CONFIG)                        # Lista chaves
+get_indicator_config(SGS_CONFIG, 'selic')          # Config do indicador
 filter_by_field(SGS_CONFIG, 'frequency', 'daily')  # Filtra por frequencia
 ```
 
 ---
 
-## ExpectationsCollector
-
-Coleta expectativas de mercado do Relatorio Focus.
-
-### Uso Basico
-
-```python
-from src.bacen import ExpectationsCollector
-
-collector = ExpectationsCollector(data_path='data/')
-
-# Coleta de indicadores
-results = collector.collect('ipca_anual')          # Um indicador
-results = collector.collect(['ipca_anual', 'selic'])  # Lista
-results = collector.collect()                       # Todos
-
-# Consolidacao (adiciona _source por padrao)
-results = collector.consolidate(add_source=True)
-
-# Status dos arquivos
-collector.get_status()
-```
-
-### Metodos
-
-#### collect(indicators='all', start_date=None, limit=None, save=True, verbose=True)
-
-Coleta um ou mais indicadores.
-
-**Retorno:** dict[str, DataFrame]
-
-#### consolidate(subdirs=None, output_prefix='expectations', add_source=True, save=True, verbose=True)
-
-Consolida arquivos. Converte coluna 'Data' para DatetimeIndex para fatiamento temporal.
-
-**Retorno:** dict[str, DataFrame]
-
-### Metodos Herdados de BaseCollector
-
-ExpectationsCollector herda funcionalidades comuns de `BaseCollector`:
-- `get_status()` - Status dos arquivos salvos
-- `_normalize_indicators_list()` - Normaliza entrada de indicadores
-- `_normalize_subdirs_list()` - Normaliza entrada de subdirs
-- `_log_collect_start()`, `_log_collect_end()` - Banners padronizados de coleta
-- `_log_consolidate_start()` - Banner de consolidacao
-- `_save_parquet_to_processed()` - Salva em processed/
-
-Ver [utils.md](utils.md) para documentacao completa de BaseCollector.
-
-### EXPECTATIONS_CONFIG
+## EXPECTATIONS_CONFIG
 
 Indicadores disponiveis em `src/bacen/expectations/indicators.py`:
 
@@ -185,78 +101,69 @@ Indicadores disponiveis em `src/bacen/expectations/indicators.py`:
 | ipca_24m | inflacao_24m | IPCA |
 | igpm_12m | inflacao_12m | IGP-M |
 
-### ENDPOINTS
-
-Endpoints disponiveis da API Focus:
-
-```python
-ENDPOINTS = {
-    "top5_anuais": "ExpectativasMercadoTop5Anuais",
-    "anuais": "ExpectativasMercadoAnuais",
-    "mensais": "ExpectativaMercadoMensais",
-    "selic": "ExpectativasMercadoSelic",
-    "inflacao_12m": "ExpectativasMercadoInflacao12Meses",
-    "inflacao_24m": "ExpectativasMercadoInflacao24Meses",
-    # ... ver indicators.py para lista completa
-}
-```
-
 ---
 
-## Clients (Baixo Nivel)
+## Uso Avancado (Acesso Direto)
 
-### SGSClient
-
-Wrapper direto da API SGS:
+Para casos especiais onde e necessario acesso direto aos collectors/clients:
 
 ```python
-from src.bacen import SGSClient
+# Collectors (imports diretos - uso interno)
+from bacen.sgs.collector import SGSCollector
+from bacen.expectations.collector import ExpectationsCollector
+
+collector = SGSCollector(data_path='data/')
+results = collector.collect('selic')
+collector.get_status()
+
+# Clients (baixo nivel)
+from bacen.sgs.client import SGSClient
+from bacen.expectations.client import ExpectationsClient
 
 client = SGSClient()
 df = client.get_data(code=432, name='Selic', frequency='daily', start_date='2024-01-01')
 ```
 
-### ExpectationsClient
-
-Wrapper direto da API Focus:
+### SGSCollector.collect()
 
 ```python
-from src.bacen import ExpectationsClient
+def collect(
+    indicators: list[str] | str = 'all',
+    save: bool = True,
+    verbose: bool = True,
+) -> dict[str, pd.DataFrame]
+```
 
-client = ExpectationsClient()
-df = client.query(endpoint_key='selic', indicator='Selic', start_date='2024-01-01')
+### ExpectationsCollector.collect()
+
+```python
+def collect(
+    indicators: list[str] | str = 'all',
+    start_date: str = None,
+    limit: int = None,
+    save: bool = True,
+    verbose: bool = True,
+) -> dict[str, pd.DataFrame]
 ```
 
 ---
 
-## Imports Publicos
+## Exports Publicos
 
 ```python
-from src.bacen import (
-    # Collectors
-    SGSCollector,
-    ExpectationsCollector,
-
-    # Clients
-    SGSClient,
-    ExpectationsClient,
-
-    # Configuracoes SGS
-    SGS_CONFIG,
-
-    # Configuracoes Expectations
-    EXPECTATIONS_CONFIG,
-    ENDPOINTS,
-)
+# Configs (exportados)
+from src.bacen import SGS_CONFIG, EXPECTATIONS_CONFIG
 
 # Funcoes auxiliares (centralizadas em core)
 from core import (
     list_indicators,
     get_indicator_config,
     filter_by_field,
-    BaseCollector,
-    DataManager,
 )
+
+# Interface centralizada (recomendado)
+from core.collectors import collect, available_sources, get_status
+from core.data import sgs, expectations
 ```
 
 ---
@@ -265,14 +172,10 @@ from core import (
 
 ```
 data/
-├── raw/
-│   └── bacen/
-│       ├── sgs/
-│       │   ├── daily/        # selic.parquet, cdi.parquet, etc
-│       │   └── monthly/      # ibc_br_bruto.parquet, igp_m.parquet, etc
-│       └── expectations/     # ipca_anual.parquet, selic.parquet, etc
-└── processed/
-    ├── bacen_sgs_daily_consolidated.parquet     # Com cdi_anualizado
-    ├── bacen_sgs_monthly_consolidated.parquet
-    └── expectations_consolidated.parquet
+└── raw/
+    └── bacen/
+        ├── sgs/
+        │   ├── daily/        # selic.parquet, cdi.parquet, etc
+        │   └── monthly/      # ibc_br_bruto.parquet, igp_m.parquet, etc
+        └── expectations/     # ipca_anual.parquet, selic.parquet, etc
 ```

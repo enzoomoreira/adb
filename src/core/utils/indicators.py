@@ -23,7 +23,7 @@ def get_indicator_config(config: dict, key: str) -> dict:
         KeyError: Se indicador nao encontrado
 
     Example:
-        >>> from core.indicators import get_indicator_config
+        >>> from core.utils import get_indicator_config
         >>> from bacen.sgs.indicators import SGS_CONFIG
         >>> config = get_indicator_config(SGS_CONFIG, 'selic')
         >>> config['code']
@@ -47,7 +47,7 @@ def list_indicators(config: dict, frequency: str = None) -> list[str]:
         Lista de chaves de indicadores
 
     Example:
-        >>> from core.indicators import list_indicators
+        >>> from core.utils import list_indicators
         >>> from bacen.sgs.indicators import SGS_CONFIG
         >>> list_indicators(SGS_CONFIG)
         ['selic', 'cdi', 'dolar_ptax', ...]
@@ -75,7 +75,7 @@ def filter_by_field(config: dict, field: str, value: Any) -> dict:
         Dict com indicadores filtrados
 
     Example:
-        >>> from core.indicators import filter_by_field
+        >>> from core.utils import filter_by_field
         >>> from bacen.sgs.indicators import SGS_CONFIG
         >>> daily_indicators = filter_by_field(SGS_CONFIG, 'frequency', 'daily')
     """

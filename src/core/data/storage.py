@@ -9,7 +9,10 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Callable
 
+
 import pandas as pd
+
+from core.utils.dates import normalize_date_index
 
 
 class DataManager:
@@ -24,16 +27,21 @@ class DataManager:
     Para queries SQL, use QueryEngine de core.data.query.
     """
 
-    def __init__(self, base_path: Path):
+    def __init__(self, base_path: Path = None):
         """
         Inicializa o gerenciador de dados.
 
         Args:
-            base_path: Caminho base para diretorio data/
+            base_path: Caminho base para diretorio data/ (opcional, usa DATA_PATH se None)
         """
-        self.base_path = Path(base_path)
+        from core.config import DATA_PATH
+        self.base_path = Path(base_path) if base_path else DATA_PATH
         self.raw_path = self.base_path / 'raw'
         self.processed_path = self.base_path / 'processed'
+        
+        # Composicao: usa QueryEngine para leituras otimizadas (DuckDB)
+        from core.data.query import QueryEngine
+        self._qe = QueryEngine(self.base_path)
 
     # =========================================================================
     # CRUD Principal
@@ -61,6 +69,9 @@ class DataManager:
         """
         output_dir = self.raw_path / subdir
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Padronizar índice de data antes de salvar (usa método do QueryEngine)
+        df = normalize_date_index(df)
 
         # Adicionar metadata ao DataFrame
         df.attrs['filename'] = filename
@@ -92,7 +103,7 @@ class DataManager:
         subdir: str = 'daily',
     ) -> pd.DataFrame:
         """
-        Le arquivo de dados.
+        Le arquivo de dados via DuckDB (otimizado).
 
         Args:
             filename: Nome do arquivo (sem extensao)
@@ -100,9 +111,6 @@ class DataManager:
 
         Returns:
             DataFrame com dados (vazio se arquivo nao existe)
-
-        Note:
-            Para leitura com filtros SQL, use QueryEngine.read_filtered()
         """
         filepath = self.raw_path / subdir / f"{filename}.parquet"
 
@@ -113,7 +121,25 @@ class DataManager:
                 return pd.read_csv(csv_path, index_col=0, parse_dates=True)
             return pd.DataFrame()
 
-        return pd.read_parquet(filepath, engine='pyarrow')
+        # Usa QueryEngine (DuckDB) para leitura otimizada
+        return self._qe.read(filename, subdir)
+
+    def get_metadata(
+        self,
+        filename: str,
+        subdir: str = 'daily',
+    ) -> dict:
+        """
+        Retorna metadados do arquivo (count, datas) de forma otimizada.
+        
+        Args:
+            filename: Nome do arquivo (sem extensao)
+            subdir: Subdiretorio dentro de raw/
+            
+        Returns:
+            Dict com metadados ou None se arquivo nao existe
+        """
+        return self._qe.get_metadata(filename, subdir)
 
     def append(
         self,
@@ -197,6 +223,9 @@ class DataManager:
     ):
         """
         Retorna a ultima data disponivel em um arquivo.
+        
+        Otimizado: usa DuckDB para buscar apenas MAX(date) sem carregar
+        o arquivo inteiro na memoria.
 
         Args:
             filename: Nome do arquivo
@@ -205,19 +234,27 @@ class DataManager:
         Returns:
             datetime da ultima data ou None se nao existir
         """
-        df = self.read(filename, subdir)
-        if df.empty:
+        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        
+        if not filepath.exists():
             return None
-
-        # Verificar se indice e datetime
-        if pd.api.types.is_datetime64_any_dtype(df.index):
-            return df.index.max()
-
-        # Verificar se existe coluna 'Data' com datetime
-        if 'Data' in df.columns and pd.api.types.is_datetime64_any_dtype(df['Data']):
-            return df['Data'].max()
-
-        # Fallback: tentar converter indice para datetime
+        
+        # Tenta coluna 'date' (padrao SGS, IPEA, etc)
+        try:
+            result = self._qe.sql(f"SELECT MAX(date) as max_date FROM '{filepath}'")
+            if not result.empty and result['max_date'].iloc[0] is not None:
+                return pd.to_datetime(result['max_date'].iloc[0])
+        except Exception:
+            pass
+        
+        # Tenta coluna 'Data' (padrao Expectations)
+        try:
+            result = self._qe.sql(f"SELECT MAX(Data) as max_date FROM '{filepath}'")
+            if not result.empty and result['max_date'].iloc[0] is not None:
+                return pd.to_datetime(result['max_date'].iloc[0])
+        except Exception:
+            pass
+        
         return None
 
     def is_first_run(self, subdir: str) -> bool:
@@ -248,146 +285,5 @@ class DataManager:
         """
         return self.raw_path / subdir / f"{filename}.parquet"
 
-    # =========================================================================
-    # Coleta Incremental
-    # =========================================================================
 
-    def fetch_and_sync(
-        self,
-        filename: str,
-        subdir: str,
-        fetch_fn: Callable[[str | None], pd.DataFrame],
-        frequency: str = 'daily',
-        verbose: bool = True,
-    ) -> tuple[pd.DataFrame, bool]:
-        """
-        Orquestra coleta incremental: verifica ultima data, busca dados, salva/append.
 
-        Metodo generico para qualquer fonte de dados (BCB, IBGE, Bloomberg, etc).
-        Centraliza a logica de decidir entre download completo ou incremental.
-
-        Args:
-            filename: Nome do arquivo (sem extensao)
-            subdir: Subdiretorio em raw/
-            fetch_fn: Funcao que recebe start_date e retorna DataFrame
-                      - None: buscar historico completo
-                      - 'YYYY-MM-DD': buscar a partir desta data
-            frequency: Frequencia dos dados ('daily' ou 'monthly')
-            verbose: Imprimir progresso
-
-        Returns:
-            (DataFrame com dados coletados, is_first_run)
-
-        Example:
-            def fetch(start_date):
-                return client.get_data(code, start=start_date)
-
-            df, is_first = data_manager.fetch_and_sync('selic', 'sgs/daily', fetch)
-        """
-        last_date = self.get_last_date(filename, subdir)
-        is_first_run = last_date is None
-
-        if is_first_run:
-            start_date = None
-        elif frequency == 'monthly':
-            # Para series mensais, pular para o proximo mes
-            next_month = (last_date.replace(day=1) + timedelta(days=32)).replace(day=1)
-            start_date = next_month.strftime('%Y-%m-%d')
-        else:
-            start_date = (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
-
-        df = fetch_fn(start_date)
-
-        if not df.empty:
-            if is_first_run:
-                self.save(df, filename, subdir, verbose=verbose)
-            else:
-                self.append(df, filename, subdir, verbose=verbose)
-
-        return df, is_first_run
-
-    # =========================================================================
-    # Consolidacao
-    # =========================================================================
-
-    def consolidate(
-        self,
-        files: list[str] = None,
-        output_filename: str = None,
-        subdir: str = 'daily',
-        save: bool = True,
-        verbose: bool = False,
-        add_source: bool = False,
-    ) -> pd.DataFrame:
-        """
-        Consolida multiplos arquivos em um DataFrame.
-
-        Args:
-            files: Lista de nomes de arquivos (default: todos os arquivos do subdir)
-            output_filename: Nome do arquivo consolidado (obrigatorio se save=True)
-            subdir: Subdiretorio dentro de raw/
-            save: Se True, salva em processed/
-            verbose: Se True, imprime progresso
-            add_source: Se True, adiciona coluna '_source' com nome do arquivo origem
-
-        Returns:
-            DataFrame consolidado
-        """
-        if files is None:
-            files = self.list_files(subdir)
-
-        if not files:
-            if verbose:
-                print(f"Nenhum arquivo para consolidar em {subdir}/")
-            return pd.DataFrame()
-
-        if verbose:
-            print(f"Consolidando {len(files)} arquivos de {subdir}/...")
-
-        dfs = []
-        for filename in files:
-            df = self.read(filename, subdir)
-            if not df.empty:
-                if add_source:
-                    # Concatenar com coluna de origem
-                    df = df.copy()
-                    df['_source'] = filename
-                    dfs.append(df)
-                else:
-                    # Usar filename como nome da coluna se tiver coluna 'value'
-                    if 'value' in df.columns:
-                        df = df.rename(columns={'value': filename})
-                    dfs.append(df)
-
-        if not dfs:
-            return pd.DataFrame()
-
-        if add_source:
-            # Concatenar verticalmente quando add_source=True
-            result = pd.concat(dfs, ignore_index=True)
-        else:
-            # Juntar horizontalmente por indice
-            result = dfs[0]
-            for df in dfs[1:]:
-                result = result.join(df, how='outer')
-            result = result.sort_index()
-
-        if save:
-            if output_filename is None:
-                raise ValueError("output_filename obrigatorio quando save=True")
-
-            self.processed_path.mkdir(parents=True, exist_ok=True)
-            filepath = self.processed_path / f"{output_filename}.parquet"
-            result.to_parquet(
-                filepath,
-                engine='pyarrow',
-                compression='snappy',
-                index=True
-            )
-            if verbose:
-                print(f"Salvo: {filepath.relative_to(self.base_path)}")
-
-        if verbose:
-            print(f"Total: {len(result):,} registros, {len(result.columns)} colunas")
-
-        return result

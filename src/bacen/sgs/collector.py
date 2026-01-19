@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from core.collectors import BaseCollector
-from core.indicators import get_indicator_config
+from core.utils import get_indicator_config
 from .client import SGSClient
 from .indicators import SGS_CONFIG
 
@@ -26,14 +26,13 @@ class SGSCollector(BaseCollector):
     """
 
     default_subdir = 'bacen/sgs/daily'
-    default_consolidate_subdirs = ['bacen/sgs/daily', 'bacen/sgs/monthly']
 
-    def __init__(self, data_path: Path):
+    def __init__(self, data_path: Path = None):
         """
         Inicializa o coletor.
 
         Args:
-            data_path: Caminho para diretorio data/
+            data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
         """
         super().__init__(data_path)
         self.client = SGSClient()
@@ -153,87 +152,23 @@ class SGSCollector(BaseCollector):
         return results
 
     # =========================================================================
-    # Consolidacao
-    # =========================================================================
 
-    @staticmethod
-    def _annualize_cdi(daily_rate: pd.Series) -> pd.Series:
+    def get_status(self) -> pd.DataFrame:
         """
-        Calcula taxa anualizada a partir da taxa diaria do CDI.
-
-        Formula: ((1 + taxa_diaria/100) ** 252 - 1) * 100
-
-        O CDI vem em percentual diario (ex: 0.055 = 0.055% ao dia).
-        Resultado em percentual anual (ex: 14.9 = 14.9% ao ano).
-        """
-        return ((1 + daily_rate / 100) ** 252 - 1) * 100
-
-    def consolidate(
-        self,
-        subdirs: list[str] | str = None,
-        output_prefix: str = None,
-        save: bool = True,
-        verbose: bool = True,
-    ) -> dict[str, pd.DataFrame]:
-        """
-        Consolida arquivos de um ou mais subdiretorios.
-
-        Para sgs/daily, adiciona coluna 'cdi_anualizado' com o CDI
-        convertido para taxa anual (comparavel com SELIC).
-
-        Args:
-            subdirs: Subdiretorios a consolidar:
-                - None: usa default_consolidate_subdirs (['sgs/daily', 'sgs/monthly'])
-                - lista: ['sgs/daily', 'sgs/monthly']
-                - string: 'sgs/daily' (um unico)
-            output_prefix: Prefixo para nomes de arquivo (default: sgs_daily_consolidated)
-            save: Se True, salva em processed/
-            verbose: Se True, imprime progresso
+        Retorna status dos arquivos SGS (daily e monthly).
 
         Returns:
-            Dict {subdir: DataFrame} com dados consolidados
+            DataFrame com status de cada arquivo
         """
-        # Normalizar entrada
-        subdirs_list = self._normalize_subdirs_list(subdirs)
+        dfs = []
+        subdirs = ['bacen/sgs/daily', 'bacen/sgs/monthly']
+        for subdir in subdirs:
+            df = super().get_status(subdir)
+            if not df.empty:
+                dfs.append(df)
 
-        self._log_consolidate_start(verbose=verbose)
+        if not dfs:
+            return pd.DataFrame()
 
-        results = {}
-        for subdir in subdirs_list:
-            # Gerar nome de arquivo (sgs/daily -> sgs_daily_consolidated)
-            subdir_safe = subdir.replace('/', '_')
-            output_name = f"{output_prefix or subdir_safe}_consolidated" if save else None
+        return pd.concat(dfs, ignore_index=True)
 
-            # Consolidar sem salvar primeiro (para aplicar transformacoes)
-            df = self.data_manager.consolidate(
-                subdir=subdir,
-                output_filename=None,
-                save=False,
-                verbose=verbose,
-            )
-
-            # Adicionar cdi_anualizado para dados diarios
-            if subdir == 'bacen/sgs/daily' and 'cdi' in df.columns:
-                df['cdi_anualizado'] = self._annualize_cdi(df['cdi'])
-                if verbose:
-                    print("  + Adicionada coluna 'cdi_anualizado'")
-
-            # Salvar se solicitado
-            if save and output_name:
-                self._save_parquet_to_processed(df, output_name, verbose=verbose)
-
-            results[subdir] = df
-
-            if verbose and not df.empty:
-                print(f"  {subdir}: {df.shape[0]:,} registros x {df.shape[1]} colunas")
-                if hasattr(df.index, 'min') and hasattr(df.index, 'max'):
-                    try:
-                        print(f"  Periodo: {df.index.min().date()} a {df.index.max().date()}")
-                    except AttributeError:
-                        pass
-                print()
-
-        if verbose:
-            print("Consolidacao concluida!")
-
-        return results
