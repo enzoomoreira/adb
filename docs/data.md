@@ -39,10 +39,17 @@ df = sgs.read('selic', 'cdi')
 print(sgs.available())           # Lista indicadores
 print(sgs.info('selic'))         # Info do indicador
 
-# CAGED (microdados) - metodos especiais
-df = caged.saldo_mensal()
-df = caged.saldo_por_uf()
+# CAGED (microdados) - interface diferente
+df = caged.read(year=2025)                    # Todos os meses
+df = caged.read(year=2025, month=10)          # Mes especifico
+df = caged.read(year=2025, uf=35)             # Filtrar por UF
+
+# CAGED - agregacoes (year obrigatorio)
+df = caged.saldo_mensal(year=2025)
+df = caged.saldo_por_uf(year=2025)
+df = caged.saldo_por_setor(year=2025)
 print(caged.available_periods())
+print(caged.info('cagedmov'))
 ```
 
 ---
@@ -152,7 +159,7 @@ Retorna o path completo de um arquivo.
 
 Retorna metadados de um arquivo.
 
-**Retorno:** dict
+**Retorno:** dict ou None (se arquivo nao existe)
 
 ---
 

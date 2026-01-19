@@ -63,7 +63,7 @@ Indicadores disponiveis em `src/bacen/sgs/indicators.py`:
 ### Funcoes Auxiliares
 
 ```python
-from src.bacen import SGS_CONFIG
+from bacen import SGS_CONFIG
 from core import list_indicators, get_indicator_config, filter_by_field
 
 list_indicators(SGS_CONFIG)                        # Lista chaves
@@ -120,14 +120,32 @@ collector.get_status()
 from bacen.sgs.client import SGSClient
 from bacen.expectations.client import ExpectationsClient
 
+# SGSClient
 client = SGSClient()
 df = client.get_data(code=432, name='Selic', frequency='daily', start_date='2024-01-01')
+
+# ExpectationsClient
+client = ExpectationsClient()
+df = client.query(endpoint_key='top5_anuais', indicator='IPCA', start_date='2024-01-01')
+```
+
+### SGSClient.get_data()
+
+```python
+def get_data(
+    code: int,
+    name: str,
+    frequency: str,
+    start_date: str = None,
+    verbose: bool = False,
+) -> pd.DataFrame
 ```
 
 ### SGSCollector.collect()
 
 ```python
 def collect(
+    self,
     indicators: list[str] | str = 'all',
     save: bool = True,
     verbose: bool = True,
@@ -138,6 +156,7 @@ def collect(
 
 ```python
 def collect(
+    self,
     indicators: list[str] | str = 'all',
     start_date: str = None,
     limit: int = None,
@@ -152,7 +171,7 @@ def collect(
 
 ```python
 # Configs (exportados)
-from src.bacen import SGS_CONFIG, EXPECTATIONS_CONFIG
+from bacen import SGS_CONFIG, EXPECTATIONS_CONFIG
 
 # Funcoes auxiliares (centralizadas em core)
 from core import (

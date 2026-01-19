@@ -8,7 +8,7 @@ O modulo `src/mte/` coleta microdados de emprego formal via FTP do MTE.
 
 | Caracteristica | Valor |
 |----------------|-------|
-| Fonte | FTP pdet.mte.gov.br |
+| Fonte | FTP ftp.mtps.gov.br |
 | Formato origem | 7z -> CSV -> Parquet |
 | Periodo | 2020-presente (Novo CAGED) |
 | Volume | ~500MB-1GB por mes |
@@ -23,10 +23,10 @@ O modulo `src/mte/` coleta microdados de emprego formal via FTP do MTE.
 ```python
 from core.collectors import collect
 
-collect('caged')                                  # Todos indicadores
-collect('caged', indicators='cagedmov')           # Um indicador
-collect('caged', indicators=['cagedmov', 'cagedfor'])  # Lista
-# Retorna: dict[str, int] com contagem de registros
+collect('caged')                                   # Todos indicadores, todos periodos
+collect('caged', indicators='cagedmov')            # Um indicador
+collect('caged', indicators=['cagedmov', 'cagedfor'])  # Lista de indicadores
+# Retorna: dict[str, int] com contagem de registros por indicador
 ```
 
 ### Para Leitura/Queries (Explorer)
@@ -34,15 +34,16 @@ collect('caged', indicators=['cagedmov', 'cagedfor'])  # Lista
 ```python
 from core.data import caged
 
-# Leitura de microdados
-df = caged.read('cagedmov')                      # Todos os periodos
-df = caged.read('cagedmov', start='2024-01')     # A partir de janeiro/2024
-df = caged.read('cagedmov', start='2024-01', end='2024-06')
+# Leitura de microdados (year obrigatorio)
+df = caged.read(year=2024)                       # Ano inteiro
+df = caged.read(year=2024, month=6)              # Mes especifico
+df = caged.read(year=2024, uf=35)                # Filtrado por UF (SP)
+df = caged.read(year=2024, dataset='cagedfor')   # Outro dataset
 
-# Consultas agregadas
-df = caged.saldo_mensal()                        # Saldo por mes
-df = caged.saldo_por_uf()                        # Saldo por UF
-df = caged.saldo_por_setor()                     # Saldo por setor
+# Consultas agregadas (year obrigatorio)
+df = caged.saldo_mensal(year=2024)               # Saldo por mes
+df = caged.saldo_por_uf(year=2024)               # Saldo por UF
+df = caged.saldo_por_setor(year=2024)            # Saldo por setor
 
 # Informacoes
 print(caged.available_periods())                 # Periodos disponiveis
@@ -56,7 +57,7 @@ Para queries customizadas, use o QueryEngine:
 ```python
 from core.data import QueryEngine
 
-qe = QueryEngine('data/')
+qe = QueryEngine()  # Usa DATA_PATH padrao
 
 # Leitura com filtros
 df = qe.read_glob('cagedmov_2024-*.parquet', subdir='mte/caged')
@@ -64,7 +65,7 @@ df = qe.read_glob('cagedmov_*.parquet', subdir='mte/caged',
                   columns=['uf', 'saldomovimentacao'],
                   where="uf = 35")  # SP
 
-# Query SQL com DuckDB
+# Query SQL com DuckDB (usa {raw} como variavel)
 df = qe.sql('''
     SELECT uf, SUM(saldomovimentacao) as saldo
     FROM '{raw}/mte/caged/cagedmov_*.parquet'
@@ -91,8 +92,8 @@ Indicadores disponiveis em `src/mte/caged/indicators.py`:
 ### Funcoes Auxiliares
 
 ```python
-from src.mte import CAGED_CONFIG
-from core import list_indicators, get_indicator_config
+from mte import CAGED_CONFIG
+from core.utils import list_indicators, get_indicator_config
 
 list_indicators(CAGED_CONFIG)                    # ['cagedmov', 'cagedfor', 'cagedexc']
 get_indicator_config(CAGED_CONFIG, 'cagedmov')   # Config do indicador
@@ -163,10 +164,10 @@ def get_status() -> pd.DataFrame
 
 ```python
 # Config (exportado)
-from src.mte import CAGED_CONFIG
+from mte import CAGED_CONFIG
 
-# Funcoes auxiliares (centralizadas em core)
-from core import list_indicators, get_indicator_config
+# Funcoes auxiliares (centralizadas em core.utils)
+from core.utils import list_indicators, get_indicator_config
 
 # Interface centralizada (recomendado)
 from core.collectors import collect

@@ -11,7 +11,7 @@ O modulo `src/core/` contem os componentes centralizados do projeto:
 | Componente | Localizacao | Descricao |
 |------------|-------------|-----------|
 | Funcoes de indicadores | `core/utils/indicators.py` | Manipulacao de configs |
-| Funcoes de datas | `core/utils/dates.py` | Parsing e normalizacao |
+| Funcoes de datas | `core/utils/dates.py` | Parsing e normalizacao (parse_date, normalize_date_index) |
 | BaseCollector | `core/collectors/base.py` | Classe base para collectors |
 | Registry | `core/collectors/registry.py` | Interface centralizada de coleta |
 | Config | `core/config.py` | Configuracao global (paths) |
@@ -29,6 +29,8 @@ from core import list_indicators, get_indicator_config, filter_by_field
 # ou
 from core.utils import list_indicators, get_indicator_config, filter_by_field
 ```
+
+> **Nota:** Funcoes de datas (`parse_date`, `normalize_date_index`) tambem estao disponiveis em `core.utils` mas sao de uso interno.
 
 #### list_indicators(config, frequency=None)
 
@@ -69,6 +71,10 @@ from src.bacen import SGS_CONFIG
 
 cfg = get_indicator_config(SGS_CONFIG, 'selic')
 # {'code': 432, 'name': 'Meta Selic', 'frequency': 'daily'}
+
+# Erro se indicador nao existe:
+cfg = get_indicator_config(SGS_CONFIG, 'invalido')
+# KeyError: "Indicador 'invalido' nao encontrado. Disponiveis: ..."
 ```
 
 #### filter_by_field(config, field, value)
@@ -131,8 +137,10 @@ collect('bloomberg')
 collect('sgs', indicators='selic')
 collect('sgs', indicators=['selic', 'cdi'])
 
-# Com parametros extras
-collect('caged', indicators='cagedmov', max_workers=4)
+# Com parametros extras (CAGED)
+collect('caged', year=2025)
+collect('caged', year=2025, month=10)
+collect('caged', year=2025, parallel=True, max_workers=4)
 ```
 
 #### available_sources()
@@ -230,10 +238,12 @@ Normaliza entrada de indicadores para lista.
 Imprime banner padronizado de inicio de coleta.
 
 ```
-================================================================================
-                           COLETA: BACEN - SGS
-                         ATUALIZACAO | 7 indicadores
-================================================================================
+======================================================================
+PRIMEIRA EXECUCAO - Download de Historico Completo
+======================================================================
+BACEN - Sistema Gerenciador de Series
+======================================================================
+Indicadores a coletar: 7
 ```
 
 #### _log_collect_end(results, verbose=True)
@@ -241,9 +251,9 @@ Imprime banner padronizado de inicio de coleta.
 Imprime banner padronizado de fim de coleta.
 
 ```
-================================================================================
-                        COLETA CONCLUIDA: 1,523 registros
-================================================================================
+======================================================================
+Coleta concluida! Total: 1,523 registros
+======================================================================
 ```
 
 #### _log_fetch_start(name, start_date=None, verbose=True)
@@ -266,9 +276,12 @@ Log de resultado de busca.
 
 #### _calculate_start_date(last_date, frequency)
 
-Calcula data inicial para coleta incremental.
+Calcula data inicial para coleta incremental baseada na ultima data salva.
 
-#### _collect_with_sync(fetch_fn, filename, name, subdir, frequency, save=True, verbose=True)
+- `frequency='monthly'`: retorna primeiro dia do proximo mes
+- `frequency='daily'` (ou outro): retorna proximo dia
+
+#### _collect_with_sync(fetch_fn, filename, name, subdir, frequency='daily', save=True, verbose=True)
 
 Template pattern para coleta com suporte a atualizacao incremental.
 
@@ -307,9 +320,9 @@ src/
 │   │   ├── storage.py        # DataManager
 │   │   └── query.py          # QueryEngine
 │   └── utils/
-│       ├── __init__.py       # list_indicators, get_indicator_config, filter_by_field
+│       ├── __init__.py       # list_indicators, get_indicator_config, filter_by_field, parse_date, normalize_date_index
 │       ├── indicators.py     # Funcoes de indicadores
-│       └── dates.py          # Funcoes de datas
+│       └── dates.py          # Funcoes de datas (parse_date, normalize_date_index)
 ├── bacen/
 │   ├── __init__.py           # SGS_CONFIG, EXPECTATIONS_CONFIG
 │   ├── sgs/
@@ -373,12 +386,15 @@ from core.data import DataManager, QueryEngine
 # Funcoes auxiliares
 from core import list_indicators, get_indicator_config, filter_by_field
 
+# Funcoes de datas (uso interno)
+from core.utils import parse_date, normalize_date_index
+
 # Configuracao
 from core import PROJECT_ROOT, DATA_PATH
 
-# Configs de indicadores
-from src.bacen import SGS_CONFIG, EXPECTATIONS_CONFIG
-from src.mte import CAGED_CONFIG
-from src.ipea import IPEA_CONFIG
-from src.bloomberg import BLOOMBERG_CONFIG
+# Configs de indicadores (para referencia)
+from bacen import SGS_CONFIG, EXPECTATIONS_CONFIG
+from mte import CAGED_CONFIG
+from ipea import IPEA_CONFIG
+from bloomberg import BLOOMBERG_CONFIG
 ```

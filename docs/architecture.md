@@ -21,35 +21,51 @@ Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta cin
 ```
 agora-database/
 ├── src/
-│   ├── core/                     # Utilitarios compartilhados
-│   │   ├── indicators.py         # Funcoes centralizadas para indicadores
-│   │   ├── parallel.py           # ParallelFetcher
-│   │   ├── collectors/           # Base classes para collectors
-│   │   │   └── base.py           # BaseCollector
-│   │   └── data/
-│   │       ├── storage.py        # DataManager (persistencia)
-│   │       └── query.py          # QueryEngine (consultas SQL)
+│   ├── core/                     # Modulo central
+│   │   ├── __init__.py           # API publica centralizada
+│   │   ├── config.py             # PROJECT_ROOT, DATA_PATH
+│   │   ├── collectors/           # Sistema de coleta
+│   │   │   ├── __init__.py       # collect, available_sources, get_status
+│   │   │   ├── base.py           # BaseCollector
+│   │   │   └── registry.py       # Registro de collectors
+│   │   ├── data/                 # Persistencia e queries
+│   │   │   ├── __init__.py       # DataManager, QueryEngine, explorers
+│   │   │   ├── storage.py        # DataManager (persistencia)
+│   │   │   └── query.py          # QueryEngine (consultas SQL)
+│   │   └── utils/                # Utilitarios
+│   │       ├── __init__.py       # Exports centralizados
+│   │       ├── indicators.py     # list_indicators, get_indicator_config
+│   │       └── dates.py          # parse_date, normalize_date_index
 │   ├── bacen/                    # Modulo BCB
+│   │   ├── __init__.py           # SGS_CONFIG, EXPECTATIONS_CONFIG
 │   │   ├── sgs/                  # Series temporais SGS
 │   │   │   ├── client.py         # SGSClient
 │   │   │   ├── collector.py      # SGSCollector
+│   │   │   ├── explorer.py       # SGSExplorer
 │   │   │   └── indicators.py     # SGS_CONFIG
 │   │   └── expectations/         # Expectativas Focus
 │   │       ├── client.py         # ExpectationsClient
 │   │       ├── collector.py      # ExpectationsCollector
+│   │       ├── explorer.py       # ExpectationsExplorer
 │   │       └── indicators.py     # EXPECTATIONS_CONFIG
 │   ├── mte/                      # Modulo MTE
+│   │   ├── __init__.py           # CAGED_CONFIG
 │   │   └── caged/                # Microdados CAGED
 │   │       ├── client.py         # CAGEDClient (FTP)
 │   │       ├── collector.py      # CAGEDCollector
+│   │       ├── explorer.py       # CAGEDExplorer
 │   │       └── indicators.py     # CAGED_CONFIG
 │   ├── ipea/                     # Modulo IPEA
+│   │   ├── __init__.py           # IPEA_CONFIG
 │   │   ├── client.py             # IPEAClient
 │   │   ├── collector.py          # IPEACollector
+│   │   ├── explorer.py           # IPEAExplorer
 │   │   └── indicators.py         # IPEA_CONFIG
 │   └── bloomberg/                # Modulo Bloomberg Terminal
+│       ├── __init__.py           # BLOOMBERG_CONFIG
 │       ├── client.py             # BloombergClient
 │       ├── collector.py          # BloombergCollector
+│       ├── explorer.py           # BloombergExplorer
 │       └── indicators.py         # BLOOMBERG_CONFIG
 ├── data/                         # Dados coletados
 │   ├── raw/                      # Dados brutos
@@ -89,8 +105,14 @@ DataManager (src/core/data/storage.py)    # save/read/append/consolidate
 QueryEngine (src/core/data/query.py)      # SQL queries via DuckDB
 
 # Utilitarios
-ParallelFetcher (src/core/parallel.py)    # Usado pelo CAGEDCollector
-core.indicators (src/core/indicators.py)  # list_indicators(), get_indicator_config()
+core.utils.indicators (src/core/utils/indicators.py)  # list_indicators(), get_indicator_config()
+
+# Explorers (interface pythonica para queries)
+SGSExplorer (src/bacen/sgs/explorer.py)
+ExpectationsExplorer (src/bacen/expectations/explorer.py)
+CAGEDExplorer (src/mte/caged/explorer.py)
+IPEAExplorer (src/ipea/explorer.py)
+BloombergExplorer (src/bloomberg/explorer.py)
 ```
 
 **Separacao de Responsabilidades:**
@@ -120,10 +142,12 @@ core.indicators (src/core/indicators.py)  # list_indicators(), get_indicator_con
                             ┌───────────────┴───────────────┐
                             ▼                               ▼
                     data/raw/{subdir}/*.parquet    data/processed/*.parquet
-                            │
-                            ▼
-                      QueryEngine (query.py)
-                    SQL queries via DuckDB
+                                    │
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+              Explorers      QueryEngine      DataManager.read()
+           (interface        (SQL direto)     (leitura basica)
+            pythonica)
 ```
 
 ---
@@ -140,28 +164,52 @@ results = collector.collect(['selic', 'cdi'])     # Lista
 results = collector.collect()                      # Todos (default)
 ```
 
-### Coleta e Consolidacao
+### Coleta Centralizada (Recomendado)
 
 ```python
-from src.bacen import SGSCollector
+from core.collectors import collect, available_sources, get_status
 
-collector = SGSCollector('data/')
+# Listar fontes disponiveis
+available_sources()  # ['sgs', 'expectations', 'caged', 'ipea', 'bloomberg']
 
 # Coleta (incremental automatico)
-collector.collect()
+collect('sgs')
+collect('sgs', indicators='selic')
+collect('sgs', indicators=['selic', 'cdi'])
 
-# Consolidacao
-results = collector.consolidate()
+# Status dos dados
+status = get_status('sgs')
 ```
 
-### Leitura e Consultas SQL
+### Leitura via Explorers (Recomendado)
 
-Para leitura e queries nos dados coletados, use o `QueryEngine` (separacao de responsabilidades):
+Interface pythonica para leitura de dados coletados:
+
+```python
+from core.data import sgs, caged, expectations, ipea, bloomberg
+
+# Leitura simples
+df = sgs.read('selic')
+df = sgs.read('selic', start='2020', end='2023')
+df = sgs.read('selic', 'cdi')  # Multiplos indicadores
+
+# CAGED (microdados)
+df = caged.read(year=2025)
+df = caged.read(year=2025, uf=35)
+
+# Listar indicadores disponiveis
+sgs.available()
+sgs.info('selic')
+```
+
+### Leitura via QueryEngine (SQL Direto)
+
+Para queries mais complexas, use o `QueryEngine`:
 
 ```python
 from core.data import QueryEngine
 
-qe = QueryEngine('data/')
+qe = QueryEngine()
 
 # Leitura simples
 df = qe.read('selic', 'bacen/sgs/daily')
@@ -190,7 +238,7 @@ df = qe.read_glob('cagedmov_2024-*.parquet', subdir='mte/caged')
 | [mte.md](mte.md) | CAGEDCollector, downloads paralelos, query SQL |
 | [ipea.md](ipea.md) | IPEACollector, dados agregados |
 | [data.md](data.md) | DataManager, fetch_and_sync, persistencia |
-| [utils.md](utils.md) | ParallelFetcher, BaseCollector |
+| [utils.md](utils.md) | BaseCollector, funcoes auxiliares, registry |
 
 ---
 
@@ -244,5 +292,4 @@ IPEA_CONFIG['novo_indicador'] = {
 | Protocolo | HTTP (REST) | FTP + 7z | HTTP (ipeadatapy) | Bloomberg Terminal (xbbg) |
 | Volume/periodo | ~KB | ~500MB-1GB | ~KB | ~KB-MB |
 | Retorno collect() | DataFrame | int (contagem) | DataFrame | DataFrame |
-| Parallelismo | Nao | Sim (threads) | Nao | Nao |
 | Heranca | BaseCollector | BaseCollector | BaseCollector | BaseCollector |

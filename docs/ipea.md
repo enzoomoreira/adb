@@ -66,7 +66,7 @@ Indicadores disponiveis em `src/ipea/indicators.py`:
 ### Funcoes Auxiliares
 
 ```python
-from src.ipea import IPEA_CONFIG
+from ipea import IPEA_CONFIG
 from core import list_indicators, get_indicator_config, filter_by_field
 
 list_indicators(IPEA_CONFIG)                       # Lista chaves
@@ -131,7 +131,7 @@ def get_metadata(code: str) -> dict
 
 ```python
 # Config (exportado)
-from src.ipea import IPEA_CONFIG
+from ipea import IPEA_CONFIG
 
 # Funcoes auxiliares (centralizadas em core)
 from core import list_indicators, get_indicator_config, filter_by_field
