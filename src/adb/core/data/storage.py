@@ -1,0 +1,289 @@
+"""
+Gerenciador de persistencia de dados em formato Parquet.
+
+Responsavel por operacoes de CRUD em arquivos Parquet.
+Usado por todos os collectors do projeto.
+"""
+
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Callable
+
+
+import pandas as pd
+
+from adb.core.utils.dates import normalize_date_index
+
+
+class DataManager:
+    """
+    Gerenciador de persistencia em Parquet para indicadores economicos.
+
+    Responsabilidades:
+    - Salvar/ler/append de arquivos Parquet
+    - Consolidacao de multiplos arquivos
+    - Controle de coleta incremental (fetch_and_sync)
+
+    Para queries SQL, use QueryEngine de core.data.query.
+    """
+
+    def __init__(self, base_path: Path = None):
+        """
+        Inicializa o gerenciador de dados.
+
+        Args:
+            base_path: Caminho base para diretorio data/ (opcional, usa DATA_PATH se None)
+        """
+        from adb.core.config import DATA_PATH
+        self.base_path = Path(base_path) if base_path else DATA_PATH
+        self.raw_path = self.base_path / 'raw'
+        self.processed_path = self.base_path / 'processed'
+        
+        # Composicao: usa QueryEngine para leituras otimizadas (DuckDB)
+        from adb.core.data.query import QueryEngine
+        self._qe = QueryEngine(self.base_path)
+
+    # =========================================================================
+    # CRUD Principal
+    # =========================================================================
+
+    def save(
+        self,
+        df: pd.DataFrame,
+        filename: str,
+        subdir: str = 'daily',
+        format: str = 'parquet',
+        metadata: dict = None,
+        verbose: bool = False,
+    ):
+        """
+        Salva DataFrame em arquivo.
+
+        Args:
+            df: DataFrame para salvar
+            filename: Nome do arquivo (sem extensao)
+            subdir: Subdiretorio dentro de raw/ (ex: 'daily', 'monthly', 'expectations')
+            format: Formato do arquivo ('parquet' ou 'csv')
+            metadata: Dicionario com metadata adicional (opcional)
+            verbose: Se True, imprime caminho salvo
+        """
+        output_dir = self.raw_path / subdir
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Padronizar índice de data antes de salvar (usa método do QueryEngine)
+        df = normalize_date_index(df)
+
+        # Adicionar metadata ao DataFrame
+        df.attrs['filename'] = filename
+        df.attrs['subdir'] = subdir
+        df.attrs['saved_at'] = datetime.now().isoformat()
+        if metadata:
+            df.attrs.update(metadata)
+
+        if format == 'parquet':
+            filepath = output_dir / f"{filename}.parquet"
+            df.to_parquet(
+                filepath,
+                engine='pyarrow',
+                compression='snappy',
+                index=True
+            )
+        elif format == 'csv':
+            filepath = output_dir / f"{filename}.csv"
+            df.to_csv(filepath, index=True)
+        else:
+            raise ValueError(f"Formato '{format}' nao suportado. Use 'parquet' ou 'csv'.")
+
+        if verbose:
+            print(f"Salvo: {filepath.relative_to(self.base_path)}")
+
+    def read(
+        self,
+        filename: str,
+        subdir: str = 'daily',
+    ) -> pd.DataFrame:
+        """
+        Le arquivo de dados via DuckDB (otimizado).
+
+        Args:
+            filename: Nome do arquivo (sem extensao)
+            subdir: Subdiretorio dentro de raw/
+
+        Returns:
+            DataFrame com dados (vazio se arquivo nao existe)
+        """
+        filepath = self.raw_path / subdir / f"{filename}.parquet"
+
+        if not filepath.exists():
+            # Tentar CSV como fallback
+            csv_path = self.raw_path / subdir / f"{filename}.csv"
+            if csv_path.exists():
+                return pd.read_csv(csv_path, index_col=0, parse_dates=True)
+            return pd.DataFrame()
+
+        # Usa QueryEngine (DuckDB) para leitura otimizada
+        return self._qe.read(filename, subdir)
+
+    def get_metadata(
+        self,
+        filename: str,
+        subdir: str = 'daily',
+    ) -> dict:
+        """
+        Retorna metadados do arquivo (count, datas) de forma otimizada.
+        
+        Args:
+            filename: Nome do arquivo (sem extensao)
+            subdir: Subdiretorio dentro de raw/
+            
+        Returns:
+            Dict com metadados ou None se arquivo nao existe
+        """
+        return self._qe.get_metadata(filename, subdir)
+
+    def append(
+        self,
+        df: pd.DataFrame,
+        filename: str,
+        subdir: str = 'daily',
+        dedup: bool = True,
+        verbose: bool = False,
+    ):
+        """
+        Adiciona novos dados a um arquivo existente (update incremental).
+
+        Args:
+            df: DataFrame com novos dados
+            filename: Nome do arquivo
+            subdir: Subdiretorio dentro de raw/
+            dedup: Se True, remove duplicatas por indice (para series temporais).
+                   Se False, mantem todos os registros (para microdados como CAGED).
+            verbose: Se True, imprime progresso
+
+        Nota sobre dedup:
+            - dedup=True (padrao): Para series temporais onde indice = data unica.
+              Remove duplicatas mantendo o valor mais recente.
+            - dedup=False: Para microdados onde cada linha e um registro unico
+              (ex: CAGED). Usa ignore_index=True para resetar indices e nao
+              remove nenhum registro.
+        """
+        existing_df = self.read(filename, subdir)
+
+        if existing_df.empty:
+            # Primeira insercao: se dedup=False, reseta indice para evitar problemas futuros
+            if not dedup:
+                df = df.reset_index(drop=True)
+            self.save(df, filename, subdir, verbose=verbose)
+            return
+
+        # Concatena DataFrames
+        # - dedup=True: mantem indices originais para poder identificar duplicatas
+        # - dedup=False: usa ignore_index para criar indice sequencial unico
+        combined = pd.concat([existing_df, df], ignore_index=not dedup)
+
+        # Remove duplicatas apenas para series temporais (dedup=True)
+        if dedup:
+            combined = combined[~combined.index.duplicated(keep='last')]
+            combined = combined.sort_index()
+
+        # Preservar metadata existente
+        combined.attrs = existing_df.attrs.copy()
+        combined.attrs['last_update'] = datetime.now().isoformat()
+
+        self.save(combined, filename, subdir, metadata=combined.attrs, verbose=verbose)
+
+    # =========================================================================
+    # Listagem e Metadados
+    # =========================================================================
+
+    def list_files(
+        self,
+        subdir: str = 'daily',
+    ) -> list[str]:
+        """
+        Lista arquivos salvos em um subdiretorio.
+
+        Args:
+            subdir: Subdiretorio dentro de raw/
+
+        Returns:
+            Lista de nomes de arquivos (sem extensao)
+        """
+        dir_path = self.raw_path / subdir
+
+        if not dir_path.exists():
+            return []
+
+        return [f.stem for f in dir_path.glob('*.parquet')]
+
+    def get_last_date(
+        self,
+        filename: str,
+        subdir: str = 'daily',
+    ):
+        """
+        Retorna a ultima data disponivel em um arquivo.
+        
+        Otimizado: usa DuckDB para buscar apenas MAX(date) sem carregar
+        o arquivo inteiro na memoria.
+
+        Args:
+            filename: Nome do arquivo
+            subdir: Subdiretorio dentro de raw/
+
+        Returns:
+            datetime da ultima data ou None se nao existir
+        """
+        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        
+        if not filepath.exists():
+            return None
+        
+        # Tenta coluna 'date' (padrao SGS, IPEA, etc)
+        try:
+            result = self._qe.sql(f"SELECT MAX(date) as max_date FROM '{filepath}'")
+            if not result.empty and result['max_date'].iloc[0] is not None:
+                return pd.to_datetime(result['max_date'].iloc[0])
+        except Exception:
+            pass
+        
+        # Tenta coluna 'Data' (padrao Expectations)
+        try:
+            result = self._qe.sql(f"SELECT MAX(Data) as max_date FROM '{filepath}'")
+            if not result.empty and result['max_date'].iloc[0] is not None:
+                return pd.to_datetime(result['max_date'].iloc[0])
+        except Exception:
+            pass
+        
+        return None
+
+    def is_first_run(self, subdir: str) -> bool:
+        """
+        Verifica se e primeira execucao (subdiretorio nao existe ou esta vazio).
+
+        Args:
+            subdir: Subdiretorio dentro de raw/
+
+        Returns:
+            True se nao existem arquivos no subdiretorio
+        """
+        path = self.raw_path / subdir
+        if not path.exists():
+            return True
+        return len(list(path.glob('*.parquet'))) == 0
+
+    def get_file_path(self, filename: str, subdir: str) -> Path:
+        """
+        Retorna o caminho completo do arquivo.
+
+        Args:
+            filename: Nome do arquivo (sem extensao)
+            subdir: Subdiretorio
+
+        Returns:
+            Path do arquivo Parquet
+        """
+        return self.raw_path / subdir / f"{filename}.parquet"
+
+
+
