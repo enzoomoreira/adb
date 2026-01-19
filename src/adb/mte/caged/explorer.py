@@ -17,28 +17,31 @@ Otimizacao:
 from typing import List
 import pandas as pd
 
+from adb.core.data.explorers import BaseExplorer
 from .indicators import CAGED_CONFIG
 
 
-class CAGEDExplorer:
+class CAGEDExplorer(BaseExplorer):
     """
     Explorer para microdados CAGED.
 
     Fornece interface pythonica para leitura e agregacao de microdados
     do Cadastro Geral de Empregados e Desempregados.
+    
+    Nota: CAGED tem API diferente dos outros explorers (usa year/month).
     """
 
+    _CONFIG = CAGED_CONFIG
     _SUBDIR = "mte/caged"
 
-    def __init__(self, query_engine=None):
-        """
-        Inicializa o explorer CAGED.
+    @property
+    def _COLLECTOR_CLASS(self):
+        from adb.mte.caged.collector import CAGEDCollector
+        return CAGEDCollector
 
-        Args:
-            query_engine: QueryEngine customizado (opcional, cria novo se None)
-        """
-        from adb.core.data import QueryEngine
-        self._qe = query_engine or QueryEngine()
+    # =========================================================================
+    # Override: CAGED tem API diferente (year/month ao inves de start/end)
+    # =========================================================================
 
     def read(
         self,
@@ -62,14 +65,9 @@ class CAGEDExplorer:
 
         Returns:
             DataFrame com microdados
-
-        Examples:
-            >>> caged.read(year=2025)
-            >>> caged.read(year=2025, month=10)
-            >>> caged.read(year=2025, uf=35, columns=['uf', 'salario'])
         """
-        if dataset not in CAGED_CONFIG:
-            available = ', '.join(CAGED_CONFIG.keys())
+        if dataset not in self._CONFIG:
+            available = ', '.join(self._CONFIG.keys())
             raise ValueError(f"Dataset '{dataset}' invalido. Disponiveis: {available}")
 
         if year < 2020:
@@ -83,7 +81,7 @@ class CAGEDExplorer:
             where_parts.append(f"({where})")
         combined_where = " AND ".join(where_parts) if where_parts else None
 
-            # Arquivo unico ou glob
+        # Arquivo unico ou glob
         if month is not None:
             filename = f"{dataset}_{year}-{month:02d}"
             df = self._qe.read(filename, self._SUBDIR, columns=columns, where=combined_where)
@@ -92,20 +90,22 @@ class CAGEDExplorer:
             df = self._qe.read_glob(pattern, self._SUBDIR, columns=columns, where=combined_where)
 
         # Tratamento automatico de colunas numericas com virgula (padrao brasileiro)
-        # Colunas comuns no CAGED que precisam de conversao
         numeric_cols = ['salário', 'horascontratuais', 'valor', 'salariomovimentacao']
         
         if not df.empty:
             for col in numeric_cols:
                 if col in df.columns and df[col].dtype == 'object':
                     try:
-                        # Substituir virgula por ponto e converter para float
                         df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
                         df[col] = pd.to_numeric(df[col], errors='coerce')
                     except Exception:
-                        pass # Falha silenciosa, mantem original
-        
+                        pass
+
         return df
+
+    # =========================================================================
+    # Metodos especificos do CAGED (agregacoes SQL)
+    # =========================================================================
 
     def saldo_por_uf(
         self,
@@ -120,13 +120,6 @@ class CAGEDExplorer:
             year: Ano de referencia
             month: Mes (None = ano inteiro)
             dataset: Tipo de dados
-
-        Returns:
-            DataFrame com saldo por UF
-
-        Examples:
-            >>> caged.saldo_por_uf(year=2025)
-            >>> caged.saldo_por_uf(year=2025, month=10)
         """
         pattern = self._build_pattern(dataset, year, month)
         filepath = self._qe.raw_path / self._SUBDIR / pattern
@@ -154,13 +147,6 @@ class CAGEDExplorer:
             year: Ano de referencia
             uf: Filtrar por UF (None = Brasil)
             dataset: Tipo de dados
-
-        Returns:
-            DataFrame com saldo por mes
-
-        Examples:
-            >>> caged.saldo_mensal(year=2025)
-            >>> caged.saldo_mensal(year=2025, uf=35)  # Sao Paulo
         """
         pattern = f"{dataset}_{year}-*.parquet"
         filepath = self._qe.raw_path / self._SUBDIR / pattern
@@ -177,15 +163,6 @@ class CAGEDExplorer:
             GROUP BY 1, 2
             ORDER BY 1, 2
         """)
-        
-        # UX: Converter para datetime e indice real
-        if not df.empty:
-            df['date'] = pd.to_datetime(
-                df['ano'].astype(str) + '-' + df['mes'].astype(str) + '-01'
-            )
-            df = df.set_index('date').sort_index()
-            
-        return df
 
     def saldo_por_setor(
         self,
@@ -202,13 +179,6 @@ class CAGEDExplorer:
             month: Mes (None = ano inteiro)
             uf: Filtrar por UF (None = Brasil)
             dataset: Tipo de dados
-
-        Returns:
-            DataFrame com saldo por setor
-
-        Examples:
-            >>> caged.saldo_por_setor(year=2025)
-            >>> caged.saldo_por_setor(year=2025, uf=35)
         """
         pattern = self._build_pattern(dataset, year, month)
         filepath = self._qe.raw_path / self._SUBDIR / pattern
@@ -231,13 +201,6 @@ class CAGEDExplorer:
 
         Args:
             dataset: Tipo de dados ('cagedmov', 'cagedfor', 'cagedexc')
-
-        Returns:
-            Lista de tuplas (ano, mes)
-
-        Examples:
-            >>> caged.available_periods()
-            [(2020, 1), (2020, 2), ..., (2025, 10)]
         """
         data_path = self._qe.raw_path / self._SUBDIR
         periods = []
@@ -251,50 +214,13 @@ class CAGEDExplorer:
 
         return sorted(periods)
 
-    def info(self, dataset: str = None) -> dict:
-        """
-        Retorna informacoes sobre dataset(s).
-
-        Args:
-            dataset: Nome do dataset. None = todos.
-
-        Returns:
-            Dict com informacoes do(s) dataset(s)
-
-        Examples:
-            >>> caged.info('cagedmov')
-            {'prefix': 'CAGEDMOV', 'name': 'Movimentacoes', ...}
-        """
-        if dataset:
-            if dataset not in CAGED_CONFIG:
-                raise KeyError(f"Dataset '{dataset}' nao encontrado")
-            return CAGED_CONFIG[dataset].copy()
-        return CAGED_CONFIG.copy()
-
-    @staticmethod
-    def _build_pattern(dataset: str, year: int, month: int = None) -> str:
-        """
-        Constroi pattern de arquivo.
-
-        Args:
-            dataset: Tipo de dados
-            year: Ano
-            month: Mes (opcional)
-
-        Returns:
-            Pattern de arquivo (ex: 'cagedmov_2025-*.parquet')
-        """
-        if month is not None:
-            return f"{dataset}_{year}-{month:02d}.parquet"
-        return f"{dataset}_{year}-*.parquet"
-
     def collect(
         self,
         indicators: list[str] | str = "all",
         save: bool = True,
         verbose: bool = True,
         max_workers: int = 4,
-    ) -> dict[str, int]:
+    ) -> None:
         """
         Coleta microdados CAGED do MTE.
 
@@ -303,22 +229,18 @@ class CAGEDExplorer:
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
             max_workers: Threads para download paralelo
-
-        Returns:
-            Dict {dataset: total_rows}
-
-        Examples:
-            >>> caged.collect()
-            >>> caged.collect('cagedmov', max_workers=8)
         """
-        from adb.mte.caged.collector import CAGEDCollector
-        collector = CAGEDCollector()
-        return collector.collect(
-            indicators=indicators, save=save, verbose=verbose, max_workers=max_workers
+        collector = self._COLLECTOR_CLASS()
+        collector.collect(
+            indicators=indicators, 
+            save=save, 
+            verbose=verbose, 
+            max_workers=max_workers
         )
 
-    def get_status(self) -> pd.DataFrame:
-        """Retorna status dos dados CAGED locais."""
-        from adb.mte.caged.collector import CAGEDCollector
-        collector = CAGEDCollector()
-        return collector.get_status()
+    @staticmethod
+    def _build_pattern(dataset: str, year: int, month: int = None) -> str:
+        """Constroi pattern de arquivo."""
+        if month is not None:
+            return f"{dataset}_{year}-{month:02d}.parquet"
+        return f"{dataset}_{year}-*.parquet"

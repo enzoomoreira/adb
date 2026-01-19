@@ -59,16 +59,18 @@ def normalize_date_index(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
-    # Caso 1: Ja tem DatetimeIndex - so padronizar nome
+    # Caso 1: Ja tem DatetimeIndex - so padronizar nome e remover hora
     if pd.api.types.is_datetime64_any_dtype(df.index):
+        df.index = df.index.normalize()
         df.index.name = 'date'
         return df
 
-    # Caso 2: Tem coluna de data - mover para indice
+    # Caso 2: Tem coluna de data - mover para indice e remover hora
     for col in DATE_COLUMNS:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col])
             df = df.set_index(col)
+            df.index = df.index.normalize()
             df.index.name = 'date'
             return df
 
