@@ -44,4 +44,23 @@ SGS_CONFIG = {
         "frequency": "daily",
         "description": "Certificado de Deposito Interbancario - Taxa Diaria",
     },
+    # IBC-BR Setorial (lancado abril/2025)
+    "ibc_br_agro": {
+        "code": 29602,
+        "name": "IBC-Br Agropecuaria",
+        "frequency": "monthly",
+        "description": "IBC-Br Setor Agropecuario - Dessazonalizado",
+    },
+    "ibc_br_industria": {
+        "code": 29604,
+        "name": "IBC-Br Industria",
+        "frequency": "monthly",
+        "description": "IBC-Br Setor Industrial - Dessazonalizado",
+    },
+    "ibc_br_servicos": {
+        "code": 29606,
+        "name": "IBC-Br Servicos",
+        "frequency": "monthly",
+        "description": "IBC-Br Setor de Servicos - Dessazonalizado",
+    },
 }

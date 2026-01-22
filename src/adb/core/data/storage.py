@@ -8,8 +8,9 @@ Usado por todos os collectors do projeto.
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Callable
+import tempfile
 
-
+import duckdb
 import pandas as pd
 
 from adb.core.utils.dates import normalize_date_index
@@ -152,45 +153,83 @@ class DataManager:
         """
         Adiciona novos dados a um arquivo existente (update incremental).
 
+        Usa DuckDB para streaming: le Parquet existente + novos dados sem
+        carregar tudo na RAM, escreve para arquivo temporario e faz replace atomico.
+
         Args:
             df: DataFrame com novos dados
             filename: Nome do arquivo
             subdir: Subdiretorio dentro de raw/
-            dedup: Se True, remove duplicatas por indice (para series temporais).
+            dedup: Se True, remove duplicatas por coluna date (para series temporais).
                    Se False, mantem todos os registros (para microdados como CAGED).
             verbose: Se True, imprime progresso
-
-        Nota sobre dedup:
-            - dedup=True (padrao): Para series temporais onde indice = data unica.
-              Remove duplicatas mantendo o valor mais recente.
-            - dedup=False: Para microdados onde cada linha e um registro unico
-              (ex: CAGED). Usa ignore_index=True para resetar indices e nao
-              remove nenhum registro.
         """
-        existing_df = self.read(filename, subdir)
-
-        if existing_df.empty:
-            # Primeira insercao: se dedup=False, reseta indice para evitar problemas futuros
+        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        
+        # Primeira insercao: simplesmente salvar
+        if not filepath.exists():
             if not dedup:
                 df = df.reset_index(drop=True)
             self.save(df, filename, subdir, verbose=verbose)
             return
-
-        # Concatena DataFrames
-        # - dedup=True: mantem indices originais para poder identificar duplicatas
-        # - dedup=False: usa ignore_index para criar indice sequencial unico
-        combined = pd.concat([existing_df, df], ignore_index=not dedup)
-
-        # Remove duplicatas apenas para series temporais (dedup=True)
-        if dedup:
-            combined = combined[~combined.index.duplicated(keep='last')]
-            combined = combined.sort_index()
-
-        # Preservar metadata existente
-        combined.attrs = existing_df.attrs.copy()
-        combined.attrs['last_update'] = datetime.now().isoformat()
-
-        self.save(combined, filename, subdir, metadata=combined.attrs, verbose=verbose)
+        
+        # Normalizar novo DataFrame antes de append
+        df = normalize_date_index(df)
+        
+        # Arquivo temporario para escrita atomica
+        temp_fd, temp_path_str = tempfile.mkstemp(suffix='.parquet', dir=filepath.parent)
+        temp_path = Path(temp_path_str)
+        
+        try:
+            # Registrar DataFrame como view temporaria no DuckDB
+            duckdb.register('_new_data', df.reset_index())
+            
+            if dedup:
+                # Streaming com deduplicacao por coluna 'date'
+                # ROW_NUMBER particiona por date, mantendo o registro mais recente (do novo df)
+                query = f"""
+                    COPY (
+                        SELECT * EXCLUDE (_rn) FROM (
+                            SELECT *, ROW_NUMBER() OVER (PARTITION BY date ORDER BY _source DESC) as _rn
+                            FROM (
+                                SELECT *, 0 as _source FROM '{filepath}'
+                                UNION ALL 
+                                SELECT *, 1 as _source FROM _new_data
+                            )
+                        ) WHERE _rn = 1
+                        ORDER BY date
+                    ) TO '{temp_path}' (FORMAT 'parquet', COMPRESSION 'snappy')
+                """
+            else:
+                # Streaming sem deduplicacao (append puro)
+                query = f"""
+                    COPY (
+                        SELECT * FROM '{filepath}'
+                        UNION ALL
+                        SELECT * FROM _new_data
+                    ) TO '{temp_path}' (FORMAT 'parquet', COMPRESSION 'snappy')
+                """
+            
+            duckdb.sql(query)
+            duckdb.unregister('_new_data')
+            
+            # Replace atomico
+            import os
+            os.close(temp_fd)
+            temp_path.replace(filepath)
+            
+            if verbose:
+                print(f"Append: {filepath.relative_to(self.base_path)}")
+                
+        except Exception as e:
+            # Cleanup em caso de erro
+            try:
+                import os
+                os.close(temp_fd)
+                temp_path.unlink(missing_ok=True)
+            except:
+                pass
+            raise e
 
     # =========================================================================
     # Listagem e Metadados
@@ -239,17 +278,9 @@ class DataManager:
         if not filepath.exists():
             return None
         
-        # Tenta coluna 'date' (padrao SGS, IPEA, etc)
+        # Tenta coluna 'date' (padronizado via normalize_date_index no save)
         try:
             result = self._qe.sql(f"SELECT MAX(date) as max_date FROM '{filepath}'")
-            if not result.empty and result['max_date'].iloc[0] is not None:
-                return pd.to_datetime(result['max_date'].iloc[0])
-        except Exception:
-            pass
-        
-        # Tenta coluna 'Data' (padrao Expectations)
-        try:
-            result = self._qe.sql(f"SELECT MAX(Data) as max_date FROM '{filepath}'")
             if not result.empty and result['max_date'].iloc[0] is not None:
                 return pd.to_datetime(result['max_date'].iloc[0])
         except Exception:

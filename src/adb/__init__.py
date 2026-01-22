@@ -28,12 +28,19 @@ from adb.core.data import sgs, caged, expectations, ipea, bloomberg, sidra
 from adb.core.data import QueryEngine, DataManager
 
 # Config
-from adb.core.config import PROJECT_ROOT, DATA_PATH
+from adb.core.config import PROJECT_ROOT, DATA_PATH, OUTPUTS_PATH
 
 
 def available_sources() -> list[str]:
     """Lista todas as fontes de dados disponiveis."""
     return ['sgs', 'caged', 'expectations', 'ipea', 'bloomberg', 'sidra']
+
+
+def __getattr__(name):
+    if name == 'charting':
+        from adb.core import charting
+        return charting
+    raise AttributeError(f"module 'adb' has no attribute '{name}'")
 
 
 __all__ = [
@@ -50,6 +57,7 @@ __all__ = [
     # Config
     'PROJECT_ROOT',
     'DATA_PATH',
+    'OUTPUTS_PATH',
     # Helpers
     'available_sources',
 ]

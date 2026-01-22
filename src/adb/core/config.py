@@ -28,3 +28,4 @@ def get_project_root() -> Path:
 
 PROJECT_ROOT = get_project_root()
 DATA_PATH = PROJECT_ROOT / 'data'
+OUTPUTS_PATH = DATA_PATH / 'outputs'

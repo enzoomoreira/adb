@@ -89,17 +89,8 @@ class CAGEDExplorer(BaseExplorer):
             pattern = f"{dataset}_{year}-*.parquet"
             df = self._qe.read_glob(pattern, self._SUBDIR, columns=columns, where=combined_where)
 
-        # Tratamento automatico de colunas numericas com virgula (padrao brasileiro)
-        numeric_cols = ['salário', 'horascontratuais', 'valor', 'salariomovimentacao']
-        
-        if not df.empty:
-            for col in numeric_cols:
-                if col in df.columns and df[col].dtype == 'object':
-                    try:
-                        df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
-                    except Exception:
-                        pass
+        # Nota: Colunas numéricas (salario, horascontratuais, salariomovimentacao)
+        # são limpas no CAGEDCollector durante a ingestão (CSV→Parquet)
 
         return df
 

@@ -9,6 +9,8 @@ import pandas as pd
 
 
 # Colunas de data reconhecidas (ordem de prioridade)
+# normalize_date_index() usa esta lista para converter qualquer variante para 'date'
+# Dados salvos via DataManager.save() SEMPRE terão coluna 'date' (Schema on Write)
 DATE_COLUMNS = ['date', 'Date', 'data', 'Data', 'DATE']
 
 

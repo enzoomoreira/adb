@@ -137,7 +137,11 @@ class CAGEDCollector(BaseCollector):
             
             query = f"""
                 COPY (
-                    SELECT * 
+                    SELECT 
+                        * EXCLUDE (salário, horascontratuais, salariomovimentacao),
+                        TRY_CAST(REPLACE(salário, ',', '.') AS DOUBLE) as salario,
+                        TRY_CAST(REPLACE(horascontratuais, ',', '.') AS DOUBLE) as horascontratuais,
+                        TRY_CAST(REPLACE(salariomovimentacao, ',', '.') AS DOUBLE) as salariomovimentacao
                     FROM read_csv('{str(csv_path)}', delim=';', header=True, encoding='utf-8', ignore_errors=True)
                 ) TO '{str(output_path)}' (FORMAT 'parquet', COMPRESSION 'snappy')
             """

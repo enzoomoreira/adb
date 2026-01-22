@@ -1,0 +1,77 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+from .theme import theme
+
+def add_footer(fig, source: str = None):
+    """
+    Adiciona rodape padrao ao grafico.
+
+    Formato: "Fonte: {fonte}, Ágora Investimentos"
+    Se fonte nao especificada: apenas "Ágora Investimentos"
+
+    O footer e alinhado com a borda esquerda da area do grafico (axes).
+    """
+    if source:
+        footer_text = f"Fonte: {source}, Ágora Investimentos"
+    else:
+        footer_text = "Ágora Investimentos"
+
+    # Alinha com a borda esquerda do axes (area do grafico)
+    x_pos = 0.01
+    if fig.axes:
+        ax = fig.axes[0]
+        bbox = ax.get_position()
+        x_pos = bbox.x0  # Borda esquerda do axes em coordenadas de figura
+
+    fig.text(x_pos, 0.01, footer_text,
+             ha='left', va='bottom',
+             fontsize=9, color='gray',
+             fontproperties=theme.font)
+
+def highlight_last_point(ax, series: pd.Series, color: str = None, **kwargs):
+    """
+    Destaca o ultimo ponto da serie com um scatter e label.
+
+    Ignora silenciosamente se a serie estiver vazia ou o ultimo valor for NaN/Inf.
+    """
+    if series.empty:
+        return
+
+    # Encontra o ultimo valor valido (nao-NaN)
+    valid_series = series.dropna()
+    if valid_series.empty:
+        return
+
+    last_date = valid_series.index[-1]
+    last_val = valid_series.iloc[-1]
+
+    # Verifica se o valor e finito (nao Inf)
+    if not pd.isna(last_val) and pd.api.types.is_number(last_val):
+        import numpy as np
+        if not np.isfinite(last_val):
+            return
+
+    if color is None:
+        color = theme.colors.primary
+
+    # Scatter (bolinha)
+    ax.scatter([last_date], [last_val], color=color, s=30, zorder=5)
+    
+    # Texto
+    # Formata valor (tenta usar o formatter do eixo Y se disponivel, senao default)
+    y_fmt = ax.yaxis.get_major_formatter()
+    label_text = y_fmt(last_val, None) 
+    
+    # Se o formatter for ScalarFormatter padrao do mpl, ele pode retornar string vazia ou cientifica feia
+    # Entao fallback simples se parecer ruim
+    if not label_text: 
+        label_text = f"{last_val:.2f}"
+
+    ax.annotate(label_text, 
+               xy=(last_date, last_val),
+               xytext=(5, 0), 
+               textcoords='offset points',
+               color=color,
+               fontproperties=theme.font,
+               fontweight='bold',
+               va='center')

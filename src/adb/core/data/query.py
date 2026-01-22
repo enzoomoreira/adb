@@ -12,7 +12,7 @@ import pandas as pd
 import duckdb
 import pyarrow.parquet as pq
 
-from adb.core.utils.dates import normalize_date_index, DATE_COLUMNS
+from adb.core.utils.dates import DATE_COLUMNS
 
 
 class QueryEngine:
@@ -98,7 +98,7 @@ class QueryEngine:
             where: Filtro SQL (ex: "uf = 35 AND date >= '2023-01-01'")
 
         Returns:
-            DataFrame Pandas com índice de data normalizado.
+            DataFrame Pandas (dados normalizados no save via Schema on Write).
         """
         filepath = self.raw_path / subdir / f"{filename}.parquet"
         
@@ -109,7 +109,7 @@ class QueryEngine:
         
         try:
             df = duckdb.sql(sql).df()
-            return normalize_date_index(df)
+            return df
         except Exception as e:
             print(f"Erro lendo {filename}: {e}")
             return pd.DataFrame()
@@ -144,7 +144,8 @@ class QueryEngine:
 
             sql = self._build_query(full_pattern, columns, where)
             df = duckdb.sql(sql).df()
-            return normalize_date_index(df)
+            # Nota: normalize_date_index é chamado apenas no save() (Schema on Write)
+            return df
         except Exception as e:
             # Glob vazio ou erro de leitura
             return pd.DataFrame()
@@ -213,11 +214,7 @@ class QueryEngine:
             schema = duckdb.sql(f"DESCRIBE SELECT * FROM '{filepath}' LIMIT 0").df()
             cols = set(schema['column_name'].tolist())
             
-            date_col = None
-            if 'date' in cols:
-                date_col = 'date'
-            elif 'Data' in cols:
-                date_col = 'Data'
+            date_col = 'date' if 'date' in cols else None
                 
             # 2. Build Query
             if date_col:
