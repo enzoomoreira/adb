@@ -7,8 +7,8 @@ Para query, use: adb.caged.read()
 Exemplo:
     import adb
     
-    df = caged.read(year=2025)
-    periodos = caged.available_periods()
+    df = adb.caged.read(year=2025)
+    periodos = adb.caged.available_periods()
 """
 
 from .indicators import CAGED_CONFIG

@@ -1,3 +1,7 @@
+"""
+Cliente para a API do IBGE Sidra.
+"""
+
 import pandas as pd
 import requests
 from datetime import datetime
@@ -5,12 +9,18 @@ from datetime import datetime
 class SidraClient:
     """
     Cliente para a API do IBGE Sidra.
-    Adapta a logica de extracao padrao do repositorio.
+
+    Adapta a logica de extracao padrao do repositorio para metodos
+    estruturados e tipados.
     """
 
     def __init__(self):
         """Inicializa o cliente Sidra."""
         pass
+
+    # =========================================================================
+    # Metodos Publicos
+    # =========================================================================
 
     def get_data(
         self,
@@ -47,6 +57,10 @@ class SidraClient:
         
         return df
 
+    # =========================================================================
+    # Metodos Internos (Helpers)
+    # =========================================================================
+
     def _date_to_sidra_period(self, date_str: str, frequency: str) -> str:
         """
         Converte data 'YYYY-MM-DD' para formato de periodo SIDRA.
@@ -80,18 +94,17 @@ class SidraClient:
     ) -> dict:
         """Realiza a request para a API do Sidra."""
         
-        # URL Builder logic adapted from temp/Economic_DataBase/src/scrape/sources/ibge.py
+        # URL Builder logic a partir do scrape original
         if classificador is None:
              url = f"https://servicodados.ibge.gov.br/api/v3/agregados/{agregados}/periodos/{periodos}/variaveis/{variaveis}?localidades=N{nivel_territorial}[{localidades}]"
              
              # Support for standard API classification filtering
-             # Check for 'classification' or 'classificacao' in kwargs
              classification = kwargs.get('classification') or kwargs.get('classificacao')
              if classification:
                  url += f"&classificacao={classification}"
                  
         else:
-            # Fallback/Alternative endpoint logic if needed, keeping simple for now based on main usage
+            # Fallback/Alternative endpoint logic
             url = f"https://apisidra.ibge.gov.br/values/t/{agregados}/v/all/p/{periodos}/{classificador}/{variaveis}/n{nivel_territorial}/{localidades}?formato=json"
 
         try:
@@ -107,11 +120,6 @@ class SidraClient:
         try:
             # Estrutura padrao da API v3:
             # Lista de dicts. Metadata pode estar no [0] ou ser lista plana dependendo do endpoint.
-            # O codigo original pegava data[0]['resultados'][0]['series'][0]["serie"]
-            # Vamos adaptar para ser robusto.
-            
-            # API v3 padrao retorna JSON onde primeiro elemento as vezes eh metadata ou headers
-            # Mas o request_data usa v3/agregados... que retorna estrutura complexa
             
             if isinstance(data, list) and len(data) > 0 and 'resultados' in data[0]:
                  # Estrutura v3
@@ -125,42 +133,31 @@ class SidraClient:
                  df = pd.DataFrame(list(series_data.items()), columns=["date_raw", "value"])
                  
             else:
-                 # Tentativa de fallback para API de Values (tabela plana) se for o caso
-                 # Mas seguindo o codigo original, foca no v3
                  return pd.DataFrame()
 
             # Limpeza
             df = df.dropna()
             df['value'] = pd.to_numeric(df['value'], errors='coerce')
             
-            
             # Tratamento de data
-            # A API retorna AAAAMM para mensal e AAAA0T para trimestral (onde T=1,2,3,4)
-            
-            # Recupera a frequencia do config ou tenta inferir
+            # A API retorna AAAAMM para mensal e AAAA0T para trimestral
             frequency = params.get('frequency', 'monthly')
             
             if frequency == 'quarterly':
-                # Formato esperado: YYYY01, YYYY02, YYYY03, YYYY04
-                # Converte para YYYY-Q1, etc.
+                # Converte para YYYY-Q1
                 try:
-                    # Extrai ano e trimestre
                     df['year'] = df['date_raw'].str[:4]
                     df['quarter'] = df['date_raw'].str[4:].astype(int)
                     
-                    # Cria PeriodIndex
-                    # "202401" -> "2024Q1"
+                    # Cria PeriodIndex ("202401" -> "2024Q1")
                     df['date_period'] = pd.PeriodIndex(df['year'] + 'Q' + df['quarter'].astype(str), freq='Q')
                     
                     # Converte para fim do trimestre (timestamp)
                     df['date'] = df['date_period'].dt.to_timestamp(how='end')
-                    
-                    # Limpa colunas auxiliares
                     df = df.drop(columns=['year', 'quarter', 'date_period'])
                     
                 except Exception as e:
                     print(f"Erro ao processar datas trimestrais: {e}. Raw examples: {df['date_raw'].head().tolist()}")
-                    # Fallback simples se falhar
                     df["date"] = pd.to_datetime(df["date_raw"], errors="coerce", format="%Y%m")
 
             else: # monthly default

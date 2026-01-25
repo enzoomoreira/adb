@@ -2,7 +2,7 @@
 Cliente FTP para download de microdados do Novo CAGED.
 
 Baixa arquivos 7z diretamente para disco.
-A conversão para Parquet é feita pelo CAGEDCollector usando PyArrow streaming.
+A conversão para Parquet é feita pelo CAGEDCollector usando DuckDB.
 """
 
 from ftplib import FTP
@@ -26,6 +26,10 @@ class CAGEDClient:
         self.timeout = timeout
         self._ftp: FTP | None = None
 
+    # =========================================================================
+    # Metodos Publicos
+    # =========================================================================
+
     def connect(self) -> FTP:
         """
         Conecta ao servidor FTP (anonymous).
@@ -46,6 +50,10 @@ class CAGEDClient:
             except Exception:
                 pass
             self._ftp = None
+
+    # =========================================================================
+    # Metodos Internos
+    # =========================================================================
 
     def _ensure_connected(self):
         """Reconecta se necessario (servidor fecha conexoes ociosas)."""

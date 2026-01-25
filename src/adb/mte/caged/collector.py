@@ -9,7 +9,6 @@ import tempfile
 import shutil
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
 
 import py7zr
 import duckdb
@@ -49,7 +48,10 @@ class CAGEDCollector(BaseCollector):
         """
         super().__init__(data_path)
         self.client = CAGEDClient()
-        self._db_lock = Lock()
+
+    # =========================================================================
+    # Metodos internos (Helpers)
+    # =========================================================================
 
     def _get_last_period(self, filename: str, subdir: str) -> tuple[int, int] | None:
         """
@@ -126,32 +128,33 @@ class CAGEDCollector(BaseCollector):
             
             csv_path = next((f for f in csv_files if config['prefix'] in f.name.upper()), csv_files[0])
             
-            # 4. Converter para Parquet usando DuckDB (ETL otimizado)
+            # 4. Converter para Parquet usando DuckDB
             output_filename = f"{indicator_key}_{year}-{month:02d}.parquet"
             output_path = self.data_manager.raw_path / subdir / output_filename
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # DuckDB consome muitos recursos, melhor serializar a conversao
-            # enquanto mantemos downloads em paralelo (via worker threads)
-            # Para isso usamos um lock global ou de classe, mas aqui usaremos connection isolada
+            # Cada thread usa sua propria connection isolada para paralelismo real
+            # DuckDB e thread-safe quando connections sao independentes
+            # Como cada thread escreve para arquivo diferente, nao ha conflito
             
             query = f"""
                 COPY (
-                    SELECT 
-                        * EXCLUDE (salário, horascontratuais, salariomovimentacao),
-                        TRY_CAST(REPLACE(salário, ',', '.') AS DOUBLE) as salario,
-                        TRY_CAST(REPLACE(horascontratuais, ',', '.') AS DOUBLE) as horascontratuais,
-                        TRY_CAST(REPLACE(salariomovimentacao, ',', '.') AS DOUBLE) as salariomovimentacao
+                    SELECT
+                        * EXCLUDE (salário, horascontratuais, valorsaláriofixo),
+                        TRY_CAST(REPLACE(TRY_CAST(salário AS VARCHAR), ',', '.') AS DOUBLE) as salario,
+                        TRY_CAST(REPLACE(TRY_CAST(horascontratuais AS VARCHAR), ',', '.') AS DOUBLE) as horascontratuais,
+                        TRY_CAST(REPLACE(TRY_CAST(valorsaláriofixo AS VARCHAR), ',', '.') AS DOUBLE) as valorsalariofixo
                     FROM read_csv('{str(csv_path)}', delim=';', header=True, encoding='utf-8', ignore_errors=True)
                 ) TO '{str(output_path)}' (FORMAT 'parquet', COMPRESSION 'snappy')
             """
             
-            # Serializar apenas a etapa de CPU heavy do DuckDB para evitar travamento
-            with self._db_lock:
-                # Desabilitar barra de progresso do DuckDB para nao poluir notebook
-                duckdb.sql("SET enable_progress_bar = false;")
-                duckdb.sql(query)
-                row_count = duckdb.sql(f"SELECT COUNT(*) FROM '{str(output_path)}'").fetchone()[0]
+            conn = duckdb.connect()  # Connection isolada por thread
+            try:
+                conn.execute("SET enable_progress_bar = false")
+                conn.execute(query)
+                row_count = conn.execute(f"SELECT COUNT(*) FROM '{str(output_path)}'").fetchone()[0]
+            finally:
+                conn.close()
             
             return (year, month, row_count, None)
 
@@ -169,6 +172,10 @@ class CAGEDCollector(BaseCollector):
                 shutil.rmtree(temp_dir, ignore_errors=True)
             except Exception:
                 pass
+
+    # =========================================================================
+    # API Publica
+    # =========================================================================
 
     def collect(
         self,
@@ -252,18 +259,73 @@ class CAGEDCollector(BaseCollector):
         self._log_collect_end(verbose=verbose)
 
     def get_status(self) -> pd.DataFrame:
-        """Status dos dados locais."""
+        """
+        Retorna status dos arquivos salvos por indicador.
+
+        Agrega metadados de todos os arquivos mensais de cada indicador
+        para retornar no formato padrao (arquivo, subdir, registros, colunas,
+        primeira_data, ultima_data, status).
+        """
         subdir = "mte/caged"
-        status = []
+        status_data = []
 
         for key in CAGED_CONFIG.keys():
-            last = self._get_last_period(key, subdir)
-            status.append(
-                {
-                    "indicador": key,
-                    "ultimo_periodo": f"{last[0]}-{last[1]:02d}" if last else "Nao iniciado",
-                    "status": "Ok" if last else "Pendente",
-                }
-            )
+            # Glob para pegar todos os arquivos do indicador
+            pattern = f"{key}_*.parquet"
+            glob_path = self.data_manager.raw_path / subdir / pattern
 
-        return pd.DataFrame(status)
+            files = list((self.data_manager.raw_path / subdir).glob(pattern))
+
+            if not files:
+                status_data.append({
+                    'arquivo': key,
+                    'subdir': subdir,
+                    'registros': 0,
+                    'colunas': 0,
+                    'primeira_data': None,
+                    'ultima_data': None,
+                    'status': 'Pendente',
+                })
+                continue
+
+            try:
+                # Usa DuckDB para agregar metadados de todos os arquivos
+                sql = f"""
+                    SELECT
+                        COUNT(*) as total,
+                        MIN(competênciamov) as min_date,
+                        MAX(competênciamov) as max_date
+                    FROM '{glob_path}'
+                """
+                res = duckdb.sql(sql).fetchone()
+                total, min_d, max_d = res
+
+                # Pega numero de colunas do primeiro arquivo
+                schema = duckdb.sql(f"DESCRIBE SELECT * FROM '{files[0]}' LIMIT 0").df()
+                n_cols = len(schema)
+
+                # Converte competenciamov (YYYYMM int) para datetime
+                first_date = pd.to_datetime(str(min_d), format='%Y%m') if min_d else None
+                last_date = pd.to_datetime(str(max_d), format='%Y%m') if max_d else None
+
+                status_data.append({
+                    'arquivo': key,
+                    'subdir': subdir,
+                    'registros': total,
+                    'colunas': n_cols,
+                    'primeira_data': first_date,
+                    'ultima_data': last_date,
+                    'status': 'OK',
+                })
+            except Exception as e:
+                status_data.append({
+                    'arquivo': key,
+                    'subdir': subdir,
+                    'registros': 0,
+                    'colunas': 0,
+                    'primeira_data': None,
+                    'ultima_data': None,
+                    'status': f'Erro: {str(e)[:50]}',
+                })
+
+        return pd.DataFrame(status_data)

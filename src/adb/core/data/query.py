@@ -39,6 +39,10 @@ class QueryEngine:
         self._conn = duckdb.connect()
         self._conn.execute(f"SET enable_progress_bar = {str(progress_bar).lower()}")
 
+    # =========================================================================
+    # Helpers Internos
+    # =========================================================================
+
     def _ensure_date_columns(self, path_or_glob: str, columns: list[str]) -> list[str]:
         """
         Garante que colunas de data sejam incluídas na seleção para indexação correta.
@@ -80,6 +84,10 @@ class QueryEngine:
             query += f" WHERE {where}"
             
         return query
+
+    # =========================================================================
+    # API de Leitura
+    # =========================================================================
 
     def read(
         self,
@@ -161,6 +169,10 @@ class QueryEngine:
             query = query.replace('{subdir}', str(self.raw_path / subdir))
 
         return duckdb.sql(query).df()
+
+    # =========================================================================
+    # Agregacoes e Metadados
+    # =========================================================================
 
     def aggregate(
         self,

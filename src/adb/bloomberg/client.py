@@ -61,6 +61,10 @@ class BloombergClient:
                 f"Verifique se Terminal esta instalado e logado. Erro: {e}"
             ) from e
 
+    # =========================================================================
+    # Metodos Publicos
+    # =========================================================================
+
     def get_data(
         self,
         ticker: str,
@@ -151,6 +155,10 @@ class BloombergClient:
             return df if df is not None else pd.DataFrame()
         except Exception:
             return pd.DataFrame()
+
+    # =========================================================================
+    # Metodos Internos (Helpers)
+    # =========================================================================
 
     def _normalize_dataframe(
         self,

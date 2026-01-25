@@ -26,5 +26,6 @@ class IPEAExplorer(BaseExplorer):
 
     @property
     def _COLLECTOR_CLASS(self):
+        """Retorna a classe do coletor associado."""
         from adb.ipea.collector import IPEACollector
         return IPEACollector

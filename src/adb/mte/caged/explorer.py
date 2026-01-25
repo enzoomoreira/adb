@@ -10,8 +10,8 @@ Uso:
     df = caged.saldo_mensal(year=2025)
 
 Otimizacao:
-    - Leituras (read): QueryEngine com PyArrow (eficiente em memoria)
-    - Agregacoes (saldo_*): QueryEngine com DuckDB (streaming)
+    - Leituras (read): QueryEngine com DuckDB (eficiente em memoria)
+    - Agregacoes (saldo_*): QueryEngine com DuckDB (SQL nativo)
 """
 
 from typing import List
@@ -89,7 +89,7 @@ class CAGEDExplorer(BaseExplorer):
             pattern = f"{dataset}_{year}-*.parquet"
             df = self._qe.read_glob(pattern, self._SUBDIR, columns=columns, where=combined_where)
 
-        # Nota: Colunas numéricas (salario, horascontratuais, salariomovimentacao)
+        # Nota: Colunas numéricas (salario, horascontratuais, valorsalariofixo)
         # são limpas no CAGEDCollector durante a ingestão (CSV→Parquet)
 
         return df

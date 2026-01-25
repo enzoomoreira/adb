@@ -1,5 +1,7 @@
 """
 Coletor de dados IBGE Sidra.
+
+Orquestra a coleta de series temporais do Sistema IBGE de Recuperacao Automatica (SIDRA).
 """
 
 import pandas as pd
@@ -13,13 +15,29 @@ from .indicators import SIDRA_CONFIG
 class SidraCollector(BaseCollector):
     """
     Orquestrador de coleta de dados IBGE Sidra.
+
+    API publica:
+    - collect() - Coleta um ou mais indicadores usando config predefinida
+    - get_status() - Status dos arquivos salvos
+
+    Herda de BaseCollector para logging padronizado e get_status().
     """
 
-    default_subdir = 'ibge/sidra/monthly' # Default padrao
+    default_subdir = 'ibge/sidra/monthly'
 
     def __init__(self, data_path: Path = None):
+        """
+        Inicializa o coletor.
+
+        Args:
+            data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
+        """
         super().__init__(data_path)
         self.client = SidraClient()
+
+    # =========================================================================
+    # API Publica
+    # =========================================================================
 
     def collect(
         self,
@@ -29,6 +47,14 @@ class SidraCollector(BaseCollector):
     ) -> None:
         """
         Coleta um ou mais indicadores do IBGE Sidra.
+
+        Args:
+            indicators: Indicadores a coletar:
+                - 'all': todos de SIDRA_CONFIG
+                - lista: ['ipca', 'pib', ...]
+                - string: 'ipca' (um unico)
+            save: Se True, salva em Parquet
+            verbose: Se True, imprime progresso
         """
         keys = self._normalize_indicators_list(indicators, SIDRA_CONFIG)
 
@@ -72,7 +98,9 @@ class SidraCollector(BaseCollector):
 
     def get_status(self) -> pd.DataFrame:
         """
-        Retorna status dos arquivos IBGE Sidra (monthly e quarterly).
+        Retorna status dos arquivos IBGE Sidra.
+        
+        Agrega status dos diretorios monthly e quarterly.
 
         Returns:
             DataFrame com status de cada arquivo

@@ -28,8 +28,13 @@ class BloombergExplorer(BaseExplorer):
 
     @property
     def _COLLECTOR_CLASS(self):
+        """Retorna a classe do coletor associado."""
         from adb.bloomberg.collector import BloombergCollector
         return BloombergCollector
+
+    # =========================================================================
+    # Metodos de coleta (customizados)
+    # =========================================================================
 
     def collect(
         self,

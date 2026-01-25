@@ -9,6 +9,7 @@ from typing import List
 import pandas as pd
 
 from adb.core.utils import parse_date
+from adb.core.utils.dates import normalize_date_index
 
 
 class BaseExplorer:
@@ -44,6 +45,10 @@ class BaseExplorer:
     def _COLLECTOR_CLASS(self):
         """Retorna classe do collector. Sobrescrever na subclasse."""
         raise NotImplementedError("Subclasse deve implementar _COLLECTOR_CLASS")
+
+    # =========================================================================
+    # Metodos Internos (Extension Points)
+    # =========================================================================
 
     def _get_subdir(self, indicator: str) -> str:
         """
@@ -117,13 +122,15 @@ class BaseExplorer:
         # Um indicador: retorna direto
         if len(indicators) == 1:
             subdir = self._get_subdir(indicators[0])
-            return self._qe.read(indicators[0], subdir, columns=columns, where=where)
+            df = self._qe.read(indicators[0], subdir, columns=columns, where=where)
+            return normalize_date_index(df)
 
         # Multiplos indicadores: join por data
         dfs = []
         for ind in indicators:
             subdir = self._get_subdir(ind)
             df = self._qe.read(ind, subdir, columns=['value'], where=where)
+            df = normalize_date_index(df)
             if not df.empty:
                 df = df.rename(columns={'value': ind})
                 dfs.append(df)

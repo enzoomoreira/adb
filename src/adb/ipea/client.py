@@ -21,6 +21,10 @@ class IPEAClient:
         """Inicializa o cliente IPEA."""
         pass
 
+    # =========================================================================
+    # Metodos Publicos
+    # =========================================================================
+
     def get_data(
         self,
         code: str,
@@ -124,6 +128,10 @@ class IPEAClient:
 
         except Exception:
             return pd.DataFrame()
+
+    # =========================================================================
+    # Metodos Internos (Helpers)
+    # =========================================================================
 
     def _normalize_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """

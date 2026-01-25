@@ -43,6 +43,16 @@ class ExpectationsExplorer(BaseExplorer):
     _SUBDIR = "bacen/expectations"
     _DATE_COLUMN = "date"
 
+    @property
+    def _COLLECTOR_CLASS(self):
+        """Retorna a classe do coletor associado."""
+        from adb.bacen.expectations.collector import ExpectationsCollector
+        return ExpectationsCollector
+
+    # =========================================================================
+    # Metodos de leitura e processamento
+    # =========================================================================
+
     def read(
         self,
         *indicators: str,
@@ -141,10 +151,9 @@ class ExpectationsExplorer(BaseExplorer):
 
         return result.sort_index()
 
-    @property
-    def _COLLECTOR_CLASS(self):
-        from adb.bacen.expectations.collector import ExpectationsCollector
-        return ExpectationsCollector
+    # =========================================================================
+    # Metodos auxiliares
+    # =========================================================================
 
     def _join_multiple(self, dfs: list, indicators: tuple) -> pd.DataFrame:
         """

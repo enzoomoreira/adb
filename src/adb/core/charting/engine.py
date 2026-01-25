@@ -2,14 +2,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Optional
 
 from .config import CHARTS_PATH
-
-from .theme import theme
-from .formatters import currency_formatter, percent_formatter, human_readable_formatter
-from .components import add_footer, highlight_last_point
-
+from .styling import theme, currency_formatter, percent_formatter, human_readable_formatter
+from .components import add_footer
+from .plots.line import plot_line
+from .plots.bar import plot_bar
 
 class AgoraPlotter:
     """
@@ -22,6 +20,10 @@ class AgoraPlotter:
         self._fig = None
         self._ax = None
         
+    # =========================================================================
+    # API Publica
+    # =========================================================================
+
     def plot(
         self,
         x: str = None,
@@ -69,9 +71,9 @@ class AgoraPlotter:
             
         # 3. Plotagem Core
         if kind == 'line':
-            self._plot_line(ax, x_data, y_data, highlight_last, **kwargs)
+            plot_line(ax, x_data, y_data, highlight_last, **kwargs)
         elif kind == 'bar':
-            self._plot_bar(ax, x_data, y_data, y_origin=y_origin, **kwargs)
+            plot_bar(ax, x_data, y_data, y_origin=y_origin, **kwargs)
         else:
             raise ValueError(f"Chart type '{kind}' not supported.")
             
@@ -85,79 +87,9 @@ class AgoraPlotter:
             
         return ax
 
-    def _plot_line(self, ax, x, y_data, highlight, **kwargs):
-        # Se for Series, transforma em DF para unificar logica
-        if isinstance(y_data, pd.Series):
-            y_data = y_data.to_frame()
-
-        # Cores: usa paleta do tema
-        colors = theme.colors.cycle()
-
-        lines = []
-        for i, col in enumerate(y_data.columns):
-            # Define cor da linha atual
-            if 'color' in kwargs:
-                c = kwargs['color']
-            else:
-                c = colors[i % len(colors)]
-
-            label = str(col)
-
-            # Converte para numpy para garantir compatibilidade com matplotlib
-            x_np = x.to_numpy() if hasattr(x, 'to_numpy') else np.array(x)
-            y_np = y_data[col].to_numpy() if hasattr(y_data[col], 'to_numpy') else np.array(y_data[col])
-
-            line, = ax.plot(x_np, y_np, linewidth=2, color=c, label=label, **kwargs)
-            lines.append(line)
-
-            if highlight:
-                highlight_last_point(ax, y_data[col], color=c)
-
-        # Mostra legenda se houver mais de uma serie
-        if y_data.shape[1] > 1:
-            ax.legend(loc='best', frameon=True, framealpha=0.9)
-
-    def _plot_bar(self, ax, x, y_data, y_origin: str = 'zero', **kwargs):
-        if 'color' not in kwargs:
-            kwargs['color'] = theme.colors.primary
-
-        # Largura da barra inteligente baseada na frequencia dos dados
-        width = 0.8
-        if pd.api.types.is_datetime64_any_dtype(x):
-            if len(x) > 1:
-                avg_diff = (x.max() - x.min()) / (len(x) - 1)
-                if avg_diff.days > 25:
-                    width = 20  # Mensal
-                elif avg_diff.days > 300:
-                    width = 300  # Anual
-
-        if isinstance(y_data, pd.DataFrame):
-            if y_data.shape[1] > 1:
-                # Multiplas series: usa pandas plot
-                y_data.plot(kind='bar', ax=ax, width=0.8, **kwargs)
-                return
-            else:
-                vals = y_data.iloc[:, 0]
-        else:
-            vals = y_data
-
-        ax.bar(x, vals, width=width, **kwargs)
-
-        # Ajusta origem do eixo Y
-        if y_origin == 'auto':
-            # Ajusta eixo Y para focar nos dados com margem
-            vals_clean = vals.dropna()
-            if not vals_clean.empty:
-                ymin, ymax = vals_clean.min(), vals_clean.max()
-                margin = (ymax - ymin) * 0.1  # 10% de margem
-                ax.set_ylim(ymin - margin, ymax + margin)
-        else:
-            # Default: inclui zero no eixo Y
-            ymin, ymax = ax.get_ylim()
-            if ymin > 0:
-                ax.set_ylim(0, ymax)
-            elif ymax < 0:
-                ax.set_ylim(ymin, 0)
+    # =========================================================================
+    # Helpers de Decoracao
+    # =========================================================================
 
     def _apply_formatting(self, ax, title, units):
         # Titulo centralizado
@@ -178,6 +110,10 @@ class AgoraPlotter:
 
     def _apply_decorations(self, fig, source):
         add_footer(fig, source)
+
+    # =========================================================================
+    # IO e Exportacao
+    # =========================================================================
 
     def save(self, path: str, dpi: int = 300):
         """

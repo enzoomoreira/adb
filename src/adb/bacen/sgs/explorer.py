@@ -27,8 +27,13 @@ class SGSExplorer(BaseExplorer):
 
     @property
     def _COLLECTOR_CLASS(self):
+        """Retorna a classe do coletor associado."""
         from adb.bacen.sgs.collector import SGSCollector
         return SGSCollector
+
+    # =========================================================================
+    # Metodos auxiliares
+    # =========================================================================
 
     def _get_subdir(self, indicator: str) -> str:
         """SGS tem subdir dinamico baseado em frequency."""

@@ -16,8 +16,8 @@ Uso:
 """
 
 from .accessor import AgoraAccessor
-from .plotter import AgoraPlotter
-from .theme import theme
+from .engine import AgoraPlotter
+from .styling.theme import theme
 from .transforms import yoy, mom, accum_12m, diff, normalize
 from .config import CHARTS_PATH
 

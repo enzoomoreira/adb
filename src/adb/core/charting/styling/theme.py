@@ -1,13 +1,8 @@
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, Any, List
-
-# Caminho para assets dentro do pacote charting
-ASSETS_PATH = Path(__file__).parent / 'assets'
-FONT_PATH = ASSETS_PATH / 'fonts' / 'BradescoSans-Light.ttf'
-
+from .fonts import load_font
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 
 @dataclass
 class ColorPalette:
@@ -45,14 +40,8 @@ class AgoraTheme:
     """
     def __init__(self):
         self.colors = ColorPalette()
-        self.font = self._load_font()
+        self.font = load_font()
         
-    def _load_font(self) -> fm.FontProperties:
-        if FONT_PATH.exists():
-            fm.fontManager.addfont(str(FONT_PATH))
-            return fm.FontProperties(fname=str(FONT_PATH))
-        return fm.FontProperties(family='sans-serif')
-
     @property
     def font_name(self) -> str:
         return self.font.get_name()

@@ -12,6 +12,10 @@ class ExpectationsClient:
     def __init__(self):
         self._api = Expectativas()
 
+    # =========================================================================
+    # Metodos Publicos
+    # =========================================================================
+
     def get_endpoint(self, endpoint_key: str):
         """
         Retorna objeto endpoint para queries customizadas.

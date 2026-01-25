@@ -1,5 +1,5 @@
 import pandas as pd
-from .plotter import AgoraPlotter
+from .engine import AgoraPlotter
 
 @pd.api.extensions.register_dataframe_accessor("agora")
 class AgoraAccessor:
@@ -41,4 +41,3 @@ class AgoraAccessor:
             self._plotter.save(path)
         else:
              raise RuntimeError("Nenhum grafico gerado ainda. Chame .plot() primeiro.")
-

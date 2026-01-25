@@ -26,8 +26,13 @@ class SidraExplorer(BaseExplorer):
 
     @property
     def _COLLECTOR_CLASS(self):
+        """Retorna a classe do coletor associado."""
         from adb.ibge.sidra.collector import SidraCollector
         return SidraCollector
+
+    # =========================================================================
+    # Metodos auxiliares
+    # =========================================================================
 
     def _get_subdir(self, indicator: str) -> str:
         """Sidra tem subdir dinamico baseado em frequency."""

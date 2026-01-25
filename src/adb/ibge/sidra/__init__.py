@@ -1,5 +1,8 @@
 """
-Modulo IBGE Sidra.
+Modulo IBGE Sidra (interno) - Dados do IBGE via API Sidra.
+
+Para coleta, use: adb.sidra.collect()
+Para query, use: adb.sidra.read()
 """
 
 from .indicators import SIDRA_CONFIG
