@@ -4,7 +4,7 @@ Documentacao do coletor de dados do IPEADATA.
 
 ## Visao Geral
 
-O modulo `src/ipea/` coleta series temporais agregadas do IPEADATA.
+O modulo `src/adb/ipea/` coleta series temporais agregadas do IPEADATA.
 
 | Caracteristica | Valor |
 |----------------|-------|
@@ -21,33 +21,33 @@ O modulo `src/ipea/` coleta series temporais agregadas do IPEADATA.
 
 ## Arquitetura de Uso
 
-### Para Coleta de Dados
-
-```python
-from core.collectors import collect
-
-collect('ipea')                                    # Todos indicadores
-collect('ipea', indicators='caged_saldo')          # Um indicador
-collect('ipea', indicators=['caged_saldo', 'taxa_desemprego'])  # Lista
-```
-
 ### Para Leitura/Queries (Explorer)
 
 ```python
-from core.data import ipea
+import adb
 
-df = ipea.read('caged_saldo')                  # Leitura simples
-df = ipea.read('caged_saldo', start='2020')    # Com filtro de data
-df = ipea.read('caged_saldo', 'taxa_desemprego')  # Multiplos
-print(ipea.available())                        # Lista indicadores
-print(ipea.info('caged_saldo'))                # Info do indicador
+df = adb.ipea.read('caged_saldo')                  # Leitura simples
+df = adb.ipea.read('caged_saldo', start='2020')    # Com filtro de data
+df = adb.ipea.read('caged_saldo', 'taxa_desemprego')  # Multiplos
+print(adb.ipea.available())                        # Lista indicadores
+print(adb.ipea.info('caged_saldo'))                # Info do indicador
+```
+
+### Para Coleta de Dados
+
+```python
+import adb
+
+adb.ipea.collect()                                 # Todos indicadores
+adb.ipea.collect(indicators='caged_saldo')         # Um indicador
+adb.ipea.collect(indicators=['caged_saldo', 'taxa_desemprego'])  # Lista
 ```
 
 ---
 
 ## IPEA_CONFIG
 
-Indicadores disponiveis em `src/ipea/indicators.py`:
+Indicadores disponiveis em `src/adb/ipea/indicators.py`:
 
 ### Emprego (CAGED Agregado)
 
@@ -66,8 +66,8 @@ Indicadores disponiveis em `src/ipea/indicators.py`:
 ### Funcoes Auxiliares
 
 ```python
-from ipea import IPEA_CONFIG
-from core import list_indicators, get_indicator_config, filter_by_field
+from adb.ipea import IPEA_CONFIG
+from adb.core import list_indicators, get_indicator_config, filter_by_field
 
 list_indicators(IPEA_CONFIG)                       # Lista chaves
 get_indicator_config(IPEA_CONFIG, 'caged_saldo')   # Config completa
@@ -82,14 +82,14 @@ Para casos especiais:
 
 ```python
 # Collector (import direto - uso interno)
-from ipea.collector import IPEACollector
+from adb.ipea.collector import IPEACollector
 
-collector = IPEACollector(data_path='data/')
-results = collector.collect('caged_saldo')
+collector = IPEACollector()
+collector.collect(indicators='caged_saldo')
 collector.get_status()
 
 # Client (baixo nivel)
-from ipea.client import IPEAClient
+from adb.ipea.client import IPEAClient
 
 client = IPEAClient()
 df = client.get_data(code='CAGED12_SALDON12', start_date='2020-01-01')
@@ -104,7 +104,7 @@ def collect(
     indicators: list[str] | str = 'all',
     save: bool = True,
     verbose: bool = True,
-) -> dict[str, pd.DataFrame]
+) -> None
 ```
 
 ### IPEAClient.get_data()
@@ -130,15 +130,19 @@ def get_metadata(code: str) -> dict
 ## Exports Publicos
 
 ```python
-# Config (exportado)
-from ipea import IPEA_CONFIG
+# Config (exportado do modulo ipea)
+from adb.ipea import IPEA_CONFIG
 
 # Funcoes auxiliares (centralizadas em core)
-from core import list_indicators, get_indicator_config, filter_by_field
+from adb.core import list_indicators, get_indicator_config, filter_by_field
 
-# Interface centralizada (recomendado)
-from core.collectors import collect
-from core.data import ipea
+# Interface via explorer (recomendado)
+import adb
+adb.ipea.read(...)
+adb.ipea.collect(...)
+adb.ipea.available()
+adb.ipea.info(...)
+adb.ipea.get_status()
 ```
 
 ---
@@ -163,7 +167,7 @@ data/
 Para adicionar novos indicadores IPEA:
 
 ```python
-# Em src/ipea/indicators.py
+# Em src/adb/ipea/indicators.py
 IPEA_CONFIG['novo_indicador'] = {
     'code': 'CODIGO_IPEADATA',      # Codigo na API IPEADATA
     'name': 'Nome Legivel',
@@ -176,7 +180,7 @@ IPEA_CONFIG['novo_indicador'] = {
 
 **Descobrindo codigos IPEA:**
 ```python
-from ipea.client import IPEAClient
+from adb.ipea.client import IPEAClient
 client = IPEAClient()
 series = client.list_series(keyword='desemprego')
 print(series)  # DataFrame com codigos e descricoes

@@ -1,18 +1,21 @@
 # Arquitetura do Projeto agora-database
 
-Visao geral da estrutura e funcionamento do repositorio.
+Visao geral da estrutura, funcionamento e componentes principais do repositorio.
 
 ## Visao Geral
 
-Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta cinco fontes de dados:
+Projeto para coleta, armazenamento e visualizacao de dados economicos brasileiros. Suporta seis fontes de dados e oferece ferramentas integradas de analise e plotagem.
+
+### Fontes de Dados Suportadas
 
 | Fonte | Modulo | Descricao | Docs |
 |-------|--------|-----------|------|
-| BCB - SGS | `src/bacen/sgs/` | Series temporais (Selic, CDI, IPCA, cambio) | [bacen.md](bacen.md) |
-| BCB - Focus | `src/bacen/expectations/` | Expectativas de mercado | [bacen.md](bacen.md) |
-| MTE - CAGED | `src/mte/caged/` | Microdados de emprego formal | [mte.md](mte.md) |
-| IPEA | `src/ipea/` | Dados agregados de emprego | [ipea.md](ipea.md) |
-| Bloomberg Terminal | `src/bloomberg/` | Dados de mercado financeiro | [bloomberg.md](bloomberg.md) |
+| BCB - SGS | `src/adb/bacen/sgs/` | Series temporais (Selic, CDI, IPCA, cambio) | [bacen.md](bacen.md) |
+| BCB - Focus | `src/adb/bacen/expectations/` | Expectativas de mercado | [bacen.md](bacen.md) |
+| MTE - CAGED | `src/adb/mte/caged/` | Microdados de emprego formal | [mte.md](mte.md) |
+| IPEA | `src/adb/ipea/` | Dados agregados de emprego | [ipea.md](ipea.md) |
+| IBGE - SIDRA | `src/adb/ibge/sidra/` | Dados demograficos e economicos (IPCA, PIB) | [ibge.md](ibge.md) |
+| Bloomberg | `src/adb/bloomberg/` | Dados de mercado financeiro (Terminal) | [bloomberg.md](bloomberg.md) |
 
 ---
 
@@ -21,275 +24,216 @@ Projeto para coleta e armazenamento de dados economicos brasileiros. Suporta cin
 ```
 agora-database/
 ├── src/
-│   ├── core/                     # Modulo central
-│   │   ├── __init__.py           # API publica centralizada
-│   │   ├── config.py             # PROJECT_ROOT, DATA_PATH
-│   │   ├── collectors/           # Sistema de coleta
-│   │   │   ├── __init__.py       # collect, available_sources, get_status
-│   │   │   ├── base.py           # BaseCollector
-│   │   │   └── registry.py       # Registro de collectors
-│   │   ├── data/                 # Persistencia e queries
-│   │   │   ├── __init__.py       # DataManager, QueryEngine, explorers
-│   │   │   ├── storage.py        # DataManager (persistencia)
-│   │   │   └── query.py          # QueryEngine (consultas SQL)
-│   │   └── utils/                # Utilitarios
-│   │       ├── __init__.py       # Exports centralizados
-│   │       ├── indicators.py     # list_indicators, get_indicator_config
-│   │       └── dates.py          # parse_date, normalize_date_index
-│   ├── bacen/                    # Modulo BCB
-│   │   ├── __init__.py           # SGS_CONFIG, EXPECTATIONS_CONFIG
-│   │   ├── sgs/                  # Series temporais SGS
-│   │   │   ├── client.py         # SGSClient
-│   │   │   ├── collector.py      # SGSCollector
-│   │   │   ├── explorer.py       # SGSExplorer
-│   │   │   └── indicators.py     # SGS_CONFIG
-│   │   └── expectations/         # Expectativas Focus
-│   │       ├── client.py         # ExpectationsClient
-│   │       ├── collector.py      # ExpectationsCollector
-│   │       ├── explorer.py       # ExpectationsExplorer
-│   │       └── indicators.py     # EXPECTATIONS_CONFIG
-│   ├── mte/                      # Modulo MTE
-│   │   ├── __init__.py           # CAGED_CONFIG
-│   │   └── caged/                # Microdados CAGED
-│   │       ├── client.py         # CAGEDClient (FTP)
-│   │       ├── collector.py      # CAGEDCollector
-│   │       ├── explorer.py       # CAGEDExplorer
-│   │       └── indicators.py     # CAGED_CONFIG
-│   ├── ipea/                     # Modulo IPEA
-│   │   ├── __init__.py           # IPEA_CONFIG
-│   │   ├── client.py             # IPEAClient
-│   │   ├── collector.py          # IPEACollector
-│   │   ├── explorer.py           # IPEAExplorer
-│   │   └── indicators.py         # IPEA_CONFIG
-│   └── bloomberg/                # Modulo Bloomberg Terminal
-│       ├── __init__.py           # BLOOMBERG_CONFIG
-│       ├── client.py             # BloombergClient
-│       ├── collector.py          # BloombergCollector
-│       ├── explorer.py           # BloombergExplorer
-│       └── indicators.py         # BLOOMBERG_CONFIG
-├── data/                         # Dados coletados
-│   ├── raw/                      # Dados brutos
-│   │   ├── bacen/
-│   │   │   ├── sgs/
-│   │   │   │   ├── daily/        # selic, cdi, ptax
-│   │   │   │   └── monthly/      # ibc-br, igp-m
-│   │   │   └── expectations/     # expectativas Focus
-│   │   ├── mte/
-│   │   │   └── caged/            # microdados mensais
-│   │   ├── ipea/
-│   │   │   └── monthly/          # dados agregados
-│   │   └── bloomberg/
-│   │       └── daily/            # dados do Bloomberg Terminal
-│   └── processed/                # Dados consolidados
+│   └── adb/                      # Pacote raiz
+│       ├── __init__.py           # Exports do pacote (explorers, config)
+│       ├── core/                 # Modulo central (Core Services)
+│       │   ├── __init__.py       # API publica centralizada
+│       │   ├── config.py         # Configuracao global (paths, timeouts)
+│       │   ├── log.py            # Sistema de logging (arquivo + console)
+│       │   ├── resilience.py     # Retry, backoff e tratamento de erros
+│       │   ├── exceptions.py     # Excecoes customizadas (ADBException)
+│       │   ├── collectors/       # Abstracao de coleta
+│       │   ├── data/             # Persistencia e queries
+│       │   ├── charting/         # Visualizacao
+│       │   └── utils/            # Utilitarios gerais
+│       ├── bacen/                # Modulo BCB (SGS + Expectations)
+│       ├── mte/                  # Modulo MTE (CAGED)
+│       ├── ipea/                 # Modulo IPEA
+│       ├── ibge/                 # Modulo IBGE (SIDRA)
+│       └── bloomberg/            # Modulo Bloomberg
+├── data/                         # Dados armazenados
+│   ├── raw/                      # Dados brutos (Parquet/Snappy)
+│   └── outputs/
+│       └── charts/               # Graficos exportados (PNG)
+├── logs/                         # Logs de execucao
 ├── notebooks/                    # Jupyter notebooks
-├── scripts/                      # Scripts utilitarios
+├── scripts/                      # Scripts de automacao
 └── docs/                         # Documentacao
 ```
 
 ---
 
-## Hierarquia de Classes
+## Arquitetura de Componentes
 
+O projeto segue uma arquitetura em camadas com separacao clara de responsabilidades.
+
+### Hierarquia de Classes
+
+```mermaid
+graph TD
+    subgraph Coleta e Dados
+        BC["BaseCollector<br/><small>core/collectors/base.py</small>"]
+        BC --> SGSCol[SGSCollector]
+        BC --> ExpCol[ExpectationsCollector]
+        BC --> CAGEDCol[CAGEDCollector]
+        BC --> IPEACol[IPEACollector]
+        BC --> SidraCol[SidraCollector]
+        BC --> BBGCol[BloombergCollector]
+
+        BE["BaseExplorer<br/><small>core/data/explorers.py</small>"]
+        BE --> SGSExp[SGSExplorer]
+        BE --> ExpExp[ExpectationsExplorer]
+        BE --> CAGEDExp[CAGEDExplorer]
+        BE --> IPEAExp[IPEAExplorer]
+        BE --> SidraExp[SidraExplorer]
+        BE --> BBGExp[BloombergExplorer]
+    end
+
+    subgraph Visualizacao
+        DF[pandas.DataFrame]
+        DF --> AA["AgoraAccessor (.agora)"]
+        AA --> AP["AgoraPlotter (via .plot())"]
+    end
 ```
-BaseCollector (src/core/collectors/base.py)
-├── SGSCollector (src/bacen/sgs/collector.py)
-├── ExpectationsCollector (src/bacen/expectations/collector.py)
-├── CAGEDCollector (src/mte/caged/collector.py)
-├── IPEACollector (src/ipea/collector.py)
-└── BloombergCollector (src/bloomberg/collector.py)
 
-# Persistencia (usado por collectors)
-DataManager (src/core/data/storage.py)    # save/read/append/consolidate
+### Componentes Principais
 
-# Consultas (usado para leitura/analise)
-QueryEngine (src/core/data/query.py)      # SQL queries via DuckDB
+| Componente | Localizacao | Responsabilidade |
+|------------|-------------|------------------|
+| **BaseCollector** | `core/collectors/base.py` | Classe base para coleta de dados |
+| **BaseExplorer** | `core/data/explorers.py` | Interface unificada para leitura/coleta |
+| **DataManager** | `core/data/storage.py` | Persistencia I/O (Parquet) |
+| **QueryEngine** | `core/data/query.py` | Consultas SQL (DuckDB) |
+| **AgoraPlotter** | `core/charting/engine.py` | Motor de visualizacao |
 
-# Utilitarios
-core.utils.indicators (src/core/utils/indicators.py)  # list_indicators(), get_indicator_config()
-
-# Explorers (interface pythonica para queries)
-SGSExplorer (src/bacen/sgs/explorer.py)
-ExpectationsExplorer (src/bacen/expectations/explorer.py)
-CAGEDExplorer (src/mte/caged/explorer.py)
-IPEAExplorer (src/ipea/explorer.py)
-BloombergExplorer (src/bloomberg/explorer.py)
-```
-
-**Separacao de Responsabilidades:**
-- **Collectors**: Apenas coleta de dados (collect, consolidate, get_status)
-- **DataManager**: Persistencia (save, read, append)
-- **QueryEngine**: Consultas SQL eficientes (sql, read, read_glob, aggregate)
+Para documentacao detalhada de cada componente, consulte [core.md](core.md).
 
 ---
 
 ## Fluxo de Dados
 
+Do download a visualizacao:
+
+```mermaid
+flowchart TD
+    User["Usuario<br/>(Notebook/Script)"]
+
+    subgraph Coleta ["1. Coleta"]
+        EC[Explorer.collect]
+        CC[Collector.collect]
+        CLI["Client<br/>(API externa, @retry)"]
+        RAW[Dados brutos]
+        DM[DataManager.save/append]
+    end
+
+    subgraph Leitura ["2. Leitura"]
+        ER[Explorer.read]
+        QE["QueryEngine<br/>(DuckDB SQL)"]
+    end
+
+    subgraph Saida ["3. Saida"]
+        DF[DataFrame]
+        VIZ[".agora.plot()"]
+        TRF["Transforms<br/>yoy, mom, accum_12m"]
+        CHART["Chart (PNG)"]
+    end
+
+    PARQUET[("data/raw/*.parquet")]
+    CHARTS[("data/outputs/charts/")]
+
+    User --> EC
+    EC -->|delega| CC
+    CC --> CLI
+    CLI --> RAW
+    RAW --> DM
+    DM --> PARQUET
+
+    PARQUET --> ER
+    ER --> QE
+    QE --> DF
+
+    DF --> VIZ
+    DF --> TRF
+    TRF --> DF
+    VIZ --> CHART
+    CHART --> CHARTS
 ```
-    API BCB         API Focus         FTP MTE         API IPEA      Bloomberg Terminal
-    (SGS)          (Expectations)     (CAGED)        (ipeadatapy)        (xbbg)
-        │                │                │                │                │
-        ▼                ▼                ▼                ▼                ▼
-   SGSClient    ExpectationsClient   CAGEDClient      IPEAClient     BloombergClient
-        │                │                │                │                │
-        ▼                ▼                ▼                ▼                ▼
-   SGSCollector ExpectationsCollector CAGEDCollector IPEACollector BloombergCollector
-        │                │                │                │                │
-        └────────────────┴────────────────┴────────────────┴────────────────┘
-                                            │
-                                            ▼
-                                      DataManager (storage.py)
-                                            │
-                            ┌───────────────┴───────────────┐
-                            ▼                               ▼
-                    data/raw/{subdir}/*.parquet    data/processed/*.parquet
-                                    │
-                    ┌───────────────┼───────────────┐
-                    ▼               ▼               ▼
-              Explorers      QueryEngine      DataManager.read()
-           (interface        (SQL direto)     (leitura basica)
-            pythonica)
-```
+
+### Relacao Explorer-Collector
+
+O **Explorer** e a interface publica para o usuario. Ele **delega** a coleta para o **Collector**:
+
+- `Explorer.read()` → Le dados salvos via QueryEngine
+- `Explorer.collect()` → Instancia o Collector e dispara coleta
+- `Collector.collect()` → Baixa dados via Client e salva via DataManager
 
 ---
 
 ## Padrao de Uso
 
-### API Publica
-
-Todos os collectors seguem o mesmo padrao:
+### Coleta e Leitura de Dados
 
 ```python
-results = collector.collect('selic')              # Um indicador
-results = collector.collect(['selic', 'cdi'])     # Lista
-results = collector.collect()                      # Todos (default)
-```
+import adb
 
-### Coleta Centralizada (Recomendado)
+# Coleta (Incremental + Retry automatico)
+adb.sgs.collect(['selic', 'cdi'])
+adb.caged.collect()
 
-```python
-from core.collectors import collect, available_sources, get_status
-
-# Listar fontes disponiveis
-available_sources()  # ['sgs', 'expectations', 'caged', 'ipea', 'bloomberg']
-
-# Coleta (incremental automatico)
-collect('sgs')
-collect('sgs', indicators='selic')
-collect('sgs', indicators=['selic', 'cdi'])
-
-# Status dos dados
-status = get_status('sgs')
-```
-
-### Leitura via Explorers (Recomendado)
-
-Interface pythonica para leitura de dados coletados:
-
-```python
-from core.data import sgs, caged, expectations, ipea, bloomberg
-
-# Leitura simples
-df = sgs.read('selic')
-df = sgs.read('selic', start='2020', end='2023')
-df = sgs.read('selic', 'cdi')  # Multiplos indicadores
-
-# CAGED (microdados)
-df = caged.read(year=2025)
-df = caged.read(year=2025, uf=35)
+# Leitura (via Explorer -> QueryEngine)
+df = adb.sgs.read('selic', start='2023-01-01')
+df = adb.sgs.read('selic', 'cdi')  # Multiplos indicadores
 
 # Listar indicadores disponiveis
-sgs.available()
-sgs.info('selic')
+adb.sgs.available()
+adb.sgs.info('selic')
 ```
 
-### Leitura via QueryEngine (SQL Direto)
-
-Para queries mais complexas, use o `QueryEngine`:
+### Visualizacao
 
 ```python
-from core.data import QueryEngine
+import adb
+import adb.core.charting  # Registra o accessor 'agora'
+from adb.core.charting import yoy, mom, accum_12m
 
-qe = QueryEngine()
+df = adb.sgs.read('selic', start='2020')
 
-# Leitura simples
-df = qe.read('selic', 'bacen/sgs/daily')
+# Plotagem basica
+df.agora.plot(title="Selic", kind='line')
 
-# Leitura com filtros
-df = qe.read('selic', 'bacen/sgs/daily', columns=['value'], where="value > 10")
-
-# Query SQL (suporta glob patterns e variaveis {raw}, {processed})
-df = qe.sql('''
-    SELECT strftime(date, '%Y') as ano, AVG(value) as media
-    FROM '{raw}/bacen/sgs/daily/selic.parquet'
-    GROUP BY ano
-''')
-
-# Leitura de multiplos arquivos (ideal para CAGED)
-df = qe.read_glob('cagedmov_2024-*.parquet', subdir='mte/caged')
+# Com transformacao
+yoy(df).agora.plot(title="Selic - Variacao Anual")
 ```
 
 ---
 
-## Documentacao Detalhada
+## Padroes de Projeto
 
-| Documento | Conteudo |
-|-----------|----------|
-| [bacen.md](bacen.md) | SGSCollector, ExpectationsCollector, configs |
-| [mte.md](mte.md) | CAGEDCollector, downloads paralelos, query SQL |
-| [ipea.md](ipea.md) | IPEACollector, dados agregados |
-| [data.md](data.md) | DataManager, fetch_and_sync, persistencia |
-| [utils.md](utils.md) | BaseCollector, funcoes auxiliares, registry |
-
----
-
-## Formato de Dados
-
-- **Formato**: Parquet (compressao Snappy)
-- **Indice**: DatetimeIndex para series temporais
-- **Coluna de valor**: `value` (normalizado pelos clients)
+| Padrao | Uso |
+|--------|-----|
+| **Template Method** | BaseCollector define estrutura, subclasses implementam `collect()` |
+| **Facade** | Explorers simplificam acesso a Collectors + QueryEngine |
+| **Lazy Loading** | Exploradores carregados sob demanda |
+| **Decorator** | `@retry` para resiliencia de rede |
+| **Pandas Accessor** | `df.agora` para plotagem integrada |
 
 ---
 
 ## Extensibilidade
 
-Para adicionar novo indicador, editar o arquivo `indicators.py` do modulo correspondente:
+### Adicionar Novo Indicador
 
-```python
-# src/bacen/sgs/indicators.py
-SGS_CONFIG['novo_indicador'] = {
-    'code': 12345,
-    'name': 'Nome do Indicador',
-    'frequency': 'daily',
-}
+Edite o `indicators.py` do modulo especifico (ex: `src/adb/bacen/sgs/indicators.py`).
 
-# src/bacen/expectations/indicators.py
-EXPECTATIONS_CONFIG['novo_indicador'] = {
-    'endpoint': 'top5_anuais',
-    'indicator': 'Nome na API',
-}
+### Adicionar Nova Fonte
 
-# src/mte/caged/indicators.py
-CAGED_CONFIG['novo_tipo'] = {
-    'prefix': 'PREFIXO',
-    'name': 'Nome',
-    'start_year': 2020,
-}
+1. Crie o pacote em `src/adb/nova_fonte/`
+2. Implemente: `client.py`, `indicators.py`, `collector.py`, `explorer.py`
+3. Registre o collector em `src/adb/core/collectors/registry.py`
+4. Exporte o explorer em `src/adb/__init__.py`
 
-# src/ipea/indicators.py
-IPEA_CONFIG['novo_indicador'] = {
-    'code': 'CODIGO_IPEA',
-    'name': 'Nome',
-    'frequency': 'monthly',
-}
-```
+Para detalhes de implementacao, consulte [core.md](core.md).
 
 ---
 
-## Comparacao de Collectors
+## Documentacao Relacionada
 
-| Aspecto | SGS/Expectations | CAGED | IPEA | Bloomberg |
-|---------|------------------|-------|------|-----------|
-| Protocolo | HTTP (REST) | FTP + 7z | HTTP (ipeadatapy) | Bloomberg Terminal (xbbg) |
-| Volume/periodo | ~KB | ~500MB-1GB | ~KB | ~KB-MB |
-| Retorno collect() | DataFrame | int (contagem) | DataFrame | DataFrame |
-| Heranca | BaseCollector | BaseCollector | BaseCollector | BaseCollector |
+| Doc | Conteudo |
+|-----|----------|
+| [core.md](core.md) | API completa do modulo central (collectors, data, utils) |
+| [charting.md](charting.md) | Sistema de visualizacao |
+| [bacen.md](bacen.md) | Coletor BCB (SGS + Expectations) |
+| [ibge.md](ibge.md) | Coletor IBGE/SIDRA |
+| [ipea.md](ipea.md) | Coletor IPEA |
+| [mte.md](mte.md) | Coletor MTE/CAGED |
+| [bloomberg.md](bloomberg.md) | Coletor Bloomberg |
