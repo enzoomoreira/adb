@@ -30,7 +30,6 @@ adb.sgs.collect(['selic', 'cdi'])          # Lista
 # Expectations - Relatorio Focus
 adb.expectations.collect()                 # Todos
 adb.expectations.collect('ipca_anual')
-adb.expectations.collect(start_date='2023-01-01', limit=5000)
 ```
 
 ### Leitura de Dados
@@ -179,7 +178,7 @@ collector.get_status()
 
 # ExpectationsCollector
 collector = ExpectationsCollector()
-collector.collect('ipca_anual', start_date='2024-01-01')
+collector.collect('ipca_anual')
 ```
 
 ### Clients (Baixo Nivel)
@@ -226,8 +225,6 @@ def collect(
 ```python
 def collect(
     indicators: list[str] | str = 'all',
-    start_date: str = None,
-    limit: int = None,
     save: bool = True,
     verbose: bool = True,
 ) -> None

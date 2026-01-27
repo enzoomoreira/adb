@@ -46,9 +46,7 @@ class ExpectationsCollector(BaseCollector):
         endpoint: str,
         filename: str,
         indicator: str = None,
-        start_date: str = None,
         end_date: str = None,
-        limit: int = None,
         subdir: str = None,
         save: bool = True,
         verbose: bool = True,
@@ -79,14 +77,11 @@ class ExpectationsCollector(BaseCollector):
         log_name = indicator or filename
 
         def fetch(auto_start_date: str | None) -> pd.DataFrame:
-            # start_date manual tem prioridade sobre automatico
-            effective_start = start_date or auto_start_date
             return self.client.query(
                 endpoint_key=endpoint,
                 indicator=indicator,
-                start_date=effective_start,
+                start_date=auto_start_date,
                 end_date=end_date,
-                limit=limit,
             )
 
         return self._sync(
@@ -106,8 +101,6 @@ class ExpectationsCollector(BaseCollector):
     def collect(
         self,
         indicators: list[str] | str = 'all',
-        start_date: str = None,
-        limit: int = None,
         save: bool = True,
         verbose: bool = True,
     ) -> None:
@@ -119,8 +112,6 @@ class ExpectationsCollector(BaseCollector):
                 - 'all': todos de EXPECTATIONS_CONFIG
                 - lista: ['ipca_anual', 'selic', ...]
                 - string: 'ipca_anual' (um unico)
-            start_date: Data inicial para todos (opcional)
-            limit: Limite de registros para todos (opcional)
             save: Se True, salva cada indicador em Parquet
             verbose: Se True, imprime progresso
 
@@ -145,8 +136,6 @@ class ExpectationsCollector(BaseCollector):
                 endpoint=config['endpoint'],
                 filename=key,
                 indicator=config['indicator'],
-                start_date=start_date,
-                limit=limit,
                 subdir=self.default_subdir,
                 save=save,
                 verbose=verbose,
