@@ -1,6 +1,10 @@
-from bcb import Expectativas
 import pandas as pd
 from typing import Callable
+
+from bcb import Expectativas
+
+from adb.core.log import get_logger
+from adb.core.resilience import retry
 from .indicators import ENDPOINTS
 
 
@@ -10,7 +14,9 @@ class ExpectationsClient:
     """
 
     def __init__(self):
+        """Inicializa o cliente de Expectativas."""
         self._api = Expectativas()
+        self.logger = get_logger(self.__class__.__name__)
 
     # =========================================================================
     # Metodos Publicos
@@ -29,6 +35,7 @@ class ExpectationsClient:
         endpoint_name = ENDPOINTS.get(endpoint_key, endpoint_key)
         return self._api.get_endpoint(endpoint_name)
 
+    @retry()  # usa defaults para falhas de rede
     def query(
         self,
         endpoint_key: str,
@@ -82,7 +89,7 @@ class ExpectationsClient:
             return q.collect()
 
         except Exception as e:
-            print(f"Erro ao buscar expectativas: {e}")
+            self.logger.error(f"Erro ao buscar expectativas: {e}")
             return pd.DataFrame()
 
     def get_selic_expectations(
@@ -187,6 +194,7 @@ class ExpectationsClient:
             limit=limit,
         )
 
+    @retry()  # usa defaults para falhas de rede
     def raw_query(
         self,
         endpoint_key: str,
@@ -236,5 +244,5 @@ class ExpectationsClient:
             return q.collect()
 
         except Exception as e:
-            print(f"Erro na query customizada: {e}")
+            self.logger.error(f"Erro na query customizada: {e}")
             return pd.DataFrame()

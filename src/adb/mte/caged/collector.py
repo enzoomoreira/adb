@@ -159,7 +159,9 @@ class CAGEDCollector(BaseCollector):
             return (year, month, row_count, None)
 
         except Exception as e:
-            return (year, month, 0, f"Erro: {str(e)}")
+            # Extrair mensagem limpa do erro (sem traceback longo)
+            error_msg = str(e).split('\n')[0][:80]
+            return (year, month, 0, error_msg)
 
         finally:
             # Garantir limpeza
@@ -251,8 +253,8 @@ class CAGEDCollector(BaseCollector):
                 
                 pbar.close()
 
-            if verbose and errors:
-                print(f"    Erros ({len(errors)}): {', '.join(errors[:3])}...")
+            if errors:
+                self.logger.warning(f"  {len(errors)} periodo(s) falharam: {', '.join(errors[:3])}")
 
             results[key] = total_rows
 

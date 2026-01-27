@@ -28,19 +28,15 @@ class BloombergCollector(BaseCollector):
 
     default_subdir = "bloomberg/daily"
 
-    def __init__(self, data_path: Path = None, check_connection: bool = True):
+    def __init__(self, data_path: Path = None):
         """
         Inicializa o coletor.
 
         Args:
             data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
-            check_connection: Se True, valida conexao Bloomberg no init
-
-        Raises:
-            RuntimeError: Se Bloomberg nao disponivel e check_connection=True
         """
         super().__init__(data_path)
-        self.client = BloombergClient(check_connection=check_connection)
+        self.client = BloombergClient()
 
     # =========================================================================
     # Metodo interno de coleta

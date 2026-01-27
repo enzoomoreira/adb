@@ -17,3 +17,6 @@ temp
 
 # Test benchmarks
 scripts/tests/benchmark/
+
+# Logs
+logs/

@@ -92,7 +92,7 @@ class SidraCollector(BaseCollector):
             )
             
             if verbose:
-                print()
+                self.logger.info("")
 
         self._log_collect_end(verbose=verbose)
 

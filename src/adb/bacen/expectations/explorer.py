@@ -169,30 +169,3 @@ class ExpectationsExplorer(BaseExplorer):
             df['indicator'] = ind
 
         return pd.concat(dfs, ignore_index=True)
-
-    def collect(
-        self,
-        indicators: list[str] | str = 'all',
-        start_date: str = None,
-        limit: int = None,
-        save: bool = True,
-        verbose: bool = True,
-    ) -> None:
-        """
-        Coleta expectativas do Relatorio Focus (BCB).
-
-        Args:
-            indicators: 'all', lista, ou string com indicador(es)
-            start_date: Data inicial (formato 'YYYY-MM-DD')
-            limit: Limite de registros
-            save: Se True, salva em Parquet
-            verbose: Se True, imprime progresso
-        """
-        collector = self._COLLECTOR_CLASS()
-        collector.collect(
-            indicators=indicators, 
-            start_date=start_date, 
-            limit=limit,
-            save=save, 
-            verbose=verbose
-        )

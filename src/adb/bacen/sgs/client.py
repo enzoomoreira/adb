@@ -1,6 +1,12 @@
-from bcb import sgs
 import pandas as pd
 from datetime import datetime, timedelta
+from bcb import sgs
+
+from adb.core.config import DEFAULT_CHUNK_DELAY
+from adb.core.log import get_logger
+from adb.core.resilience import retry
+
+import time
 
 
 class SGSClient:
@@ -10,7 +16,7 @@ class SGSClient:
 
     def __init__(self):
         """Inicializa o cliente SGS."""
-        pass
+        self.logger = get_logger(self.__class__.__name__)
 
     def query(
         self,
@@ -58,7 +64,7 @@ class SGSClient:
             df = sgs.get(codes, start=start_date, end=end_date, last=last)
             return df
         except Exception as e:
-            print(f"Erro ao buscar dados SGS: {e}")
+            self.logger.error(f"Erro ao buscar dados SGS: {e}")
             return pd.DataFrame()
 
     def get_single_series(
@@ -157,6 +163,8 @@ class SGSClient:
                 chunk_start_date = start_date
             else:
                 chunk_start_date = f'{chunk_start}-01-01'
+                # Delay entre requests para evitar rate limit
+                time.sleep(DEFAULT_CHUNK_DELAY)
 
             end_date = f'{chunk_end}-12-31'
 
@@ -178,6 +186,7 @@ class SGSClient:
     # METODOS INTERNOS
     # =========================================================================
 
+    @retry(delay=2.0)  # delay maior para API BCB, demais params usam defaults
     def _fetch_series(
         self,
         code: int,
@@ -185,10 +194,16 @@ class SGSClient:
         start_date: str,
         end_date: str = None
     ) -> pd.DataFrame:
-        """Metodo interno para buscar serie com tratamento de erro."""
+        """
+        Busca serie do SGS. Faz raise em erros para retry funcionar.
+
+        "Value(s) not found" = sem dados (esperado, nao erro).
+        """
         try:
             df = sgs.get({name: code}, start=start_date, end=end_date)
             return df
-        except Exception:
-            # Silenciosamente retorna vazio para periodos sem dados
-            return pd.DataFrame()
+        except Exception as e:
+            if "Value(s) not found" in str(e):
+                return pd.DataFrame()
+            raise
+

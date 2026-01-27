@@ -31,35 +31,3 @@ class BloombergExplorer(BaseExplorer):
         """Retorna a classe do coletor associado."""
         from adb.bloomberg.collector import BloombergCollector
         return BloombergCollector
-
-    # =========================================================================
-    # Metodos de coleta (customizados)
-    # =========================================================================
-
-    def collect(
-        self,
-        indicators: list[str] | str = "all",
-        save: bool = True,
-        verbose: bool = True,
-        check_connection: bool = True,
-        **kwargs,
-    ) -> None:
-        """
-        Coleta dados de mercado via Bloomberg Terminal.
-
-        Args:
-            indicators: 'all', lista, ou string com indicador(es)
-            save: Se True, salva em Parquet
-            verbose: Se True, imprime progresso
-            check_connection: Se True, valida conexao Bloomberg
-
-        Raises:
-            RuntimeError: Se Bloomberg nao disponivel e check_connection=True
-        """
-        collector = self._COLLECTOR_CLASS(check_connection=check_connection)
-        collector.collect(indicators=indicators, save=save, verbose=verbose, **kwargs)
-
-    def get_status(self):
-        """Retorna status dos arquivos Bloomberg salvos."""
-        collector = self._COLLECTOR_CLASS(check_connection=False)
-        return collector.get_status()

@@ -6,6 +6,10 @@ import pandas as pd
 import requests
 from datetime import datetime
 
+from adb.core.config import DEFAULT_REQUEST_TIMEOUT
+from adb.core.log import get_logger
+from adb.core.resilience import retry
+
 class SidraClient:
     """
     Cliente para a API do IBGE Sidra.
@@ -16,7 +20,7 @@ class SidraClient:
 
     def __init__(self):
         """Inicializa o cliente Sidra."""
-        pass
+        self.logger = get_logger(self.__class__.__name__)
 
     # =========================================================================
     # Metodos Publicos
@@ -40,22 +44,18 @@ class SidraClient:
             DataFrame com serie temporal (index=Date, value=valor)
         """
         params = config.copy()
-        
-        # Converte start_date para formato de periodo SIDRA se especificado
+
         frequency = params.get('frequency', 'monthly')
         if start_date is not None:
             periodo_inicio = self._date_to_sidra_period(start_date, frequency)
-            # Calcula periodo final baseado na data atual
             periodo_fim = self._date_to_sidra_period(datetime.now().strftime('%Y-%m-%d'), frequency)
             params['periodos'] = f"{periodo_inicio}-{periodo_fim}"
-        
+
         data = self._request_data(**params)
         if not data:
-             return pd.DataFrame()
-             
-        df = self._format_data(data, params)
-        
-        return df
+            return pd.DataFrame()
+
+        return self._format_data(data, params)
 
     # =========================================================================
     # Metodos Internos (Helpers)
@@ -82,6 +82,7 @@ class SidraClient:
             # Mensal: AAAAMM
             return f"{dt.year:04d}{dt.month:02d}"
 
+    @retry()  # usa defaults de NETWORK_EXCEPTIONS, attempts, delay
     def _request_data(
         self,
         agregados: str,
@@ -90,30 +91,34 @@ class SidraClient:
         nivel_territorial: str,
         localidades: str,
         classificador: str = None,
-        **kwargs # Ignora extras
+        **kwargs  # Ignora extras
     ) -> dict:
         """Realiza a request para a API do Sidra."""
-        
+
         # URL Builder logic a partir do scrape original
         if classificador is None:
-             url = f"https://servicodados.ibge.gov.br/api/v3/agregados/{agregados}/periodos/{periodos}/variaveis/{variaveis}?localidades=N{nivel_territorial}[{localidades}]"
-             
-             # Support for standard API classification filtering
-             classification = kwargs.get('classification') or kwargs.get('classificacao')
-             if classification:
-                 url += f"&classificacao={classification}"
-                 
+            url = (
+                f"https://servicodados.ibge.gov.br/api/v3/agregados/{agregados}"
+                f"/periodos/{periodos}/variaveis/{variaveis}"
+                f"?localidades=N{nivel_territorial}[{localidades}]"
+            )
+
+            # Support for standard API classification filtering
+            classification = kwargs.get('classification') or kwargs.get('classificacao')
+            if classification:
+                url += f"&classificacao={classification}"
+
         else:
             # Fallback/Alternative endpoint logic
-            url = f"https://apisidra.ibge.gov.br/values/t/{agregados}/v/all/p/{periodos}/{classificador}/{variaveis}/n{nivel_territorial}/{localidades}?formato=json"
+            url = (
+                f"https://apisidra.ibge.gov.br/values/t/{agregados}/v/all"
+                f"/p/{periodos}/{classificador}/{variaveis}"
+                f"/n{nivel_territorial}/{localidades}?formato=json"
+            )
 
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            print(f"Erro ao buscar dados IBGE Sidra: {e}")
-            return {}
+        response = requests.get(url, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
 
     def _format_data(self, data: list, params: dict) -> pd.DataFrame:
         """Formata os dados brutos da API para DataFrame padrao."""
@@ -157,7 +162,7 @@ class SidraClient:
                     df = df.drop(columns=['year', 'quarter', 'date_period'])
                     
                 except Exception as e:
-                    print(f"Erro ao processar datas trimestrais: {e}. Raw examples: {df['date_raw'].head().tolist()}")
+                    self.logger.warning(f"Erro ao processar datas trimestrais: {e}")
                     df["date"] = pd.to_datetime(df["date_raw"], errors="coerce", format="%Y%m")
 
             else: # monthly default
@@ -171,5 +176,5 @@ class SidraClient:
             return df
             
         except Exception as e:
-            print(f"Erro ao formatar dados IBGE: {e}")
+            self.logger.error(f"Erro ao formatar dados IBGE: {e}")
             return pd.DataFrame()

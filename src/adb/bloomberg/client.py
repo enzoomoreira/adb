@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 import xbbg.blp as blp
 
+from adb.core.log import get_logger
+from adb.core.resilience import retry
 from .indicators import LOOKBACK_DAYS
 
 
@@ -22,49 +24,15 @@ class BloombergClient:
     - Lookback limitado para evitar quotas
     """
 
-    def __init__(self, check_connection: bool = True):
-        """
-        Inicializa cliente Bloomberg.
-
-        Args:
-            check_connection: Se True, testa conexao no __init__
-
-        Raises:
-            RuntimeError: Se Bloomberg Terminal nao disponivel
-        """
-        self.is_connected = False
-        if check_connection:
-            self.smoke_test_connection()
-
-    def smoke_test_connection(self) -> bool:
-        """
-        Testa conexao com Bloomberg Terminal.
-
-        Faz um BDP simples para validar que Terminal esta logado.
-
-        Returns:
-            True se conexao OK
-
-        Raises:
-            RuntimeError: Se Bloomberg nao disponivel
-        """
-        try:
-            # Buscar name de ticker conhecido
-            test = blp.bdp("MXWD Index", "NAME")
-            if test is not None and not test.empty:
-                self.is_connected = True
-                return True
-            raise RuntimeError("Bloomberg retornou vazio no smoke test")
-        except Exception as e:
-            raise RuntimeError(
-                f"Bloomberg Terminal nao disponivel. "
-                f"Verifique se Terminal esta instalado e logado. Erro: {e}"
-            ) from e
+    def __init__(self):
+        """Inicializa cliente Bloomberg."""
+        self.logger = get_logger(self.__class__.__name__)
 
     # =========================================================================
     # Metodos Publicos
     # =========================================================================
 
+    @retry(max_attempts=2, delay=1.0, exceptions=(RuntimeError, TimeoutError, OSError))
     def get_data(
         self,
         ticker: str,
@@ -85,7 +53,7 @@ class BloombergClient:
             name: Nome para logging (opcional)
             start_date: Data inicial 'YYYY-MM-DD' (None = usa LOOKBACK_DAYS)
             end_date: Data final 'YYYY-MM-DD' (None = hoje)
-            verbose: Se True, imprime erros
+            verbose: Deprecado, mantido para compatibilidade
 
         Returns:
             DataFrame com DatetimeIndex e coluna 'value'
@@ -128,8 +96,7 @@ class BloombergClient:
             return df
 
         except Exception as e:
-            if verbose:
-                print(f"Erro ao buscar {ticker}/{field}: {e}")
+            self.logger.error(f"Erro ao buscar {ticker}/{field}: {e}")
             return pd.DataFrame()
 
     def get_reference_data(

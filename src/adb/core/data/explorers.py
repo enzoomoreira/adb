@@ -8,6 +8,7 @@ reduzindo duplicacao entre os explorers especificos.
 from typing import List
 import pandas as pd
 
+from adb.core.log import get_logger
 from adb.core.utils import parse_date
 from adb.core.utils.dates import normalize_date_index
 
@@ -40,6 +41,7 @@ class BaseExplorer:
         """
         from adb.core.data import QueryEngine
         self._qe = query_engine or QueryEngine()
+        self.logger = get_logger(self.__class__.__name__)
 
     @property
     def _COLLECTOR_CLASS(self):
@@ -117,13 +119,18 @@ class BaseExplorer:
                 available = ', '.join(self._CONFIG.keys())
                 raise KeyError(f"Indicador '{ind}' nao encontrado. Disponiveis: {available}")
 
+        self.logger.debug(f"Lendo {len(indicators)} indicador(es): {indicators}")
+
         where = self._build_where(start, end)
 
         # Um indicador: retorna direto
         if len(indicators) == 1:
             subdir = self._get_subdir(indicators[0])
             df = self._qe.read(indicators[0], subdir, columns=columns, where=where)
-            return normalize_date_index(df)
+            df = normalize_date_index(df)
+            if df.empty:
+                self.logger.warning(f"Nenhum dado encontrado para '{indicators[0]}'")
+            return df
 
         # Multiplos indicadores: join por data
         dfs = []
@@ -134,6 +141,8 @@ class BaseExplorer:
             if not df.empty:
                 df = df.rename(columns={'value': ind})
                 dfs.append(df)
+            else:
+                self.logger.warning(f"Nenhum dado encontrado para '{ind}'")
 
         return self._join_multiple(dfs, indicators)
 
@@ -189,8 +198,10 @@ class BaseExplorer:
             verbose: Se True, imprime progresso
             **kwargs: Argumentos extras para o collector
         """
+        self.logger.info(f"Iniciando coleta: {indicators}")
         collector = self._COLLECTOR_CLASS()
         collector.collect(indicators=indicators, save=save, verbose=verbose, **kwargs)
+        self.logger.info("Coleta finalizada")
 
     def get_status(self) -> pd.DataFrame:
         """Retorna status dos arquivos salvos."""

@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from adb.core.data import DataManager
+from adb.core.log import get_logger
 
 
 class BaseCollector:
@@ -39,6 +40,7 @@ class BaseCollector:
         from adb.core.config import DATA_PATH
         self.data_path = Path(data_path) if data_path else DATA_PATH
         self.data_manager = DataManager(self.data_path)
+        self.logger = get_logger(self.__class__.__name__)
 
     # =========================================================================
     # Logging (output padronizado)
@@ -49,18 +51,18 @@ class BaseCollector:
         if not verbose:
             return
         if start_date:
-            print(f"  Buscando {name} desde {start_date}...")
+            self.logger.info(f"  Buscando {name} desde {start_date}...")
         else:
-            print(f"  Buscando {name} (historico completo)...")
+            self.logger.info(f"  Buscando {name} (historico completo)...")
 
     def _log_fetch_result(self, name: str, count: int, verbose: bool = True):
         """Loga resultado de fetch de indicador."""
         if not verbose:
             return
         if count:
-            print(f"  {count:,} registros")
+            self.logger.info(f"  {count:,} registros")
         else:
-            print(f"  Sem dados disponiveis")
+            self.logger.warning(f"  Sem dados disponiveis")
 
     # =========================================================================
     # Status
@@ -150,21 +152,21 @@ class BaseCollector:
         if not verbose:
             return
 
-        print("=" * 70)
+        self.logger.info("=" * 70)
 
         # Se pediu check de primeira execucao
         if check_first_run and subdir:
             is_first = self.data_manager.is_first_run(subdir)
             if is_first:
-                print("PRIMEIRA EXECUCAO - Download de Historico Completo")
+                self.logger.info("PRIMEIRA EXECUCAO - Download de Historico Completo")
             else:
-                print("ATUALIZACAO INCREMENTAL")
-            print("=" * 70)
+                self.logger.info("ATUALIZACAO INCREMENTAL")
+            self.logger.info("=" * 70)
 
-        print(title)
-        print("=" * 70)
-        print(f"Indicadores a coletar: {num_indicators}")
-        print()
+        self.logger.info(title)
+        self.logger.info("=" * 70)
+        self.logger.info(f"Indicadores a coletar: {num_indicators}")
+        self.logger.info("")
 
     def _log_collect_end(
         self,
@@ -182,7 +184,7 @@ class BaseCollector:
         if not verbose:
             return
 
-        print("=" * 70)
+        self.logger.info("=" * 70)
 
         if results:
             total = 0
@@ -191,11 +193,11 @@ class BaseCollector:
                     total += res
                 elif hasattr(res, '__len__'):
                     total += len(res)
-            print(f"Coleta concluida! Total: {total:,} registros")
+            self.logger.info(f"Coleta concluida! Total: {total:,} registros")
         else:
-            print("Coleta concluida!")
+            self.logger.info("Coleta concluida!")
 
-        print("=" * 70)
+        self.logger.info("=" * 70)
 
 
     def _calculate_start_date(self, last_date: pd.Timestamp | None, frequency: str) -> str | None:
@@ -248,7 +250,7 @@ class BaseCollector:
         try:
             df = fetch_with_log(start_date)
         except Exception as e:
-            print(f"  Erro ao buscar dados: {e}")
+            self.logger.error(f"Unexpected error during fetch for {name}: {e}")
             return pd.DataFrame()
 
         # 4. Salvar resultados

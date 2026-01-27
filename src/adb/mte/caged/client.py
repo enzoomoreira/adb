@@ -9,6 +9,8 @@ from ftplib import FTP
 from pathlib import Path
 import tempfile
 
+from adb.core.resilience import retry
+
 
 class CAGEDClient:
     """Cliente FTP para download de microdados do Novo CAGED."""
@@ -30,6 +32,7 @@ class CAGEDClient:
     # Metodos Publicos
     # =========================================================================
 
+    @retry(delay=5.0, backoff_factor=2.0)
     def connect(self) -> FTP:
         """
         Conecta ao servidor FTP (anonymous).
@@ -81,6 +84,7 @@ class CAGEDClient:
         ym = f"{year}{month:02d}"
         return f"{self.BASE_PATH}/{year}/{ym}/{prefix}{ym}.7z"
 
+    @retry(delay=5.0, backoff_factor=2.0)
     def download_to_file(
         self,
         prefix: str,
@@ -101,7 +105,7 @@ class CAGEDClient:
             Path do arquivo baixado
 
         Raises:
-            Exception: Propaga erros de conexao/download
+            Exception: Propaga erros de conexao/download apos retries
         """
         self._ensure_connected()
         

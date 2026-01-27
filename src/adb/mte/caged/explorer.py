@@ -205,30 +205,6 @@ class CAGEDExplorer(BaseExplorer):
 
         return sorted(periods)
 
-    def collect(
-        self,
-        indicators: list[str] | str = "all",
-        save: bool = True,
-        verbose: bool = True,
-        max_workers: int = 4,
-    ) -> None:
-        """
-        Coleta microdados CAGED do MTE.
-
-        Args:
-            indicators: 'all', lista, ou string com dataset(s)
-            save: Se True, salva em Parquet
-            verbose: Se True, imprime progresso
-            max_workers: Threads para download paralelo
-        """
-        collector = self._COLLECTOR_CLASS()
-        collector.collect(
-            indicators=indicators, 
-            save=save, 
-            verbose=verbose, 
-            max_workers=max_workers
-        )
-
     @staticmethod
     def _build_pattern(dataset: str, year: int, month: int = None) -> str:
         """Constroi pattern de arquivo."""

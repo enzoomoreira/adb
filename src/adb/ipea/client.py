@@ -7,6 +7,9 @@ Wrapper do ipeadatapy adaptado aos padroes do projeto.
 import pandas as pd
 import ipeadatapy
 
+from adb.core.log import get_logger
+from adb.core.resilience import retry
+
 
 class IPEAClient:
     """
@@ -19,7 +22,7 @@ class IPEAClient:
 
     def __init__(self):
         """Inicializa o cliente IPEA."""
-        pass
+        self.logger = get_logger(self.__class__.__name__)
 
     # =========================================================================
     # Metodos Publicos
@@ -46,30 +49,31 @@ class IPEAClient:
         Returns:
             DataFrame com indice=DatetimeIndex, coluna='value'
         """
-        try:
-            # Determinar ano para filtro inicial (otimizacao)
-            if start_date:
-                year = int(start_date[:4]) - 1  # yearGreaterThan e exclusivo
-                df = ipeadatapy.timeseries(code, yearGreaterThan=year)
-            else:
-                df = ipeadatapy.timeseries(code)
+        # Determinar ano para filtro inicial (otimizacao)
+        year = None
+        if start_date:
+            year = int(start_date[:4]) - 1  # yearGreaterThan e exclusivo
 
-            if df is None or df.empty:
-                return pd.DataFrame()
+        df = self._fetch_timeseries(code, year)
 
-            # Normalizar para padrao do projeto
-            df = self._normalize_dataframe(df)
-
-            # Filtrar por data exata (se necessario)
-            if start_date and not df.empty:
-                df = self._filter_by_start_date(df, start_date)
-
-            return df
-
-        except Exception as e:
-            if verbose:
-                print(f"Erro ao buscar {code}: {e}")
+        if df is None or df.empty:
             return pd.DataFrame()
+
+        # Normalizar para padrao do projeto
+        df = self._normalize_dataframe(df)
+
+        # Filtrar por data exata (se necessario)
+        if start_date and not df.empty:
+            df = self._filter_by_start_date(df, start_date)
+
+        return df
+
+    @retry()  # usa defaults de NETWORK_EXCEPTIONS, attempts, delay
+    def _fetch_timeseries(self, code: str, year: int = None) -> pd.DataFrame:
+        """Busca dados brutos do IPEA com retry."""
+        if year:
+            return ipeadatapy.timeseries(code, yearGreaterThan=year)
+        return ipeadatapy.timeseries(code)
 
     def get_metadata(self, code: str) -> dict:
         """
