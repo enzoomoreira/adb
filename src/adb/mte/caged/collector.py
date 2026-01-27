@@ -15,7 +15,7 @@ import duckdb
 import pandas as pd
 
 from adb.core.collectors import BaseCollector
-from adb.core.utils import get_indicator_config
+from adb.core.utils import get_config
 from .client import CAGEDClient
 from .indicators import CAGED_CONFIG, get_available_periods
 
@@ -102,7 +102,7 @@ class CAGEDCollector(BaseCollector):
         Returns:
             Tupla (year, month, rows, error_msg)
         """
-        config = get_indicator_config(CAGED_CONFIG, indicator_key)
+        config = get_config(CAGED_CONFIG, indicator_key)
         subdir = "mte/caged"
         
         # Criar diretório temporário para este período
@@ -194,11 +194,11 @@ class CAGEDCollector(BaseCollector):
             verbose: Se True, imprime logs
             max_workers: Numero de threads para download paralelo
         """
-        keys = self._normalize_indicators_list(indicators, CAGED_CONFIG)
+        keys = self._normalize_indicators(indicators, CAGED_CONFIG)
         subdir = "mte/caged"
         
         # Log inicial padronizado
-        self._log_collect_start(
+        self._start(
             title="CAGED - Ministerio do Trabalho e Emprego",
             num_indicators=len(keys),
             subdir=subdir,
@@ -209,15 +209,15 @@ class CAGEDCollector(BaseCollector):
         results = {}
 
         for key in keys:
-            config = get_indicator_config(CAGED_CONFIG, key)
+            config = get_config(CAGED_CONFIG, key)
             missing = self._get_missing_periods(key, subdir, config["start_year"])
 
             if not missing:
-                self._log_info(f"{config['name']}: Dados atualizados", verbose)
+                self._info(f"{config['name']}: Dados atualizados", verbose)
                 results[key] = 0
                 continue
 
-            self._log_info(f"  {config['name']}: Baixando {len(missing)} meses...", verbose)
+            self._info(f"  {config['name']}: Baixando {len(missing)} meses...", verbose)
 
             total_rows = 0
             errors = []
@@ -250,7 +250,7 @@ class CAGEDCollector(BaseCollector):
 
             results[key] = total_rows
 
-        self._log_collect_end(verbose=verbose)
+        self._end(verbose=verbose)
 
     def get_status(self) -> pd.DataFrame:
         """

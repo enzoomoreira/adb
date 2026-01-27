@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from adb.core.collectors import BaseCollector
-from adb.core.utils import get_indicator_config
+from adb.core.utils import get_config
 from .client import BloombergClient
 from .indicators import BLOOMBERG_CONFIG
 
@@ -83,7 +83,7 @@ class BloombergCollector(BaseCollector):
                 start_date=start_date,
             )
 
-        return self._collect_with_sync(
+        return self._sync(
             fetch_fn=fetch,
             filename=filename,
             name=name,
@@ -118,16 +118,16 @@ class BloombergCollector(BaseCollector):
             Dict {indicator_key: DataFrame} com dados coletados
         """
         # Normalizar para lista
-        keys = self._normalize_indicators_list(indicators, BLOOMBERG_CONFIG)
+        keys = self._normalize_indicators(indicators, BLOOMBERG_CONFIG)
 
-        self._log_collect_start(
+        self._start(
             title="BLOOMBERG - Market Data",
             num_indicators=len(keys),
             verbose=verbose,
         )
 
         for key in keys:
-            config = get_indicator_config(BLOOMBERG_CONFIG, key)
+            config = get_config(BLOOMBERG_CONFIG, key)
 
             # Bloomberg CONFIG tem 'fields' como lista, pegar primeiro field
             # (cada indicador tem exatamente 1 field por design)
@@ -147,5 +147,5 @@ class BloombergCollector(BaseCollector):
                 verbose=verbose,
             )
 
-        self._log_collect_end(verbose=verbose)
+        self._end(verbose=verbose)
 

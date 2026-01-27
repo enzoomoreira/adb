@@ -192,15 +192,12 @@ from adb.bacen.expectations.client import ExpectationsClient
 client = SGSClient()
 df = client.get_data(code=432, name='Selic', frequency='daily', start_date='2024-01-01')
 df = client.get_series(codes={'selic': 432, 'cdi': 12})
-df = client.get_single_series(name='selic', code=432, start_date='2024-01-01')
 
 # ExpectationsClient - busca expectativas Focus
 client = ExpectationsClient()
 df = client.query(endpoint_key='top5_anuais', indicator='IPCA', start_date='2024-01-01')
-df = client.get_selic_expectations(start_date='2024-01-01')
-df = client.get_annual_expectations(indicator='IPCA', reference_year=2025, top5=True)
-df = client.get_inflation_expectations(indicator='IPCA', horizon=12)
-df = client.get_monthly_expectations(indicator='IPCA')
+df = client.query(endpoint_key='selic', start_date='2024-01-01')
+df = client.query(endpoint_key='inflacao_12m', indicator='IPCA', start_date='2024-01-01')
 ```
 
 ### Assinaturas dos Metodos Principais

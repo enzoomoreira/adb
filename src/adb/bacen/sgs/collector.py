@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from adb.core.collectors import BaseCollector
-from adb.core.utils import get_indicator_config
+from adb.core.utils import get_config
 from .client import SGSClient
 from .indicators import SGS_CONFIG
 
@@ -82,7 +82,7 @@ class SGSCollector(BaseCollector):
                 start_date=start_date,
             )
 
-        return self._collect_with_sync(
+        return self._sync(
             fetch_fn=fetch,
             filename=filename,
             name=name,
@@ -117,9 +117,9 @@ class SGSCollector(BaseCollector):
             Dict {indicator_key: DataFrame} com dados coletados
         """
         # Normalizar entrada
-        keys = self._normalize_indicators_list(indicators, SGS_CONFIG)
+        keys = self._normalize_indicators(indicators, SGS_CONFIG)
 
-        self._log_collect_start(
+        self._start(
             title="BACEN - Sistema Gerenciador de Series",
             num_indicators=len(keys),
             subdir='bacen/sgs/daily',
@@ -128,7 +128,7 @@ class SGSCollector(BaseCollector):
         )
 
         for key in keys:
-            config = get_indicator_config(SGS_CONFIG, key)
+            config = get_config(SGS_CONFIG, key)
             subdir = f"bacen/sgs/{config['frequency']}"
 
             self._collect_series(
@@ -141,7 +141,7 @@ class SGSCollector(BaseCollector):
                 verbose=verbose,
             )
 
-        self._log_collect_end(verbose=verbose)
+        self._end(verbose=verbose)
 
     # =========================================================================
 

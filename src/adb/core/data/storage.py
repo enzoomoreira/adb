@@ -14,7 +14,7 @@ import duckdb
 import pandas as pd
 
 from adb.core.display import get_display
-from adb.core.utils.dates import normalize_date_index
+from adb.core.utils.dates import normalize_index
 
 
 class DataManager:
@@ -76,7 +76,7 @@ class DataManager:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Padronizar índice de data antes de salvar (usa método do QueryEngine)
-        df = normalize_date_index(df)
+        df = normalize_index(df)
 
         # Adicionar metadata ao DataFrame
         df.attrs['filename'] = filename
@@ -178,7 +178,7 @@ class DataManager:
             return
         
         # Normalizar novo DataFrame antes de append
-        df = normalize_date_index(df)
+        df = normalize_index(df)
         
         # Arquivo temporario para escrita atomica
         temp_fd, temp_path_str = tempfile.mkstemp(suffix='.parquet', dir=filepath.parent)
@@ -282,7 +282,7 @@ class DataManager:
         if not filepath.exists():
             return None
         
-        # Tenta coluna 'date' (padronizado via normalize_date_index no save)
+        # Tenta coluna 'date' (padronizado via normalize_index no save)
         try:
             result = self._qe.sql(f"SELECT MAX(date) as max_date FROM '{filepath}'")
             if not result.empty and result['max_date'].iloc[0] is not None:

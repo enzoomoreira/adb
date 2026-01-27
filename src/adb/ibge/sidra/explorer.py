@@ -34,6 +34,6 @@ class SidraExplorer(BaseExplorer):
     # Metodos auxiliares
     # =========================================================================
 
-    def _get_subdir(self, indicator: str) -> str:
+    def _subdir(self, indicator: str) -> str:
         """Sidra tem subdir dinamico baseado em frequency."""
         return f"ibge/sidra/{self._CONFIG[indicator].get('frequency', 'monthly')}"

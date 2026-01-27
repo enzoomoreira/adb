@@ -10,7 +10,7 @@ import pandas as pd
 
 from adb.core.log import get_logger
 from adb.core.utils import parse_date
-from adb.core.utils.dates import normalize_date_index
+from adb.core.utils.dates import normalize_index
 
 
 class BaseExplorer:
@@ -24,8 +24,8 @@ class BaseExplorer:
 
     Subclasses podem sobrescrever:
     - _DATE_COLUMN: str - Nome da coluna de data (default: 'date')
-    - _get_subdir(): Para subdir dinamico por indicador
-    - _join_multiple(): Para logica de join diferente
+    - _subdir(): Para subdir dinamico por indicador
+    - _join(): Para logica de join diferente
     """
 
     _CONFIG: dict = None
@@ -52,7 +52,7 @@ class BaseExplorer:
     # Metodos Internos (Extension Points)
     # =========================================================================
 
-    def _get_subdir(self, indicator: str) -> str:
+    def _subdir(self, indicator: str) -> str:
         """
         Retorna subdiretorio para um indicador.
 
@@ -60,7 +60,7 @@ class BaseExplorer:
         """
         return self._SUBDIR
 
-    def _build_where(self, start: str = None, end: str = None) -> str | None:
+    def _where(self, start: str = None, end: str = None) -> str | None:
         """Constroi clausula WHERE para filtro de data."""
         where_clauses = []
         if start:
@@ -69,7 +69,7 @@ class BaseExplorer:
             where_clauses.append(f"{self._DATE_COLUMN} <= '{parse_date(end)}'")
         return " AND ".join(where_clauses) if where_clauses else None
 
-    def _join_multiple(self, dfs: list, indicators: tuple) -> pd.DataFrame:
+    def _join(self, dfs: list, indicators: tuple) -> pd.DataFrame:
         """
         Junta multiplos DataFrames por data.
 
@@ -121,13 +121,13 @@ class BaseExplorer:
 
         self.logger.debug(f"Lendo {len(indicators)} indicador(es): {indicators}")
 
-        where = self._build_where(start, end)
+        where = self._where(start, end)
 
         # Um indicador: retorna direto
         if len(indicators) == 1:
-            subdir = self._get_subdir(indicators[0])
+            subdir = self._subdir(indicators[0])
             df = self._qe.read(indicators[0], subdir, columns=columns, where=where)
-            df = normalize_date_index(df)
+            df = normalize_index(df)
             if df.empty:
                 self.logger.warning(f"Nenhum dado encontrado para '{indicators[0]}'")
             return df
@@ -135,16 +135,16 @@ class BaseExplorer:
         # Multiplos indicadores: join por data
         dfs = []
         for ind in indicators:
-            subdir = self._get_subdir(ind)
+            subdir = self._subdir(ind)
             df = self._qe.read(ind, subdir, columns=['value'], where=where)
-            df = normalize_date_index(df)
+            df = normalize_index(df)
             if not df.empty:
                 df = df.rename(columns={'value': ind})
                 dfs.append(df)
             else:
                 self.logger.warning(f"Nenhum dado encontrado para '{ind}'")
 
-        return self._join_multiple(dfs, indicators)
+        return self._join(dfs, indicators)
 
     def available(self, **filters) -> list[str]:
         """

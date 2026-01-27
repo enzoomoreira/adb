@@ -18,29 +18,6 @@ class SGSClient:
         """Inicializa o cliente SGS."""
         self.logger = get_logger(self.__class__.__name__)
 
-    def query(
-        self,
-        codes: dict[str, int],
-        start_date: str = None,
-        end_date: str = None,
-        last: int = None
-    ) -> pd.DataFrame:
-        """
-        Busca series temporais do SGS.
-
-        Alias semantico para get_series() - consistencia com ExpectationsClient.
-
-        Args:
-            codes: Dicionario {nome: codigo_sgs}
-            start_date: Data inicial 'YYYY-MM-DD' (opcional)
-            end_date: Data final 'YYYY-MM-DD' (opcional)
-            last: Numero de ultimos registros (opcional)
-
-        Returns:
-            DataFrame com as series solicitadas
-        """
-        return self.get_series(codes, start_date, end_date, last)
-
     def get_series(
         self,
         codes: dict[str, int],
@@ -66,31 +43,6 @@ class SGSClient:
         except Exception as e:
             self.logger.error(f"Erro ao buscar dados SGS: {e}")
             return pd.DataFrame()
-
-    def get_single_series(
-        self,
-        name: str,
-        code: int,
-        start_date: str = None,
-        end_date: str = None,
-        last: int = None
-    ) -> pd.DataFrame:
-        """
-        Busca uma unica serie temporal do SGS.
-
-        Args:
-            name: Nome para a coluna
-            code: Codigo SGS
-            start_date: Data inicial 'YYYY-MM-DD' (opcional)
-            end_date: Data final 'YYYY-MM-DD' (opcional)
-            last: Numero de ultimos registros (opcional)
-
-        Returns:
-            DataFrame com a serie solicitada
-        """
-        return self.get_series({name: code}, start_date, end_date, last)
-
-    # get_historical e get_incremental removidos (logica movida para Collector)
 
     # =========================================================================
     # API UNIFICADA (Recomendada)

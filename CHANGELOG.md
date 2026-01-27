@@ -1,5 +1,43 @@
 # Project Changelog
 
+## [2026-01-27 20:22]
+
+### Changed
+- Renomeados metodos internos do `BaseCollector` para nomes mais concisos:
+  - `_normalize_indicators_list()` -> `_normalize_indicators()`
+  - `_calculate_start_date()` -> `_next_date()`
+  - `_collect_with_sync()` -> `_sync()`
+  - `_log_collect_start()` -> `_start()`
+  - `_log_collect_end()` -> `_end()`
+  - `_log_fetch_start()` -> `_fetch_start()`
+  - `_log_fetch_result()` -> `_fetch_result()`
+  - `_log_info()` -> `_info()`
+  - `_log_warning()` -> `_warning()`
+- Renomeados metodos internos do `BaseExplorer`:
+  - `_get_subdir()` -> `_subdir()`
+  - `_build_where()` -> `_where()`
+  - `_join_multiple()` -> `_join()`
+- Renomeados metodos internos do `QueryEngine`:
+  - `_ensure_date_columns()` -> `_ensure_dates()`
+  - `_build_query()` -> `_query()`
+- Renomeadas funcoes utilitarias em `core/utils/`:
+  - `normalize_date_index()` -> `normalize_index()`
+  - `get_indicator_config()` -> `get_config()`
+  - `list_indicators()` -> `list_keys()`
+  - `filter_by_field()` -> `filter_by()`
+- `BaseCollector._end()` agora usa total de registros acumulado automaticamente via `_fetch_result()` (removido parametro `results`)
+- Atualizadas documentacoes `docs/bacen.md` e `docs/core.md` para refletir novos nomes
+
+### Removed
+- Metodos wrapper removidos do `ExpectationsClient` (usar `query()` diretamente):
+  - `get_selic_expectations()`
+  - `get_annual_expectations()`
+  - `get_inflation_expectations()`
+  - `get_monthly_expectations()`
+- Metodos wrapper removidos do `SGSClient`:
+  - `query()` (alias para `get_series()`)
+  - `get_single_series()` (usar `get_series({name: code})`)
+
 ## [2026-01-27 19:20]
 
 ### Added

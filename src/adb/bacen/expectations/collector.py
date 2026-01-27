@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from adb.core.collectors import BaseCollector
-from adb.core.utils import get_indicator_config
+from adb.core.utils import get_config
 from .client import ExpectationsClient
 from .indicators import EXPECTATIONS_CONFIG
 
@@ -89,7 +89,7 @@ class ExpectationsCollector(BaseCollector):
                 limit=limit,
             )
 
-        return self._collect_with_sync(
+        return self._sync(
             fetch_fn=fetch,
             filename=filename,
             name=log_name,
@@ -128,9 +128,9 @@ class ExpectationsCollector(BaseCollector):
             Dict {key: DataFrame} com dados coletados
         """
         # Normalizar entrada
-        keys = self._normalize_indicators_list(indicators, EXPECTATIONS_CONFIG)
+        keys = self._normalize_indicators(indicators, EXPECTATIONS_CONFIG)
 
-        self._log_collect_start(
+        self._start(
             title="BACEN - Expectativas (Relatorio Focus)",
             num_indicators=len(keys),
             subdir=self.default_subdir,
@@ -139,7 +139,7 @@ class ExpectationsCollector(BaseCollector):
         )
 
         for key in keys:
-            config = get_indicator_config(EXPECTATIONS_CONFIG, key)
+            config = get_config(EXPECTATIONS_CONFIG, key)
 
             self._collect_endpoint(
                 endpoint=config['endpoint'],
@@ -152,5 +152,5 @@ class ExpectationsCollector(BaseCollector):
                 verbose=verbose,
             )
 
-        self._log_collect_end(verbose=verbose)
+        self._end(verbose=verbose)
 

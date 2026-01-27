@@ -36,8 +36,8 @@ src/adb/core/
 │   ├── query.py          # QueryEngine (DuckDB)
 │   └── explorers.py      # BaseExplorer
 ├── utils/
-│   ├── dates.py          # parse_date, normalize_date_index
-│   └── indicators.py     # list_indicators, get_indicator_config
+│   ├── dates.py          # parse_date, normalize_index
+│   └── indicators.py     # list_keys, get_config
 └── charting/             # Ver charting.md
 ```
 
@@ -287,13 +287,13 @@ Retorna DataFrame com status dos arquivos salvos.
 
 | Metodo | Descricao |
 |--------|-----------|
-| `_normalize_indicators_list(indicators, config)` | Normaliza entrada para lista |
-| `_calculate_start_date(last_date, frequency)` | Calcula data inicial para coleta incremental |
-| `_collect_with_sync(fetch_fn, filename, ...)` | Template para coleta com sync automatico |
-| `_log_collect_start(title, num_indicators, ...)` | Banner de inicio |
-| `_log_collect_end(results, verbose)` | Banner de fim |
-| `_log_fetch_start(name, start_date, verbose)` | Log de inicio de fetch |
-| `_log_fetch_result(name, count, verbose)` | Log de resultado |
+| `_normalize_indicators(indicators, config)` | Normaliza entrada para lista |
+| `_next_date(last_date, frequency)` | Calcula data inicial para coleta incremental |
+| `_sync(fetch_fn, filename, ...)` | Template para coleta com sync automatico |
+| `_start(title, num_indicators, ...)` | Banner de inicio |
+| `_end(results, verbose)` | Banner de fim |
+| `_fetch_start(name, start_date, verbose)` | Log de inicio de fetch |
+| `_fetch_result(name, count, verbose)` | Log de resultado |
 
 #### Exemplo de Implementacao
 
@@ -308,12 +308,12 @@ class NovoCollector(BaseCollector):
         self.client = NovoClient()
 
     def collect(self, indicators='all', save=True, verbose=True):
-        keys = self._normalize_indicators_list(indicators, NOVA_CONFIG)
-        self._log_collect_start("Nova Fonte", len(keys), verbose=verbose)
+        keys = self._normalize_indicators(indicators, NOVA_CONFIG)
+        self._start("Nova Fonte", len(keys), verbose=verbose)
 
         for key in keys:
             cfg = NOVA_CONFIG[key]
-            self._collect_with_sync(
+            self._sync(
                 fetch_fn=lambda start: self.client.fetch(cfg['code'], start),
                 filename=key,
                 name=cfg['name'],
@@ -564,7 +564,7 @@ parse_date('2020')      # '2020-01-01'
 parse_date('2020-06')   # '2020-06-01'
 ```
 
-#### normalize_date_index(df)
+#### normalize_index(df)
 
 Padroniza indice datetime do DataFrame.
 
@@ -573,9 +573,9 @@ Padroniza indice datetime do DataFrame.
 - Define nome do indice como 'date'
 
 ```python
-from adb.core.utils import normalize_date_index
+from adb.core.utils import normalize_index
 
-df = normalize_date_index(df)
+df = normalize_index(df)
 # DataFrame com DatetimeIndex padronizado
 ```
 

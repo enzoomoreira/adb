@@ -35,6 +35,6 @@ class SGSExplorer(BaseExplorer):
     # Metodos auxiliares
     # =========================================================================
 
-    def _get_subdir(self, indicator: str) -> str:
+    def _subdir(self, indicator: str) -> str:
         """SGS tem subdir dinamico baseado em frequency."""
         return f"bacen/sgs/{self._CONFIG[indicator]['frequency']}"

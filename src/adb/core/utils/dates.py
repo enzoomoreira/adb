@@ -44,7 +44,7 @@ def parse_date(date: str) -> str:
     return date
 
 
-def normalize_date_index(df: pd.DataFrame) -> pd.DataFrame:
+def normalize_index(df: pd.DataFrame) -> pd.DataFrame:
     """
     Padroniza indice datetime de um DataFrame.
 

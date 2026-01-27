@@ -8,7 +8,7 @@ import pandas as pd
 from pathlib import Path
 
 from adb.core.collectors import BaseCollector
-from adb.core.utils import get_indicator_config
+from adb.core.utils import get_config
 from .client import SidraClient
 from .indicators import SIDRA_CONFIG
 
@@ -56,9 +56,9 @@ class SidraCollector(BaseCollector):
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
         """
-        keys = self._normalize_indicators_list(indicators, SIDRA_CONFIG)
+        keys = self._normalize_indicators(indicators, SIDRA_CONFIG)
 
-        self._log_collect_start(
+        self._start(
             title="IBGE - Sistema SIDRA",
             num_indicators=len(keys),
             subdir=self.default_subdir,
@@ -67,7 +67,7 @@ class SidraCollector(BaseCollector):
         )
 
         for key in keys:
-            config = get_indicator_config(SIDRA_CONFIG, key)
+            config = get_config(SIDRA_CONFIG, key)
             # Define subdiretorio baseado na frequencia, similar ao SGS
             subdir = f"ibge/sidra/{config.get('frequency', 'monthly')}"
 
@@ -78,9 +78,9 @@ class SidraCollector(BaseCollector):
                     start_date=start_date,
                 )
             
-            # Usa o metodo _collect_with_sync do BaseCollector que ja trata
+            # Usa o metodo _sync do BaseCollector que ja trata
             # verificacao de existencia, delta update e salvamento.
-            self._collect_with_sync(
+            self._sync(
                 fetch_fn=fetch,
                 filename=key,
                 name=config['name'],
@@ -90,7 +90,7 @@ class SidraCollector(BaseCollector):
                 verbose=verbose,
             )
             
-        self._log_collect_end(verbose=verbose)
+        self._end(verbose=verbose)
 
     def get_status(self) -> pd.DataFrame:
         """

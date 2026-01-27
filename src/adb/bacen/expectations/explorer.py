@@ -155,7 +155,7 @@ class ExpectationsExplorer(BaseExplorer):
     # Metodos auxiliares
     # =========================================================================
 
-    def _join_multiple(self, dfs: list, indicators: tuple) -> pd.DataFrame:
+    def _join(self, dfs: list, indicators: tuple) -> pd.DataFrame:
         """
         Override: Expectations concatena ao invés de join.
         

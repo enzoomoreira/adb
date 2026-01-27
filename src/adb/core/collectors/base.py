@@ -18,7 +18,7 @@ class BaseCollector:
 
     Fornece:
     - Inicializacao padronizada com DataManager
-    - Logging padronizado (_log_fetch_start, _log_fetch_result)
+    - Logging padronizado (_fetch_start, _fetch_result)
     - get_status() generico baseado em arquivos
 
     Subclasses devem definir:
@@ -43,35 +43,38 @@ class BaseCollector:
         self.data_manager = DataManager(self.data_path)
         self.logger = get_logger(self.__class__.__name__)
         self.display = get_display()  # Display singleton para output visual
+        self._collect_total = 0  # Acumulador para total de registros coletados
 
     # =========================================================================
     # Display (output visual ao usuario)
     # =========================================================================
 
-    def _log_fetch_start(self, name: str, start_date: str = None, verbose: bool = True):
+    def _fetch_start(self, name: str, start_date: str = None, verbose: bool = True):
         """Exibe inicio de fetch de indicador (console + log tecnico)."""
         self.display.set_verbose(verbose)
         self.display.fetch_start(name, start_date)
         # Log tecnico sempre vai para arquivo
         self.logger.debug(f"Fetch start: {name}, since={start_date}")
 
-    def _log_fetch_result(self, name: str, count: int, verbose: bool = True):
+    def _fetch_result(self, name: str, count: int, verbose: bool = True):
         """Exibe resultado de fetch de indicador (console + log tecnico)."""
         self.display.set_verbose(verbose)
         self.display.fetch_result(count)
+        # Acumular total de registros
+        self._collect_total += count
         # Log tecnico sempre vai para arquivo
         if count:
             self.logger.info(f"Fetch OK: {name}, {count:,} registros")
         else:
             self.logger.warning(f"Fetch vazio: {name}")
 
-    def _log_info(self, message: str, verbose: bool = True):
+    def _info(self, message: str, verbose: bool = True):
         """Exibe mensagem informativa (console + log tecnico)."""
         self.display.set_verbose(verbose)
         self.display.info(message)
         self.logger.info(message)
 
-    def _log_warning(self, message: str, verbose: bool = True):
+    def _warning(self, message: str, verbose: bool = True):
         """Exibe warning (console + log tecnico)."""
         self.display.set_verbose(verbose)
         self.display.warning(message)
@@ -121,7 +124,7 @@ class BaseCollector:
     # Helpers para Collectors (reduz duplicacao)
     # =========================================================================
 
-    def _normalize_indicators_list(
+    def _normalize_indicators(
         self,
         indicators: list[str] | str,
         config: dict
@@ -144,7 +147,7 @@ class BaseCollector:
             return list(indicators)
 
 
-    def _log_collect_start(
+    def _start(
         self,
         title: str,
         num_indicators: int,
@@ -162,6 +165,9 @@ class BaseCollector:
             check_first_run: Se True, mostra "PRIMEIRA EXECUCAO" vs "ATUALIZACAO"
             verbose: Se False, nao imprime no console
         """
+        # Resetar acumulador de registros
+        self._collect_total = 0
+
         # Determinar se e primeira execucao
         first_run = None
         if check_first_run and subdir:
@@ -181,24 +187,16 @@ class BaseCollector:
             f"first_run={first_run}, subdir={subdir}"
         )
 
-    def _log_collect_end(self, results: dict = None, verbose: bool = True):
+    def _end(self, verbose: bool = True):
         """
         Exibe banner de conclusao de coleta (console + log tecnico).
 
+        Usa total acumulado automaticamente via _fetch_result().
+
         Args:
-            results: Dict {key: DataFrame ou int} com resultados (opcional).
-                     Se fornecido, calcula e mostra total de registros.
             verbose: Se False, nao imprime no console
         """
-        # Calcular total se results fornecido
-        total = None
-        if results:
-            total = 0
-            for res in results.values():
-                if isinstance(res, int):
-                    total += res
-                elif hasattr(res, '__len__'):
-                    total += len(res)
+        total = self._collect_total if self._collect_total > 0 else None
 
         # Display visual (console)
         self.display.set_verbose(verbose)
@@ -211,7 +209,7 @@ class BaseCollector:
             self.logger.info("Coleta concluida")
 
 
-    def _calculate_start_date(self, last_date: pd.Timestamp | None, frequency: str) -> str | None:
+    def _next_date(self, last_date: pd.Timestamp | None, frequency: str) -> str | None:
         """Calcula data de inicio baseada na ultima data salva."""
         from datetime import timedelta
         
@@ -227,7 +225,7 @@ class BaseCollector:
             # Proximo dia
             return (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
 
-    def _collect_with_sync(
+    def _sync(
         self,
         fetch_fn,
         filename: str,
@@ -249,12 +247,12 @@ class BaseCollector:
         
         if save and frequency:
             last_date = self.data_manager.get_last_date(filename, subdir)
-            start_date = self._calculate_start_date(last_date, frequency)
+            start_date = self._next_date(last_date, frequency)
             is_first_run = last_date is None
 
         # 2. Wrapper de log
         def fetch_with_log(date_param):
-            self._log_fetch_start(name, date_param, verbose)
+            self._fetch_start(name, date_param, verbose)
             return fetch_fn(date_param)
 
         # 3. Executar fetch
@@ -272,7 +270,7 @@ class BaseCollector:
                 self.data_manager.append(df, filename, subdir, verbose=verbose)
 
         # 5. Log final
-        self._log_fetch_result(name, len(df), verbose)
+        self._fetch_result(name, len(df), verbose)
 
         # Nao retorna df - dados ja salvos em disco
         # Evita poluicao de output no notebook (comportamento da API antiga)

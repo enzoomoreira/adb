@@ -7,13 +7,13 @@ Contem:
 - dates: Funcoes para parsing e validacao de datas
 """
 
-from .indicators import get_indicator_config, list_indicators, filter_by_field
-from .dates import parse_date, normalize_date_index
+from .indicators import get_config, list_keys, filter_by
+from .dates import parse_date, normalize_index
 
 __all__ = [
-    'get_indicator_config',
-    'list_indicators',
-    'filter_by_field',
+    'get_config',
+    'list_keys',
+    'filter_by',
     'parse_date',
-    'normalize_date_index',
+    'normalize_index',
 ]

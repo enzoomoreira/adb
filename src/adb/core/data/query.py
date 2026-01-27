@@ -47,9 +47,9 @@ class QueryEngine:
     # Helpers Internos
     # =========================================================================
 
-    def _ensure_date_columns(self, path_or_glob: str, columns: list[str]) -> list[str]:
+    def _ensure_dates(self, path_or_glob: str, columns: list[str]) -> list[str]:
         """
-        Garante que colunas de data sejam incluídas na seleção para indexação correta.
+        Garante que colunas de data sejam incluídas na selecao para indexacao correta.
         """
         if not columns:
             return None  # Select *
@@ -75,11 +75,11 @@ class QueryEngine:
             
         return columns
 
-    def _build_query(self, source: str, columns: list[str] = None, where: str = None) -> str:
-        """Constrói a query SQL para o DuckDB."""
-        
-        # Seleção de colunas com garantia de data
-        cols_to_select = self._ensure_date_columns(source, columns)
+    def _query(self, source: str, columns: list[str] = None, where: str = None) -> str:
+        """Constroi a query SQL para o DuckDB."""
+
+        # Selecao de colunas com garantia de data
+        cols_to_select = self._ensure_dates(source, columns)
         select_clause = ", ".join(cols_to_select) if cols_to_select else "*"
         
         query = f"SELECT {select_clause} FROM '{source}'"
@@ -117,7 +117,7 @@ class QueryEngine:
         if not filepath.exists():
             return pd.DataFrame()
 
-        sql = self._build_query(str(filepath), columns, where)
+        sql = self._query(str(filepath), columns, where)
         
         try:
             df = duckdb.sql(sql).df()
@@ -155,7 +155,7 @@ class QueryEngine:
             if subdir and not list((self.raw_path / subdir).glob(pattern)):
                  return pd.DataFrame()
 
-            sql = self._build_query(full_pattern, columns, where)
+            sql = self._query(full_pattern, columns, where)
             df = duckdb.sql(sql).df()
             # Nota: normalize_date_index é chamado apenas no save() (Schema on Write)
             return df

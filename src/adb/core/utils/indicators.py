@@ -8,7 +8,7 @@ Cada modulo mantem seu CONFIG especifico e usa estas funcoes helper.
 from typing import Any
 
 
-def get_indicator_config(config: dict, key: str) -> dict:
+def get_config(config: dict, key: str) -> dict:
     """
     Retorna configuracao de um indicador.
 
@@ -23,9 +23,9 @@ def get_indicator_config(config: dict, key: str) -> dict:
         KeyError: Se indicador nao encontrado
 
     Example:
-        >>> from core.utils import get_indicator_config
+        >>> from core.utils import get_config
         >>> from bacen.sgs.indicators import SGS_CONFIG
-        >>> config = get_indicator_config(SGS_CONFIG, 'selic')
+        >>> config = get_config(SGS_CONFIG, 'selic')
         >>> config['code']
         432
     """
@@ -35,7 +35,7 @@ def get_indicator_config(config: dict, key: str) -> dict:
     return config[key]
 
 
-def list_indicators(config: dict, frequency: str = None) -> list[str]:
+def list_keys(config: dict, frequency: str = None) -> list[str]:
     """
     Lista chaves de indicadores disponiveis.
 
@@ -47,11 +47,11 @@ def list_indicators(config: dict, frequency: str = None) -> list[str]:
         Lista de chaves de indicadores
 
     Example:
-        >>> from core.utils import list_indicators
+        >>> from core.utils import list_keys
         >>> from bacen.sgs.indicators import SGS_CONFIG
-        >>> list_indicators(SGS_CONFIG)
+        >>> list_keys(SGS_CONFIG)
         ['selic', 'cdi', 'dolar_ptax', ...]
-        >>> list_indicators(SGS_CONFIG, 'daily')
+        >>> list_keys(SGS_CONFIG, 'daily')
         ['selic', 'cdi', 'dolar_ptax', ...]
     """
     if frequency is None:
@@ -62,7 +62,7 @@ def list_indicators(config: dict, frequency: str = None) -> list[str]:
     ]
 
 
-def filter_by_field(config: dict, field: str, value: Any) -> dict:
+def filter_by(config: dict, field: str, value: Any) -> dict:
     """
     Filtra indicadores por um campo especifico.
 
@@ -75,9 +75,9 @@ def filter_by_field(config: dict, field: str, value: Any) -> dict:
         Dict com indicadores filtrados
 
     Example:
-        >>> from core.utils import filter_by_field
+        >>> from core.utils import filter_by
         >>> from bacen.sgs.indicators import SGS_CONFIG
-        >>> daily_indicators = filter_by_field(SGS_CONFIG, 'frequency', 'daily')
+        >>> daily_indicators = filter_by(SGS_CONFIG, 'frequency', 'daily')
     """
     return {
         key: cfg for key, cfg in config.items()

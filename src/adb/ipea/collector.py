@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from adb.core.collectors import BaseCollector
-from adb.core.utils import get_indicator_config
+from adb.core.utils import get_config
 from .client import IPEAClient
 from .indicators import IPEA_CONFIG
 
@@ -83,7 +83,7 @@ class IPEACollector(BaseCollector):
         # Para quarterly, usar monthly (DataManager pula para proximo mes)
         effective_freq = "monthly" if frequency == "quarterly" else frequency
 
-        return self._collect_with_sync(
+        return self._sync(
             fetch_fn=fetch,
             filename=filename,
             name=name,
@@ -118,9 +118,9 @@ class IPEACollector(BaseCollector):
             Dict {indicator_key: DataFrame} com dados coletados
         """
         # Normalizar para lista
-        keys = self._normalize_indicators_list(indicators, IPEA_CONFIG)
+        keys = self._normalize_indicators(indicators, IPEA_CONFIG)
 
-        self._log_collect_start(
+        self._start(
             title="IPEA - Instituto de Pesquisa Economica Aplicada",
             num_indicators=len(keys),
             subdir=self.default_subdir,
@@ -129,7 +129,7 @@ class IPEACollector(BaseCollector):
         )
 
         for key in keys:
-            config = get_indicator_config(IPEA_CONFIG, key)
+            config = get_config(IPEA_CONFIG, key)
 
             self._collect_series(
                 code=config["code"],
@@ -140,5 +140,5 @@ class IPEACollector(BaseCollector):
                 verbose=verbose,
             )
 
-        self._log_collect_end(verbose=verbose)
+        self._end(verbose=verbose)
 
