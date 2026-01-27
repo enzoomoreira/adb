@@ -1,11 +1,8 @@
 """
 Modulo SGS (interno) - Series temporais do BCB.
 
-Para coleta, use: adb.sgs.collect()
-Para query, use: adb.sgs.read()
+Uso via API publica:
+    import adb
+    adb.sgs.collect()
+    adb.sgs.read('selic')
 """
-
-# Apenas config exposto (para referencia)
-from .indicators import SGS_CONFIG
-
-__all__ = ['SGS_CONFIG']

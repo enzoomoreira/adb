@@ -20,8 +20,8 @@ from adb.core.config import (
 )
 from adb.core.log import get_logger
 
-# Logger sem console - warnings de retry vao apenas para arquivo
-logger = get_logger("adb.core.resilience", verbose=False)
+# Logger tecnico - vai apenas para arquivo de log
+logger = get_logger("adb.core.resilience")
 
 
 # Excecoes transientes que justificam retry (rede, parsing, APIs instáveis)

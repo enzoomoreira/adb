@@ -76,7 +76,6 @@ class SidraCollector(BaseCollector):
                 return self.client.get_data(
                     config=config['parameters'],
                     start_date=start_date,
-                    verbose=False
                 )
             
             # Usa o metodo _collect_with_sync do BaseCollector que ja trata
@@ -91,9 +90,6 @@ class SidraCollector(BaseCollector):
                 verbose=verbose,
             )
             
-            if verbose:
-                self.logger.info("")
-
         self._log_collect_end(verbose=verbose)
 
     def get_status(self) -> pd.DataFrame:

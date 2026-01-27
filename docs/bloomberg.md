@@ -250,21 +250,18 @@ flowchart TD
 
 ---
 
-## Exports Publicos
+## API Publica
 
 ```python
-# Via pacote principal (recomendado)
 import adb
-adb.bloomberg.read('brent')
-adb.bloomberg.collect()
 
-# Config de indicadores
-from adb.bloomberg import BLOOMBERG_CONFIG
-
-# Acesso direto (uso interno)
-from adb.bloomberg.collector import BloombergCollector
-from adb.bloomberg.client import BloombergClient
-from adb.bloomberg.explorer import BloombergExplorer
+adb.bloomberg.collect()                      # Coleta todos indicadores
+adb.bloomberg.collect('brent')               # Coleta um indicador
+adb.bloomberg.read('brent')                  # Le dados
+adb.bloomberg.read('brent', start='2020')    # Com filtro de data
+adb.bloomberg.available()                    # Lista indicadores
+adb.bloomberg.info('brent')                  # Detalhes do indicador
+adb.bloomberg.get_status()                   # Status dos arquivos
 ```
 
 ---
@@ -316,6 +313,10 @@ O `BloombergClient` usa o decorator `@retry` para lidar com instabilidades:
 - **exceptions:** `RuntimeError`, `TimeoutError`, `OSError`
 
 A coleta e incremental: se ja existem dados salvos, busca apenas registros novos desde a ultima data.
+
+### Captura de Output do SDK
+
+O SDK `xbbg` gera mensagens de debug no stdout/stderr que podem poluir o terminal. O `BloombergClient` usa um context manager interno para capturar essas mensagens e redirecionalas para o arquivo de log, mantendo o terminal limpo durante a coleta.
 
 ---
 

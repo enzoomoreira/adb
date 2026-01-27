@@ -66,12 +66,11 @@ Indicadores disponiveis em `src/adb/ipea/indicators.py`:
 ### Funcoes Auxiliares
 
 ```python
-from adb.ipea import IPEA_CONFIG
-from adb.core import list_indicators, get_indicator_config, filter_by_field
+import adb
 
-list_indicators(IPEA_CONFIG)                       # Lista chaves
-get_indicator_config(IPEA_CONFIG, 'caged_saldo')   # Config completa
-filter_by_field(IPEA_CONFIG, 'frequency', 'monthly')  # Filtra
+adb.ipea.available()                       # Lista chaves
+adb.ipea.info('caged_saldo')               # Config completa
+adb.ipea.available(frequency='monthly')    # Filtra
 ```
 
 ---
@@ -127,22 +126,18 @@ def get_metadata(code: str) -> dict
 
 ---
 
-## Exports Publicos
+## API Publica
 
 ```python
-# Config (exportado do modulo ipea)
-from adb.ipea import IPEA_CONFIG
-
-# Funcoes auxiliares (centralizadas em core)
-from adb.core import list_indicators, get_indicator_config, filter_by_field
-
-# Interface via explorer (recomendado)
 import adb
-adb.ipea.read(...)
-adb.ipea.collect(...)
-adb.ipea.available()
-adb.ipea.info(...)
-adb.ipea.get_status()
+
+adb.ipea.collect()                           # Coleta todos indicadores
+adb.ipea.collect('caged_saldo')              # Coleta um indicador
+adb.ipea.read('caged_saldo')                 # Le dados
+adb.ipea.read('caged_saldo', start='2020')   # Com filtro de data
+adb.ipea.available()                         # Lista indicadores
+adb.ipea.info('caged_saldo')                 # Detalhes do indicador
+adb.ipea.get_status()                        # Status dos arquivos
 ```
 
 ---

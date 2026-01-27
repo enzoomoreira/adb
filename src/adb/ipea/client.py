@@ -33,7 +33,6 @@ class IPEAClient:
         code: str,
         name: str = None,
         start_date: str = None,
-        verbose: bool = False,
     ) -> pd.DataFrame:
         """
         Busca serie temporal do IPEADATA.
@@ -44,7 +43,6 @@ class IPEAClient:
             code: Codigo da serie no IPEADATA (ex: 'CAGED12_SALDON12')
             name: Nome para identificacao (usado em logs, opcional)
             start_date: Data inicial 'YYYY-MM-DD' (None = historico completo)
-            verbose: Se True, imprime progresso
 
         Returns:
             DataFrame com indice=DatetimeIndex, coluna='value'

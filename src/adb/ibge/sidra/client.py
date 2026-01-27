@@ -30,7 +30,6 @@ class SidraClient:
         self,
         config: dict,
         start_date: str = None,
-        verbose: bool = False
     ) -> pd.DataFrame:
         """
         Busca serie temporal do Sidra de acordo com configuracao.
@@ -38,7 +37,6 @@ class SidraClient:
         Args:
             config: Parte 'parameters' do SIDRA_CONFIG
             start_date: Data inicial 'YYYY-MM-DD' (filtra direto na API)
-            verbose: Se True, imprime logs
 
         Returns:
             DataFrame com serie temporal (index=Date, value=valor)

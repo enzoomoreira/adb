@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from adb.core.data import DataManager
+from adb.core.display import get_display
 from adb.core.log import get_logger
 
 
@@ -41,28 +42,40 @@ class BaseCollector:
         self.data_path = Path(data_path) if data_path else DATA_PATH
         self.data_manager = DataManager(self.data_path)
         self.logger = get_logger(self.__class__.__name__)
+        self.display = get_display()  # Display singleton para output visual
 
     # =========================================================================
-    # Logging (output padronizado)
+    # Display (output visual ao usuario)
     # =========================================================================
 
     def _log_fetch_start(self, name: str, start_date: str = None, verbose: bool = True):
-        """Loga inicio de fetch de indicador."""
-        if not verbose:
-            return
-        if start_date:
-            self.logger.info(f"  Buscando {name} desde {start_date}...")
-        else:
-            self.logger.info(f"  Buscando {name} (historico completo)...")
+        """Exibe inicio de fetch de indicador (console + log tecnico)."""
+        self.display.set_verbose(verbose)
+        self.display.fetch_start(name, start_date)
+        # Log tecnico sempre vai para arquivo
+        self.logger.debug(f"Fetch start: {name}, since={start_date}")
 
     def _log_fetch_result(self, name: str, count: int, verbose: bool = True):
-        """Loga resultado de fetch de indicador."""
-        if not verbose:
-            return
+        """Exibe resultado de fetch de indicador (console + log tecnico)."""
+        self.display.set_verbose(verbose)
+        self.display.fetch_result(count)
+        # Log tecnico sempre vai para arquivo
         if count:
-            self.logger.info(f"  {count:,} registros")
+            self.logger.info(f"Fetch OK: {name}, {count:,} registros")
         else:
-            self.logger.warning(f"  Sem dados disponiveis")
+            self.logger.warning(f"Fetch vazio: {name}")
+
+    def _log_info(self, message: str, verbose: bool = True):
+        """Exibe mensagem informativa (console + log tecnico)."""
+        self.display.set_verbose(verbose)
+        self.display.info(message)
+        self.logger.info(message)
+
+    def _log_warning(self, message: str, verbose: bool = True):
+        """Exibe warning (console + log tecnico)."""
+        self.display.set_verbose(verbose)
+        self.display.warning(message)
+        self.logger.warning(message)
 
     # =========================================================================
     # Status
@@ -140,52 +153,45 @@ class BaseCollector:
         verbose: bool = True
     ):
         """
-        Loga inicio de coleta com banner padronizado.
+        Exibe banner de inicio de coleta (console + log tecnico).
 
         Args:
             title: Titulo principal (ex: "BACEN - Sistema Gerenciador de Series")
             num_indicators: Numero de indicadores a coletar
             subdir: Subdiretorio para checar first_run (opcional)
             check_first_run: Se True, mostra "PRIMEIRA EXECUCAO" vs "ATUALIZACAO"
-            verbose: Se False, nao imprime nada
+            verbose: Se False, nao imprime no console
         """
-        if not verbose:
-            return
-
-        self.logger.info("=" * 70)
-
-        # Se pediu check de primeira execucao
+        # Determinar se e primeira execucao
+        first_run = None
         if check_first_run and subdir:
-            is_first = self.data_manager.is_first_run(subdir)
-            if is_first:
-                self.logger.info("PRIMEIRA EXECUCAO - Download de Historico Completo")
-            else:
-                self.logger.info("ATUALIZACAO INCREMENTAL")
-            self.logger.info("=" * 70)
+            first_run = self.data_manager.is_first_run(subdir)
 
-        self.logger.info(title)
-        self.logger.info("=" * 70)
-        self.logger.info(f"Indicadores a coletar: {num_indicators}")
-        self.logger.info("")
+        # Display visual (console)
+        self.display.set_verbose(verbose)
+        self.display.banner(
+            title=title,
+            first_run=first_run,
+            indicator_count=num_indicators,
+        )
 
-    def _log_collect_end(
-        self,
-        results: dict = None,
-        verbose: bool = True
-    ):
+        # Log tecnico (arquivo)
+        self.logger.info(
+            f"Coleta iniciada: {num_indicators} indicadores, "
+            f"first_run={first_run}, subdir={subdir}"
+        )
+
+    def _log_collect_end(self, results: dict = None, verbose: bool = True):
         """
-        Loga conclusao de coleta com banner padronizado.
+        Exibe banner de conclusao de coleta (console + log tecnico).
 
         Args:
-            results: Dict {key: DataFrame} com resultados (opcional)
-                     Se fornecido, calcula e mostra total de registros
-            verbose: Se False, nao imprime nada
+            results: Dict {key: DataFrame ou int} com resultados (opcional).
+                     Se fornecido, calcula e mostra total de registros.
+            verbose: Se False, nao imprime no console
         """
-        if not verbose:
-            return
-
-        self.logger.info("=" * 70)
-
+        # Calcular total se results fornecido
+        total = None
         if results:
             total = 0
             for res in results.values():
@@ -193,11 +199,16 @@ class BaseCollector:
                     total += res
                 elif hasattr(res, '__len__'):
                     total += len(res)
-            self.logger.info(f"Coleta concluida! Total: {total:,} registros")
-        else:
-            self.logger.info("Coleta concluida!")
 
-        self.logger.info("=" * 70)
+        # Display visual (console)
+        self.display.set_verbose(verbose)
+        self.display.end_banner(total=total)
+
+        # Log tecnico (arquivo)
+        if total is not None:
+            self.logger.info(f"Coleta concluida: {total:,} registros")
+        else:
+            self.logger.info("Coleta concluida")
 
 
     def _calculate_start_date(self, last_date: pd.Timestamp | None, frequency: str) -> str | None:

@@ -1,10 +1,8 @@
 """
 Modulo Bloomberg (interno) - Dados de mercado.
 
-Para coleta, use: adb.bloomberg.collect()
-Para query, use: adb.bloomberg.read()
+Uso via API publica:
+    import adb
+    adb.bloomberg.collect()
+    adb.bloomberg.read('brent')
 """
-
-from .indicators import BLOOMBERG_CONFIG
-
-__all__ = ['BLOOMBERG_CONFIG']

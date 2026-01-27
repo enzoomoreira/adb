@@ -1,10 +1,8 @@
 """
 Modulo Expectations (interno) - Relatorio Focus BCB.
 
-Para coleta, use: adb.expectations.collect()
-Para query, use: adb.expectations.read()
+Uso via API publica:
+    import adb
+    adb.expectations.collect()
+    adb.expectations.read('ipca_anual')
 """
-
-from .indicators import EXPECTATIONS_CONFIG
-
-__all__ = ['EXPECTATIONS_CONFIG']

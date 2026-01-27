@@ -198,10 +198,9 @@ class BaseExplorer:
             verbose: Se True, imprime progresso
             **kwargs: Argumentos extras para o collector
         """
-        self.logger.info(f"Iniciando coleta: {indicators}")
+        # Logs removidos - BaseCollector ja faz banners detalhados
         collector = self._COLLECTOR_CLASS()
         collector.collect(indicators=indicators, save=save, verbose=verbose, **kwargs)
-        self.logger.info("Coleta finalizada")
 
     def get_status(self) -> pd.DataFrame:
         """Retorna status dos arquivos salvos."""

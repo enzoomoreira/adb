@@ -78,7 +78,6 @@ class IPEACollector(BaseCollector):
                 code=code,
                 name=name,
                 start_date=start_date,
-                verbose=False,
             )
 
         # Para quarterly, usar monthly (DataManager pula para proximo mes)
@@ -140,9 +139,6 @@ class IPEACollector(BaseCollector):
                 save=save,
                 verbose=verbose,
             )
-
-            if verbose:
-                self.logger.info("")
 
         self._log_collect_end(verbose=verbose)
 

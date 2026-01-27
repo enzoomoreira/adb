@@ -5,7 +5,6 @@ Logs sao salvos em {PROJECT_ROOT}/logs/ com rotacao automatica.
 """
 
 import logging
-import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
@@ -15,16 +14,25 @@ from adb.core.config import LOG_PATH
 LOG_PATH.mkdir(exist_ok=True)
 
 
-def get_logger(name: str, verbose: bool = True) -> logging.Logger:
+def get_logger(name: str) -> logging.Logger:
     """
-    Retorna instancia de logger configurada.
+    Retorna logger configurado apenas para arquivo.
+
+    Logs vao para {PROJECT_ROOT}/logs/adb_YYYY-MM-DD.log
+
+    O arquivo .log contem informacoes tecnicas para debugging:
+    - Timestamps precisos
+    - Niveis (DEBUG, INFO, WARNING, ERROR)
+    - Nome do modulo
+    - Stack traces de erros
+
+    Para output visual ao usuario, use Display de core.display.
 
     Args:
         name: Nome do logger (geralmente __name__ ou nome da classe)
-        verbose: Se True, adiciona handler de console (nivel INFO)
 
     Returns:
-        logging.Logger configurado
+        logging.Logger configurado (apenas file handler)
     """
     logger = logging.getLogger(name)
 
@@ -54,13 +62,6 @@ def get_logger(name: str, verbose: bool = True) -> logging.Logger:
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
-    # Console Handler (nivel INFO - visivel ao usuario)
-    if verbose:
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.INFO)
-        # Formato simples para console (compativel com prints antigos)
-        console_formatter = logging.Formatter('%(message)s')
-        console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
+    # Console handler removido - usar Display para output visual
 
     return logger

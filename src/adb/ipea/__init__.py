@@ -1,10 +1,8 @@
 """
 Modulo IPEA (interno) - Series IPEADATA.
 
-Para coleta, use: adb.ipea.collect()
-Para query, use: adb.ipea.read()
+Uso via API publica:
+    import adb
+    adb.ipea.collect()
+    adb.ipea.read('caged_saldo')
 """
-
-from .indicators import IPEA_CONFIG
-
-__all__ = ['IPEA_CONFIG']

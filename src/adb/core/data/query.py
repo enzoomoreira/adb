@@ -12,7 +12,11 @@ import pandas as pd
 import duckdb
 import pyarrow.parquet as pq
 
+from adb.core.log import get_logger
 from adb.core.utils.dates import DATE_COLUMNS
+
+# Logger global para erros de query
+logger = get_logger(__name__)
 
 
 class QueryEngine:
@@ -119,7 +123,8 @@ class QueryEngine:
             df = duckdb.sql(sql).df()
             return df
         except Exception as e:
-            print(f"Erro lendo {filename}: {e}")
+            # Logar erro tecnicamente (nao exibir para usuario)
+            logger.error(f"Erro lendo {filename}: {e}")
             return pd.DataFrame()
 
     def read_glob(

@@ -115,13 +115,17 @@ Indicadores disponiveis em `src/adb/mte/caged/indicators.py`:
 | cagedfor | CAGEDFOR | Declaracoes fora do prazo | 2020 |
 | cagedexc | CAGEDEXC | Exclusoes de movimentacoes | 2020 |
 
-### Acesso a Configuracao
+### Informacoes dos Indicadores
 
 ```python
-from adb.mte import CAGED_CONFIG
+import adb
 
-# Estrutura de cada indicador
-CAGED_CONFIG['cagedmov']
+# Listar indicadores disponiveis
+adb.caged.info()
+# {'cagedmov': {...}, 'cagedfor': {...}, 'cagedexc': {...}}
+
+# Detalhes de um indicador
+adb.caged.info('cagedmov')
 # {
 #     "prefix": "CAGEDMOV",
 #     "name": "Movimentacoes",

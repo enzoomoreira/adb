@@ -4,6 +4,9 @@ Cliente Bloomberg via xbbg.
 Wrapper que adapta xbbg.blp ao padrao do projeto.
 """
 
+import contextlib
+import io
+import sys
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -12,6 +15,47 @@ import xbbg.blp as blp
 from adb.core.log import get_logger
 from adb.core.resilience import retry
 from .indicators import LOOKBACK_DAYS
+
+
+@contextlib.contextmanager
+def _capture_external_output(logger):
+    """
+    Captura stdout/stderr de bibliotecas externas e envia para logger.
+
+    O SDK xbbg (Bloomberg) imprime mensagens de debug diretamente no stdout/stderr,
+    gerando ruido no terminal. Este context manager captura esse output e redireciona
+    para o arquivo de log, mantendo o terminal limpo.
+
+    Args:
+        logger: Logger para onde redirecionar o output capturado
+
+    Yields:
+        None
+    """
+    stdout_capture = io.StringIO()
+    stderr_capture = io.StringIO()
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+
+    try:
+        sys.stdout = stdout_capture
+        sys.stderr = stderr_capture
+        yield
+    finally:
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+
+        # Enviar output capturado para o log
+        stdout_content = stdout_capture.getvalue().strip()
+        stderr_content = stderr_capture.getvalue().strip()
+
+        if stdout_content:
+            for line in stdout_content.split('\n'):
+                if line.strip():
+                    logger.debug(f"SDK stdout: {line}")
+
+        if stderr_content:
+            for line in stderr_content.split('\n'):
+                if line.strip():
+                    logger.warning(f"SDK stderr: {line}")
 
 
 class BloombergClient:
@@ -40,7 +84,6 @@ class BloombergClient:
         name: str = None,
         start_date: str = None,
         end_date: str = None,
-        verbose: bool = False,
     ) -> pd.DataFrame:
         """
         Busca serie temporal historica do Bloomberg.
@@ -53,7 +96,6 @@ class BloombergClient:
             name: Nome para logging (opcional)
             start_date: Data inicial 'YYYY-MM-DD' (None = usa LOOKBACK_DAYS)
             end_date: Data final 'YYYY-MM-DD' (None = hoje)
-            verbose: Deprecado, mantido para compatibilidade
 
         Returns:
             DataFrame com DatetimeIndex e coluna 'value'
@@ -80,12 +122,14 @@ class BloombergClient:
             # - Index: DatetimeIndex
             # - Columns: MultiIndex (ticker, field) se multiplos tickers/fields
             #            ou Index simples se 1 ticker + 1 field
-            df = blp.bdh(
-                tickers=ticker,
-                flds=field,
-                start_date=start_date,
-                end_date=end_date,
-            )
+            # Captura stdout/stderr do SDK para evitar ruido no terminal
+            with _capture_external_output(self.logger):
+                df = blp.bdh(
+                    tickers=ticker,
+                    flds=field,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
 
             if df is None or df.empty:
                 return pd.DataFrame()
@@ -118,7 +162,8 @@ class BloombergClient:
             Retorna DataFrame vazio em caso de erro
         """
         try:
-            df = blp.bdp(tickers, fields)
+            with _capture_external_output(self.logger):
+                df = blp.bdp(tickers, fields)
             return df if df is not None else pd.DataFrame()
         except Exception:
             return pd.DataFrame()

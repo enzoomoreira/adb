@@ -1,39 +1,36 @@
 """
-Modulo core - API centralizada do agora-database.
+Modulo core - Componentes internos do agora-database.
 
-Query:
-    from adb.core.data import sgs, caged, expectations, ipea, bloomberg, sidra
+API publica via pacote principal:
+    import adb
+    adb.sgs.read('selic')
+    adb.caged.read(year=2024)
 
-    df = sgs.read('selic', start='2020')
-    df = caged.read(year=2025, uf=35)
-
-Classes (uso avancado):
-    from adb.core.data import QueryEngine, DataManager
-    from adb.core.collectors import BaseCollector
+Classes para uso avancado:
+    from adb import QueryEngine, DataManager
 """
 
-# API de coleta (apenas base class)
+# API de coleta (apenas base class, uso interno)
 from .collectors import BaseCollector
 
 # API de dados
 from .data import DataManager, QueryEngine
 
-# Utilitarios
-from .utils import get_indicator_config, list_indicators, filter_by_field
+# Display (output visual ao usuario, uso interno)
+from .display import Display, get_display
 
 # Config global
 from .config import PROJECT_ROOT, DATA_PATH
 
 __all__ = [
-    # Coleta
+    # Coleta (interno)
     'BaseCollector',
     # Dados
     'DataManager',
     'QueryEngine',
-    # Utilitarios
-    'get_indicator_config',
-    'list_indicators',
-    'filter_by_field',
+    # Display (interno)
+    'Display',
+    'get_display',
     # Config
     'PROJECT_ROOT',
     'DATA_PATH',

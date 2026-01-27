@@ -13,7 +13,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import py7zr
 import duckdb
 import pandas as pd
-from tqdm.auto import tqdm
 
 from adb.core.collectors import BaseCollector
 from adb.core.utils import get_indicator_config
@@ -214,13 +213,11 @@ class CAGEDCollector(BaseCollector):
             missing = self._get_missing_periods(key, subdir, config["start_year"])
 
             if not missing:
-                if verbose:
-                    print(f"  {config['name']}: Dados atualizados")
+                self._log_info(f"{config['name']}: Dados atualizados", verbose)
                 results[key] = 0
                 continue
 
-            if verbose:
-                print(f"  {config['name']}: Baixando {len(missing)} meses...")
+            self._log_info(f"  {config['name']}: Baixando {len(missing)} meses...", verbose)
 
             total_rows = 0
             errors = []
@@ -232,26 +229,21 @@ class CAGEDCollector(BaseCollector):
                     executor.submit(self._fetch_single_period, key, year, month): (year, month)
                     for year, month in missing
                 }
-                
-                # Barra de progresso
-                pbar = tqdm(
+
+                # Barra de progresso via Display (thread-safe com _print)
+                with self.display.progress(
                     as_completed(future_to_period),
                     total=len(missing),
                     desc=f"  {config['prefix']}",
-                    unit="mês",
-                    disable=not verbose,
-                    leave=False
-                )
-                
-                for future in pbar:
-                    year, month, rows, error = future.result()
-                    
-                    if error:
-                        errors.append(f"{year}-{month:02d}: {error}")
-                    else:
-                        total_rows += rows
-                
-                pbar.close()
+                    unit="mes",
+                ) as pbar:
+                    for future in pbar:
+                        year, month, rows, error = future.result()
+
+                        if error:
+                            errors.append(f"{year}-{month:02d}: {error}")
+                        else:
+                            total_rows += rows
 
             if errors:
                 self.logger.warning(f"  {len(errors)} periodo(s) falharam: {', '.join(errors[:3])}")

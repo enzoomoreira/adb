@@ -13,6 +13,7 @@ import tempfile
 import duckdb
 import pandas as pd
 
+from adb.core.display import get_display
 from adb.core.utils.dates import normalize_date_index
 
 
@@ -39,10 +40,13 @@ class DataManager:
         self.base_path = Path(base_path) if base_path else DATA_PATH
         self.raw_path = self.base_path / 'raw'
         self.processed_path = self.base_path / 'processed'
-        
+
         # Composicao: usa QueryEngine para leituras otimizadas (DuckDB)
         from adb.core.data.query import QueryEngine
         self._qe = QueryEngine(self.base_path)
+
+        # Display singleton para feedback visual ao usuario
+        self._display = get_display()
 
     # =========================================================================
     # CRUD Principal
@@ -96,7 +100,7 @@ class DataManager:
             raise ValueError(f"Formato '{format}' nao suportado. Use 'parquet' ou 'csv'.")
 
         if verbose:
-            print(f"Salvo: {filepath.relative_to(self.base_path)}")
+            self._display.saved(str(filepath.relative_to(self.base_path)))
 
     def read(
         self,
@@ -219,7 +223,7 @@ class DataManager:
             temp_path.replace(filepath)
             
             if verbose:
-                print(f"Append: {filepath.relative_to(self.base_path)}")
+                self._display.appended(str(filepath.relative_to(self.base_path)))
                 
         except Exception as e:
             # Cleanup em caso de erro

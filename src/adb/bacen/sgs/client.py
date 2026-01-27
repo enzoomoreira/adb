@@ -102,7 +102,6 @@ class SGSClient:
         name: str,
         frequency: str,
         start_date: str = None,
-        verbose: bool = False,
     ) -> pd.DataFrame:
         """
         Busca serie temporal do SGS.
@@ -115,7 +114,6 @@ class SGSClient:
             name: Nome para a coluna no DataFrame
             frequency: 'daily' ou 'monthly'
             start_date: Data inicial 'YYYY-MM-DD' (None = historico completo desde 1980)
-            verbose: Deprecado, mantido para compatibilidade
 
         Returns:
             DataFrame com serie temporal

@@ -29,7 +29,8 @@ agora-database/
 │       ├── core/                 # Modulo central (Core Services)
 │       │   ├── __init__.py       # API publica centralizada
 │       │   ├── config.py         # Configuracao global (paths, timeouts)
-│       │   ├── log.py            # Sistema de logging (arquivo + console)
+│       │   ├── log.py            # Logging tecnico (apenas arquivo)
+│       │   ├── display.py        # Output visual ao usuario (console)
 │       │   ├── resilience.py     # Retry, backoff e tratamento de erros
 │       │   ├── exceptions.py     # Excecoes customizadas (ADBException)
 │       │   ├── collectors/       # Abstracao de coleta

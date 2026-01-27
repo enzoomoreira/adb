@@ -152,8 +152,5 @@ class ExpectationsCollector(BaseCollector):
                 verbose=verbose,
             )
 
-            if verbose:
-                print()
-
         self._log_collect_end(verbose=verbose)
 

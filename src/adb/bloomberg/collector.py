@@ -81,7 +81,6 @@ class BloombergCollector(BaseCollector):
                 field=field,
                 name=name,
                 start_date=start_date,
-                verbose=False,
             )
 
         return self._collect_with_sync(

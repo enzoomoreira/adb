@@ -82,12 +82,11 @@ Configurados em `src/adb/bacen/sgs/indicators.py`:
 ### Funcoes Auxiliares
 
 ```python
-from adb.bacen import SGS_CONFIG
-from adb.core import list_indicators, get_indicator_config, filter_by_field
+import adb
 
-list_indicators(SGS_CONFIG)                        # Lista todas as chaves
-get_indicator_config(SGS_CONFIG, 'selic')          # Config do indicador
-filter_by_field(SGS_CONFIG, 'frequency', 'daily')  # Filtra por frequencia
+adb.sgs.available()                        # Lista todas as chaves
+adb.sgs.info('selic')                      # Config do indicador
+adb.sgs.available(frequency='daily')       # Filtra por frequencia
 ```
 
 ---
@@ -239,25 +238,25 @@ def collect(
 
 ---
 
-## Exports Publicos
+## API Publica
 
 ```python
-# Configs (exportados de adb.bacen)
-from adb.bacen import SGS_CONFIG, EXPECTATIONS_CONFIG
-
-# Funcoes auxiliares (centralizadas em adb.core)
-from adb.core import (
-    list_indicators,
-    get_indicator_config,
-    filter_by_field,
-)
-
-# Interface centralizada (recomendado)
 import adb
-adb.sgs.collect()
-adb.sgs.read('selic')
+
+# SGS - Series temporais
+adb.sgs.collect()                          # Coleta todos indicadores
+adb.sgs.collect('selic')                   # Coleta um indicador
+adb.sgs.read('selic')                      # Le dados
+adb.sgs.read('selic', start='2020')        # Com filtro de data
+adb.sgs.available()                        # Lista indicadores
+adb.sgs.info('selic')                      # Detalhes do indicador
+adb.sgs.get_status()                       # Status dos arquivos
+
+# Expectations - Relatorio Focus
 adb.expectations.collect()
 adb.expectations.read('ipca_anual')
+adb.expectations.available()
+adb.expectations.info('ipca_anual')
 ```
 
 ---

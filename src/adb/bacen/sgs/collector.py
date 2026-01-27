@@ -80,7 +80,6 @@ class SGSCollector(BaseCollector):
                 name=name,
                 frequency=frequency,
                 start_date=start_date,
-                verbose=False,
             )
 
         return self._collect_with_sync(
@@ -141,9 +140,6 @@ class SGSCollector(BaseCollector):
                 save=save,
                 verbose=verbose,
             )
-
-            if verbose:
-                self.logger.info("")
 
         self._log_collect_end(verbose=verbose)
 

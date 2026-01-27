@@ -125,12 +125,11 @@ Configurados em `src/adb/ibge/sidra/indicators.py`:
 ### Funcoes Auxiliares
 
 ```python
-from adb.ibge.sidra import SIDRA_CONFIG
-from adb.core import list_indicators, get_indicator_config, filter_by_field
+import adb
 
-list_indicators(SIDRA_CONFIG)                         # Lista todas as chaves
-get_indicator_config(SIDRA_CONFIG, 'ipca')            # Config do indicador
-filter_by_field(SIDRA_CONFIG, 'frequency', 'monthly') # Filtra por frequencia
+adb.sidra.available()                         # Lista todas as chaves
+adb.sidra.info('ipca')                        # Config do indicador
+adb.sidra.available(frequency='monthly')      # Filtra por frequencia
 ```
 
 ---
@@ -189,22 +188,18 @@ def collect(
 
 ---
 
-## Exports Publicos
+## API Publica
 
 ```python
-# Config (exportado do modulo ibge.sidra)
-from adb.ibge.sidra import SIDRA_CONFIG
-
-# Funcoes auxiliares (centralizadas em core)
-from adb.core import list_indicators, get_indicator_config, filter_by_field
-
-# Interface via explorer (recomendado)
 import adb
-adb.sidra.read(...)
-adb.sidra.collect(...)
-adb.sidra.available()
-adb.sidra.info(...)
-adb.sidra.get_status()
+
+adb.sidra.collect()                          # Coleta todos indicadores
+adb.sidra.collect('ipca')                    # Coleta um indicador
+adb.sidra.read('ipca')                       # Le dados
+adb.sidra.read('ipca', start='2020')         # Com filtro de data
+adb.sidra.available()                        # Lista indicadores
+adb.sidra.info('ipca')                       # Detalhes do indicador
+adb.sidra.get_status()                       # Status dos arquivos
 ```
 
 ---

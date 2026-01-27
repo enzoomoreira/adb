@@ -9,7 +9,8 @@ Documentacao do modulo central do projeto agora-database.
 O modulo `adb.core` fornece a infraestrutura compartilhada por todos os coletores e exploradores de dados. Inclui:
 
 - **Configuracao** - Paths e constantes globais
-- **Logging** - Sistema centralizado com rotacao de arquivos
+- **Logging** - Logs tecnicos em arquivo com rotacao
+- **Display** - Output visual ao usuario (banners, progresso, cores ANSI)
 - **Resiliencia** - Retry com backoff exponencial para APIs
 - **Excecoes** - Hierarquia de erros customizados
 - **Collectors** - Classe base para coleta de dados
@@ -23,7 +24,8 @@ O modulo `adb.core` fornece a infraestrutura compartilhada por todos os coletore
 src/adb/core/
 ├── __init__.py           # API publica centralizada
 ├── config.py             # Configuracao global (paths, timeouts)
-├── log.py                # Sistema de logging
+├── log.py                # Logging tecnico (apenas arquivo)
+├── display.py            # Output visual ao usuario (console)
 ├── resilience.py         # Decorator @retry
 ├── exceptions.py         # Excecoes customizadas
 ├── collectors/
@@ -44,24 +46,16 @@ src/adb/core/
 ## Imports Principais
 
 ```python
-# Classes de dados
-from adb.core import DataManager, QueryEngine, BaseCollector
+# API publica (recomendado)
+import adb
+adb.sgs.read('selic')
+adb.caged.read(year=2024)
 
-# Funcoes auxiliares
-from adb.core import list_indicators, get_indicator_config, filter_by_field
+# Classes para uso avancado
+from adb import QueryEngine, DataManager
 
-# Configuracao
-from adb.core import PROJECT_ROOT, DATA_PATH
-
-# Exploradores (lazy-loaded)
-from adb.core.data import sgs, caged, expectations, ipea, bloomberg, sidra
-
-# Logging e resiliencia (uso interno/avancado)
-from adb.core.log import get_logger
-from adb.core.resilience import retry
-
-# Excecoes
-from adb.core.exceptions import ADBException, DataNotFoundError, APIError
+# Configuracao de paths
+from adb import PROJECT_ROOT, DATA_PATH, OUTPUTS_PATH
 ```
 
 ---
@@ -104,30 +98,94 @@ print(DATA_PATH)     # Path do diretorio de dados
 
 **Localizacao:** `src/adb/core/log.py`
 
-Sistema de logging centralizado com saida dual (arquivo + console).
+Sistema de logging tecnico centralizado. Registra informacoes detalhadas apenas em arquivo para debugging e auditoria.
 
-### get_logger(name, verbose=True)
+### get_logger(name)
 
 Cria ou retorna logger configurado.
 
-| Parametro | Tipo | Default | Descricao |
-|-----------|------|---------|-----------|
-| name | str | - | Nome do logger (geralmente `__name__`) |
-| verbose | bool | True | Habilita saida no console |
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| name | str | Nome do logger (geralmente `__name__`) |
 
 **Retorno:** `logging.Logger`
 
 **Caracteristicas:**
 - **Arquivo:** DEBUG+, rotacao 10MB, 5 backups em `logs/adb_YYYY-MM-DD.log`
-- **Console:** INFO+ (apenas se `verbose=True`)
 - **Formato:** `[YYYY-MM-DD HH:MM:SS] LEVEL [logger_name] message`
+- **Sem console:** Output visual ao usuario e feito via `Display` (ver `core.display`)
 
 ```python
 from adb.core.log import get_logger
 
 logger = get_logger(__name__)
-logger.info("Iniciando coleta...")
-logger.debug("Detalhes tecnicos")  # Apenas no arquivo
+logger.info("Registro tecnico para arquivo")
+logger.debug("Detalhes de debugging")
+```
+
+---
+
+## core.display
+
+**Localizacao:** `src/adb/core/display.py`
+
+Sistema de output visual para o usuario. Separa feedback visual (console) de logging tecnico (arquivo).
+
+### Display
+
+Classe que gerencia output visual. Responsabilidades:
+- Banners e separadores
+- Mensagens de progresso e status
+- Barras de progresso (via tqdm)
+- Formatacao consistente
+- Cores ANSI para destaque (warning/error/banners)
+
+**Thread-safety:**
+- Usa `tqdm.write()` quando ha barras ativas (evita output corrompido)
+- Contador de barras protegido por lock
+
+| Parametro | Tipo | Default | Descricao |
+|-----------|------|---------|-----------|
+| verbose | bool | True | Se True, exibe mensagens. Se False, silencia tudo |
+| stream | TextIO | sys.stdout | Stream de saida |
+| colors | bool | True | Usa cores ANSI quando suportado |
+
+#### Metodos
+
+| Metodo | Descricao |
+|--------|-----------|
+| `banner(title, subtitle, first_run, indicator_count)` | Banner de inicio de coleta |
+| `end_banner(total)` | Banner de conclusao |
+| `separator()` | Linha separadora |
+| `fetch_start(name, since)` | Inicio de fetch de indicador |
+| `fetch_result(count)` | Resultado de fetch |
+| `saved(path)` | Arquivo salvo |
+| `appended(path)` | Arquivo atualizado (append) |
+| `warning(message)` | Aviso (amarelo) |
+| `error(message)` | Erro (vermelho) |
+| `info(message)` | Mensagem informativa |
+| `progress(iterable, total, desc, unit, leave)` | Barra de progresso |
+
+### get_display(verbose=True)
+
+Retorna instancia unica de Display (Singleton thread-safe).
+
+Usa double-checked locking para performance:
+- Primeiro check sem lock (rapido, 99% dos casos)
+- Segundo check com lock (apenas na criacao)
+
+```python
+from adb.core.display import get_display
+
+display = get_display(verbose=True)
+display.banner("BACEN - SGS", indicator_count=10, first_run=True)
+display.fetch_start("selic", "2024-01-01")
+display.fetch_result(275)
+display.end_banner(total=275)
+
+# Com barra de progresso
+for item in display.progress(items, total=100, desc="Processando"):
+    process(item)
 ```
 
 ---
@@ -467,67 +525,20 @@ Funcoes auxiliares compartilhadas.
 
 **Localizacao:** `src/adb/core/utils/indicators.py`
 
-#### list_indicators(config, frequency=None)
-
-Lista chaves de indicadores disponiveis.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| config | dict | Dicionario de configuracao |
-| frequency | str | Filtrar por frequencia (opcional) |
-
-**Retorno:** `list[str]`
+> **Nota:** Funcoes de uso interno. Para o usuario final, usar os metodos do explorer:
 
 ```python
-from adb.core import list_indicators
-from adb.bacen import SGS_CONFIG
+import adb
 
-list_indicators(SGS_CONFIG)
-# ['selic', 'cdi', 'dolar_ptax', ...]
+# Listar indicadores
+adb.sgs.available()                        # ['selic', 'cdi', ...]
+adb.sgs.available(frequency='daily')       # Filtrado
 
-list_indicators(SGS_CONFIG, frequency='daily')
-# ['selic', 'cdi', 'dolar_ptax', 'euro_ptax']
-```
+# Obter config de um indicador
+adb.sgs.info('selic')                      # {'code': 432, 'name': ...}
 
-#### get_indicator_config(config, key)
-
-Obtem configuracao de um indicador.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| config | dict | Dicionario de configuracao |
-| key | str | Chave do indicador |
-
-**Retorno:** `dict`
-
-**Raises:** `KeyError` se indicador nao existe
-
-```python
-from adb.core import get_indicator_config
-from adb.bacen import SGS_CONFIG
-
-cfg = get_indicator_config(SGS_CONFIG, 'selic')
-# {'code': 432, 'name': 'Meta Selic', 'frequency': 'daily'}
-```
-
-#### filter_by_field(config, field, value)
-
-Filtra indicadores por campo.
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| config | dict | Dicionario de configuracao |
-| field | str | Campo para filtrar |
-| value | any | Valor esperado |
-
-**Retorno:** `dict` (subconjunto da config)
-
-```python
-from adb.core import filter_by_field
-from adb.bacen import SGS_CONFIG
-
-monthly = filter_by_field(SGS_CONFIG, 'frequency', 'monthly')
-# {'ibc_br_bruto': {...}, 'ipca': {...}, ...}
+# Listar todos com detalhes
+adb.sgs.info()                             # {'selic': {...}, 'cdi': {...}}
 ```
 
 ### Funcoes de Datas
