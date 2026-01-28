@@ -2,16 +2,13 @@
 Explorer CAGED - Interface pythonica para query de microdados.
 
 Uso:
-    from adb.core.data import caged
+    import adb
 
-    df = caged.read(year=2025)
-    df = caged.read(year=2025, month=10, uf=35)
-    df = caged.saldo_por_uf(year=2025)
-    df = caged.saldo_mensal(year=2025)
-
-Otimizacao:
-    - Leituras (read): QueryEngine com DuckDB (eficiente em memoria)
-    - Agregacoes (saldo_*): QueryEngine com DuckDB (SQL nativo)
+    df = adb.caged.read(year=2024)
+    df = adb.caged.read(year=2024, month=6, uf=35)
+    df = adb.caged.saldo_por_uf(year=2024)
+    df = adb.caged.saldo_mensal(year=2024)
+    print(adb.caged.available_periods())
 """
 
 from typing import List

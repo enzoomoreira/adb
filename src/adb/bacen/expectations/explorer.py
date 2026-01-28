@@ -2,17 +2,17 @@
 Explorer Expectations - Interface pythonica para query de expectativas Focus.
 
 Uso:
-    from adb.core.data import expectations
+    import adb
 
     # Dados brutos (todas as colunas)
-    df = expectations.read('ipca_anual')
-    df = expectations.read('ipca_anual', start='2023')
+    df = adb.expectations.read('ipca_anual')
+    df = adb.expectations.read('ipca_anual', start='2024')
 
     # Serie processada (pronta para plot)
-    df = expectations.read('selic_anual', year=2027)       # Expectativa Selic fim 2027
-    df = expectations.read('ipca_12m', smooth=True)        # IPCA 12m suavizado
+    df = adb.expectations.read('selic_anual', year=2027)     # Expectativa Selic fim 2027
+    df = adb.expectations.read('ipca_12m', smooth=True)      # IPCA 12m suavizado
 
-    print(expectations.available())
+    print(adb.expectations.available())
 """
 
 from typing import List
