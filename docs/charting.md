@@ -39,9 +39,14 @@ df.agora.plot(
     title: str = None,          # Titulo do grafico
     units: str = None,          # Formatacao do eixo Y: 'BRL', 'USD', '%', 'points', 'human'
     source: str = None,         # Fonte dos dados para rodape (ex: 'BCB', 'IBGE')
-    highlight_last: bool = False,  # Destaca ultimo valor com ponto e label (apenas line)
+    highlight_last: bool = False,  # Destaca ultimo valor com ponto e label
     y_origin: str = 'zero',     # Origem do eixo Y para barras: 'zero' ou 'auto'
     save_path: str = None,      # Caminho para salvar a imagem (opcional)
+    # Overlays
+    moving_avg: int = None,     # Janela da media movel (ex: 12 para MM12)
+    show_ath: bool = False,     # Mostra linha no All-Time High
+    show_atl: bool = False,     # Mostra linha no All-Time Low
+    overlays: dict = None,      # Overlays customizados (ver secao Overlays)
     **kwargs                    # Argumentos extras repassados para matplotlib
 )
 ```
@@ -80,6 +85,7 @@ df_saldo.agora.plot(
     title="Saldo do CAGED",
     units='human',
     y_origin='auto',
+    highlight_last=True,  # Destaca ultima barra
     source='MTE'
 )
 ```
@@ -100,13 +106,95 @@ df.agora.save("output/charts/meu_grafico.png")
 
 ---
 
+## Overlays
+
+Overlays sao elementos visuais secundarios que podem ser adicionados sobre os dados principais do grafico.
+
+### Media Movel
+
+```python
+df.agora.plot(
+    title="Selic com Media Movel",
+    moving_avg=12,  # MM12
+    source='BCB'
+)
+```
+
+### Linhas ATH/ATL
+
+Adiciona linhas horizontais no maximo (All-Time High) e/ou minimo (All-Time Low) historico:
+
+```python
+df.agora.plot(
+    title="IPCA com Extremos",
+    show_ath=True,  # Linha verde no valor maximo
+    show_atl=True,  # Linha vermelha no valor minimo
+    source='IBGE'
+)
+```
+
+### Linhas Horizontais Customizadas
+
+Use o parametro `overlays['hlines']` para adicionar linhas de referencia arbitrarias:
+
+```python
+df.agora.plot(
+    title="IPCA vs Meta",
+    overlays={
+        'hlines': [
+            {'value': 3.0, 'label': 'Meta', 'color': 'green'},
+            {'value': 4.5, 'label': 'Teto', 'color': 'orange', 'linestyle': ':'},
+            {'value': 1.5, 'label': 'Piso', 'color': 'orange', 'linestyle': ':'},
+        ]
+    },
+    source='IBGE'
+)
+```
+
+### Bandas Sombreadas
+
+Use `overlays['band']` para adicionar faixas de referencia (ex: banda de tolerancia da meta de inflacao):
+
+```python
+df.agora.plot(
+    title="IPCA com Banda de Meta",
+    overlays={
+        'band': {'lower': 1.5, 'upper': 4.5, 'color': 'green', 'alpha': 0.1, 'label': 'Meta'}
+    },
+    source='IBGE'
+)
+```
+
+### Combinando Overlays
+
+Todos os tipos de overlay podem ser combinados:
+
+```python
+df.agora.plot(
+    title="Analise Completa",
+    moving_avg=12,
+    show_ath=True,
+    overlays={
+        'hlines': [{'value': 0, 'label': 'Zero', 'linestyle': '-'}],
+        'band': {'lower': -2, 'upper': 2, 'alpha': 0.1}
+    }
+)
+```
+
+---
+
 ## Transformacoes de Series Temporais
 
 O modulo exporta funcoes utilitarias para transformacao de dados antes da plotagem:
 
 ```python
-from adb.core.charting import yoy, mom, accum_12m, diff, normalize
+from adb.core.charting import (
+    yoy, mom, accum_12m, diff, normalize,
+    annualize_daily, compound_rolling, real_rate, to_month_end
+)
 ```
+
+### Transformacoes Basicas
 
 | Funcao | Descricao | Exemplo |
 |--------|-----------|---------|
@@ -115,6 +203,36 @@ from adb.core.charting import yoy, mom, accum_12m, diff, normalize
 | `accum_12m(df)` | Variacao acumulada em 12 meses | `accum_12m(df).agora.plot()` |
 | `diff(df, periods=1)` | Diferenca absoluta entre periodos | `diff(df).agora.plot()` |
 | `normalize(df, base=100, base_date=None)` | Normaliza para valor base em data especifica | `normalize(df, base_date='2020-01-01').agora.plot()` |
+
+### Transformacoes de Juros
+
+| Funcao | Descricao | Exemplo |
+|--------|-----------|---------|
+| `annualize_daily(df, trading_days=252)` | Anualiza taxa diaria usando juros compostos | `annualize_daily(cdi_diario)` |
+| `compound_rolling(df, window=12)` | Retorno composto em janela movel (ex: Selic 12m) | `compound_rolling(selic_mensal)` |
+| `real_rate(nominal, inflation)` | Juros real via Equacao de Fisher | `real_rate(selic_12m, ipca_12m)` |
+| `to_month_end(df)` | Normaliza indice temporal para fim do mes | `to_month_end(selic)` |
+
+#### Exemplo: Juros Real
+
+```python
+from adb.core.charting import compound_rolling, real_rate, to_month_end
+
+# Calcula Selic acumulada 12 meses
+selic_mensal = adb.sgs.read('selic_acum_mensal')
+selic_12m = compound_rolling(selic_mensal)
+
+# Le IPCA 12 meses
+ipca_12m = adb.sidra.read('ipca_12m')
+
+# Alinha indices para fim do mes antes de operar
+selic_12m = to_month_end(selic_12m)
+ipca_12m = to_month_end(ipca_12m)
+
+# Calcula juros real
+juros_real = real_rate(selic_12m, ipca_12m)
+juros_real.agora.plot(title="Juros Real (Selic - IPCA)", units='%')
+```
 
 ---
 
@@ -126,9 +244,9 @@ O parametro `units` controla a formatacao dos valores no eixo Y:
 |-------|---------|---------|
 | `'BRL'` | Real brasileiro | R$ 1.234,56 |
 | `'USD'` | Dolar americano | $ 1,234.56 |
-| `'%'` | Percentual | 10,5% |
-| `'points'` | Pontos base | 10.5 p.p. |
-| `'human'` | Notacao abreviada | 1.2M, 500k |
+| `'%'` | Percentual | 10.000,5% |
+| `'points'` | Numeros com separador de milhar BR | 1.234.567 |
+| `'human'` | Notacao abreviada | 1,2M, 500k |
 
 ---
 
@@ -202,7 +320,13 @@ src/adb/core/charting/
 │       └── BradescoSans-Light.ttf
 ├── components/
 │   ├── footer.py         # Componente de rodape
-│   └── markers.py        # Destaque de pontos
+│   ├── markers.py        # Destaque de pontos
+│   └── collision.py      # Resolucao de colisoes entre labels
+├── overlays/
+│   ├── __init__.py       # Exports do modulo
+│   ├── moving_average.py # Media movel
+│   ├── reference_lines.py # Linhas ATH/ATL e hlines
+│   └── bands.py          # Bandas sombreadas
 ├── plots/
 │   ├── line.py           # Implementacao de grafico de linhas
 │   └── bar.py            # Implementacao de grafico de barras
@@ -231,11 +355,16 @@ from adb.core.charting import (
     AgoraPlotter,     # Engine (uso avancado)
     theme,            # Instancia global do tema
     CHARTS_PATH,      # Diretorio de saida
-    # Transformacoes
+    # Transformacoes basicas
     yoy,
     mom,
     accum_12m,
     diff,
     normalize,
+    # Transformacoes de juros
+    annualize_daily,
+    compound_rolling,
+    real_rate,
+    to_month_end,
 )
 ```

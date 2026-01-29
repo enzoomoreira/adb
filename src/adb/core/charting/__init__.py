@@ -11,14 +11,25 @@ Uso:
     df.agora.plot(kind='bar', title='Titulo', units='%')
 
     # Transformacoes
-    from adb.core.charting import yoy, mom, accum_12m
+    from adb.core.charting import yoy, mom, accum_12m, annualize_daily
     df_yoy = yoy(df)
+    cdi_anual = annualize_daily(cdi_diario)
 """
 
 from .accessor import AgoraAccessor
 from .engine import AgoraPlotter
 from .styling.theme import theme
-from .transforms import yoy, mom, accum_12m, diff, normalize
+from .transforms import (
+    yoy,
+    mom,
+    accum_12m,
+    diff,
+    normalize,
+    annualize_daily,
+    compound_rolling,
+    real_rate,
+    to_month_end,
+)
 from .config import CHARTS_PATH
 
 __all__ = [
@@ -32,4 +43,8 @@ __all__ = [
     'accum_12m',
     'diff',
     'normalize',
+    'annualize_daily',
+    'compound_rolling',
+    'real_rate',
+    'to_month_end',
 ]

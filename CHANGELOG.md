@@ -1,5 +1,41 @@
 # Project Changelog
 
+## [2026-01-29 15:56]
+
+### Added
+- Sistema de overlays para graficos:
+  - Media movel (`moving_avg` parameter)
+  - Linhas ATH/ATL (`show_ath`, `show_atl`)
+  - Linhas horizontais customizadas (`overlays['hlines']`)
+  - Bandas sombreadas (`overlays['band']`)
+- Novo modulo `core/charting/overlays/` com funcoes: `add_moving_average`, `add_ath_line`, `add_atl_line`, `add_hline`, `add_band`
+- Novo modulo `core/charting/components/collision.py` para resolucao de colisoes entre labels
+- Funcao `highlight_last_bar()` para destacar ultimo valor em graficos de barra
+- Novas transformacoes em `charting/transforms.py`:
+  - `annualize_daily()`: Anualiza taxa diaria usando juros compostos
+  - `compound_rolling()`: Calcula retorno composto em janela movel (ex: Selic 12m)
+  - `real_rate()`: Calcula juros real via Equacao de Fisher
+  - `to_month_end()`: Normaliza indice temporal para fim do mes
+- Formatador `points_formatter()` para valores numericos com separador de milhar BR
+- Graficos de juros real, CAGED saldo, e 9 indicadores Bloomberg no script de relatorio
+
+### Changed
+- `AgoraAccessor.plot()` agora aceita parametros de overlay: `moving_avg`, `show_ath`, `show_atl`, `overlays`
+- `AgoraPlotter.plot()` aplica formatter do eixo Y antes da plotagem (corrige highlight_last)
+- `plot_bar()` agora suporta `highlight=True` para destacar ultima barra
+- Mapa de formatadores `_FORMATTERS` extraido para facilitar extensao
+- `percent_formatter()` agora inclui separador de milhar para valores grandes
+- `human_readable_formatter()` protegido contra IndexError em magnitudes extremas
+- Script `generate_full_report.py` refatorado:
+  - Filtro de periodo via `get_start_date()` ao inves de parametro `years`
+  - Adicionados graficos de Bloomberg, IPEA e juros real
+- Frequencia de `selic_acum_mensal` corrigida de 'daily' para 'monthly' em indicators.py
+- `.gitignore` atualizado para ignorar pasta `.claude/`
+
+### Removed
+- Metodo `_validate()` do `AgoraAccessor` (nao fazia nada)
+- Parametro `years` removido de `save_chart()` (filtro agora e feito na leitura)
+
 ## [2026-01-29 04:13]
 
 ### Added

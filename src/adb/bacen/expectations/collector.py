@@ -139,3 +139,20 @@ class ExpectationsCollector(BaseCollector):
 
         self._end(verbose=verbose)
 
+    def _get_frequency_for_file(self, filename: str) -> str | None:
+        """
+        Retorna a frequencia de um indicador de expectativas.
+
+        Todas as expectativas do Focus sao efetivamente diarias
+        (cada publicacao do boletim Focus e um evento diario).
+
+        Args:
+            filename: Nome do arquivo (chave em EXPECTATIONS_CONFIG)
+
+        Returns:
+            'daily' se indicador existe, None caso contrario
+        """
+        if filename in EXPECTATIONS_CONFIG:
+            return 'daily'
+        return None
+

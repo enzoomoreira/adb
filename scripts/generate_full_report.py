@@ -7,34 +7,64 @@ Uso:
     uv run python scripts/generate_full_report.py
 """
 
-import pandas as pd
+from datetime import datetime
+
 import matplotlib.pyplot as plt
+import pandas as pd
+from dateutil.relativedelta import relativedelta
 
 # Agora-Database
-from adb import sgs, sidra, charting
+from adb import sgs, sidra, charting, bloomberg, ipea
 
-# Periodo padrao para filtros
+# Periodo padrao para filtros (em anos)
 ANOS_PADRAO = 12
+ANOS_BBG = 2
+ANOS_JUROS_REAL = 26
 
 
-def save_chart(df, filename, title, source=None, kind='line', units='%', years=None, **kwargs):
-    """Helper para gerar e salvar grafico."""
-    # Filtra por periodo se especificado
-    if years and isinstance(df.index, pd.DatetimeIndex):
-        cutoff = pd.Timestamp.now() - pd.DateOffset(years=years)
-        df = df[df.index >= cutoff]
+def get_start_date(years: int) -> str:
+    """
+    Calcula data de inicio para filtro de N anos atras.
 
+    Args:
+        years: Numero de anos para voltar no tempo.
+
+    Returns:
+        Data no formato 'YYYY-MM-DD'.
+    """
+    cutoff = datetime.now() - relativedelta(years=years)
+    return cutoff.strftime('%Y-%m-%d')
+
+
+# Datas de corte pre-calculadas
+START_PADRAO = get_start_date(ANOS_PADRAO)
+START_BBG = get_start_date(ANOS_BBG)
+START_JUROS_REAL = get_start_date(ANOS_JUROS_REAL)
+
+
+def save_chart(df, filename, title, source=None, kind='line', units='%', **kwargs):
+    """
+    Helper para gerar e salvar grafico.
+
+    Args:
+        df: DataFrame com dados a plotar.
+        filename: Nome do arquivo de saida.
+        title: Titulo do grafico.
+        source: Fonte dos dados (opcional).
+        kind: Tipo de grafico ('line' ou 'bar').
+        units: Unidade dos dados para formatacao do eixo Y.
+        **kwargs: Argumentos adicionais para o plot.
+    """
     if df.empty:
         print(f"  [SKIP] {title} - dados vazios")
         return
 
-    # Gera grafico
     df.agora.plot(
         kind=kind,
         title=title,
         units=units,
         source=source,
-        highlight_last=(kind == 'line'),
+        highlight_last=True,
         save_path=filename,
         **kwargs
     )
@@ -42,40 +72,37 @@ def save_chart(df, filename, title, source=None, kind='line', units='%', years=N
     plt.close('all')
 
 
+
 # =============================================================================
 # 1. ATIVIDADE ECONOMICA - IBC-BR
 # =============================================================================
 print("\n[1] Atividade Economica - IBC-BR")
 
-# IBC-BR Agregado (linha)
+# IBC-BR Agregado
 save_chart(
-    sgs.read('ibc_br_dessaz'),
+    sgs.read('ibc_br_dessaz', start=START_PADRAO),
     filename="ibc_br_agregado.png",
     title="IBC-BR (Dessazonalizado)",
     source="BCB",
     kind='line',
     units='points',
-    years=ANOS_PADRAO
 )
 
-# IBC-BR Setorial (linhas sobrepostas)
-try:
-    df_agro = sgs.read('ibc_br_agro')
-    df_ind = sgs.read('ibc_br_industria')
-    df_serv = sgs.read('ibc_br_servicos')
-    df_ibc_setores = pd.concat([df_agro, df_ind, df_serv], axis=1)
-    df_ibc_setores.columns = ['Agropecuária', 'Indústria', 'Serviços']
-    save_chart(
-        df_ibc_setores,
-        filename="ibc_br_setorial.png",
-        title="IBC-BR por Setor",
-        source="BCB",
-        kind='line',
-        units='points',
-        years=ANOS_PADRAO
-    )
-except Exception as e:
-    print(f"  [SKIP] IBC-BR Setorial - {e}")
+# IBC-BR Setorial
+df_ibc_setorial = pd.concat([
+    sgs.read('ibc_br_agro', start=START_PADRAO),
+    sgs.read('ibc_br_industria', start=START_PADRAO),
+    sgs.read('ibc_br_servicos', start=START_PADRAO),
+], axis=1)
+df_ibc_setorial.columns = ['Agropecuária', 'Indústria', 'Serviços']
+save_chart(
+    df_ibc_setorial,
+    filename="ibc_br_setorial.png",
+    title="IBC-BR por Setor",
+    source="BCB",
+    kind='line',
+    units='points',
+)
 
 
 # =============================================================================
@@ -83,28 +110,26 @@ except Exception as e:
 # =============================================================================
 print("\n[2] PIB")
 
-# PIB QoQ (barras)
+# PIB QoQ
 save_chart(
-    sidra.read('pib_qoq'),
+    sidra.read('pib_qoq', start=START_PADRAO),
     filename="pib_qoq.png",
     title="PIB (Variação Trimestral)",
     source="IBGE",
     kind='bar',
     units='%',
-    years=ANOS_PADRAO,
-    y_origin='auto'
+    y_origin='auto',
 )
 
-# PIB YoY (barras)
+# PIB YoY
 save_chart(
-    sidra.read('pib_yoy'),
+    sidra.read('pib_yoy', start=START_PADRAO),
     filename="pib_yoy.png",
     title="PIB (Variação Anual)",
     source="IBGE",
     kind='bar',
     units='%',
-    years=ANOS_PADRAO,
-    y_origin='auto'
+    y_origin='auto',
 )
 
 
@@ -113,15 +138,14 @@ save_chart(
 # =============================================================================
 print("\n[3] Producao Industrial")
 
-# PIM Base 100 (linha)
+# PIM
 save_chart(
-    sidra.read('pim_dessaz'),
+    sidra.read('pim_dessaz', start=START_PADRAO),
     filename="pim_indice.png",
-    title="Produção Industrial (Índice Base 100)",
+    title="Produção Industrial",
     source="IBGE",
     kind='line',
     units='points',
-    years=ANOS_PADRAO
 )
 
 
@@ -130,26 +154,24 @@ save_chart(
 # =============================================================================
 print("\n[4] Comercio")
 
-# PMC Varejo Base 100 (linha)
+# PMC Varejo
 save_chart(
-    sidra.read('pmc_varejo_dessaz'),
+    sidra.read('pmc_varejo_dessaz', start=START_PADRAO),
     filename="pmc_varejo_indice.png",
-    title="Varejo - Volume de Vendas (Índice Base 100)",
+    title="Varejo - Volume de Vendas",
     source="IBGE",
     kind='line',
     units='points',
-    years=ANOS_PADRAO
 )
 
-# PMC Ampliado Base 100 (linha)
+# PMC Ampliado
 save_chart(
-    sidra.read('pmc_ampliado_dessaz'),
+    sidra.read('pmc_ampliado_dessaz', start=START_PADRAO),
     filename="pmc_ampliado_indice.png",
-    title="Varejo Ampliado - Volume de Vendas (Índice Base 100)",
+    title="Varejo Ampliado - Volume de Vendas",
     source="IBGE",
     kind='line',
     units='points',
-    years=ANOS_PADRAO
 )
 
 
@@ -158,27 +180,25 @@ save_chart(
 # =============================================================================
 print("\n[5] Servicos")
 
-# PMS Base 100 (linha)
+# PMS
 save_chart(
-    sidra.read('pms_dessaz'),
+    sidra.read('pms_dessaz', start=START_PADRAO),
     filename="pms_indice.png",
-    title="Serviços (Índice Base 100)",
+    title="Serviços",
     source="IBGE",
     kind='line',
     units='points',
-    years=ANOS_PADRAO
 )
 
-# PMS YoY (barras)
+# PMS YoY
 save_chart(
-    sidra.read('pms_yoy'),
+    sidra.read('pms_yoy', start=START_PADRAO),
     filename="pms_yoy.png",
     title="Serviços (Variação Anual)",
     source="IBGE",
     kind='bar',
     units='%',
-    years=ANOS_PADRAO,
-    y_origin='auto'
+    y_origin='auto',
 )
 
 
@@ -187,44 +207,50 @@ save_chart(
 # =============================================================================
 print("\n[6] Mercado de Trabalho")
 
-# PNAD Taxa de Desemprego (linha)
+# PNAD Taxa de Desemprego
 save_chart(
-    sidra.read('pnad_desocupacao'),
+    sidra.read('pnad_desocupacao', start=START_PADRAO),
     filename="pnad_desemprego.png",
     title="Taxa de Desemprego (PNAD)",
     source="IBGE",
     kind='line',
     units='%',
-    years=ANOS_PADRAO
 )
 
+# CAGED saldo
+save_chart(
+    ipea.read('caged_saldo', start=START_PADRAO),
+    filename="caged_saldo.png",
+    title="Saldo Caged",
+    source="IPEA",
+    kind='bar',
+    units='points',
+)
 
 # =============================================================================
 # 7. INFLACAO
 # =============================================================================
 print("\n[7] Inflacao")
 
-# IPCA Mensal (barras)
+# IPCA Mensal
 save_chart(
-    sidra.read('ipca'),
+    sidra.read('ipca', start=START_PADRAO),
     filename="ipca_mensal.png",
     title="IPCA (Variação Mensal)",
     source="IBGE",
     kind='bar',
     units='%',
-    years=ANOS_PADRAO,
-    y_origin='auto'
+    y_origin='auto',
 )
 
-# IPCA 12m (linha)
+# IPCA 12m
 save_chart(
-    sidra.read('ipca_12m'),
+    sidra.read('ipca_12m', start=START_PADRAO),
     filename="ipca_12m.png",
     title="IPCA (Acumulado 12 meses)",
     source="IBGE",
     kind='line',
     units='%',
-    years=ANOS_PADRAO
 )
 
 
@@ -233,9 +259,9 @@ save_chart(
 # =============================================================================
 print("\n[8] Juros e Cambio")
 
-# Cambio (linhas sobrepostas)
-df_dolar = sgs.read('dolar_ptax')
-df_euro = sgs.read('euro_ptax')
+# Cambio
+df_dolar = sgs.read('dolar_ptax', start=START_PADRAO)
+df_euro = sgs.read('euro_ptax', start=START_PADRAO)
 df_cambio = pd.concat([df_dolar, df_euro], axis=1)
 df_cambio.columns = ['Dólar', 'Euro']
 save_chart(
@@ -245,20 +271,129 @@ save_chart(
     source="BCB",
     kind='line',
     units='BRL',
-    years=ANOS_PADRAO
 )
 
-# Selic (linha)
+# Selic
 save_chart(
-    sgs.read('selic'),
+    sgs.read('selic', start=START_PADRAO),
     filename="selic.png",
     title="Taxa Selic (Meta)",
     source="BCB",
     kind='line',
     units='%',
-    years=ANOS_PADRAO
 )
 
+# Juros real (precisa de dados desde o inicio do periodo de 26 anos para calculo rolling)
+ipca = charting.to_month_end(sidra.read('ipca_12m', start=START_JUROS_REAL))
+selic = charting.to_month_end(sgs.read('selic_acum_mensal', start=START_JUROS_REAL))
+
+# Selic 12m composta e juros real via Fisher
+selic_12m = charting.compound_rolling(selic['value'])
+juros_real = charting.real_rate(selic_12m, ipca['value']).dropna().to_frame('value')
+
+save_chart(
+    juros_real,
+    filename="juros_reais.png",
+    title="Juros Reais ex-post",
+    source="BCB, IBGE",
+    kind='line',
+    units='%',
+)
+
+# =============================================================================
+# 9. BLOOMBERG
+# =============================================================================
+print("\n[9] Bloomberg")
+
+# Global Mkt Cap
+save_chart(
+    bloomberg.read('msci_acwi_mktcap', start=START_BBG),
+    filename="global_mktcap.png",
+    title="Market Cap Global",
+    source="Bloomberg",
+    kind='line',
+    units='USD',
+)
+
+# Global P/L
+save_chart(
+    bloomberg.read('msci_acwi_pe', start=START_BBG),
+    filename="global_pl.png",
+    title="P/L Global",
+    source="Bloomberg",
+    kind='line',
+    units='USD',
+)
+
+# Global Dividends
+save_chart(
+    bloomberg.read('msci_acwi_dividend', start=START_BBG),
+    filename="global_dividends.png",
+    title="Dividendos Global",
+    source="Bloomberg",
+    kind='line',
+    units='USD',
+)
+
+# Ibovespa
+save_chart(
+    bloomberg.read('ibov_points', start=START_BBG),
+    filename="ibovespa.png",
+    title="Ibovespa",
+    source="Bloomberg",
+    kind='line',
+    units='points',
+)
+
+# Ibovespa em Dolar
+save_chart(
+    bloomberg.read('ibov_usd', start=START_BBG),
+    filename="ibovespa_usd.png",
+    title="Ibovespa (Dólar)",
+    source="Bloomberg",
+    kind='line',
+    units='points',
+)
+
+# IFIX
+save_chart(
+    bloomberg.read('ifix', start=START_BBG),
+    filename="ifix.png",
+    title="IFIX",
+    source="Bloomberg",
+    kind='line',
+    units='points',
+)
+
+# Petroleo Brent
+save_chart(
+    bloomberg.read('brent', start=START_BBG),
+    filename="brent.png",
+    title="Petróleo (Brent)",
+    source="Bloomberg",
+    kind='line',
+    units='USD',
+)
+
+# Minerio de Ferro
+save_chart(
+    bloomberg.read('iron_ore', start=START_BBG),
+    filename="iron.png",
+    title="Minério de Ferro",
+    source="Bloomberg",
+    kind='line',
+    units='USD',
+)
+
+# Ouro
+save_chart(
+    bloomberg.read('gold', start=START_BBG),
+    filename="gold.png",
+    title="Ouro",
+    source="Bloomberg",
+    kind='line',
+    units='USD',
+)
 
 # =============================================================================
 # RESUMO

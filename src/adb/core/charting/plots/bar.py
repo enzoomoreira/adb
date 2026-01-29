@@ -1,19 +1,40 @@
 import pandas as pd
 from ..styling.theme import theme
+from ..components.markers import highlight_last_bar
 
-def plot_bar(ax, x, y_data, y_origin: str = 'zero', **kwargs):
+# Constantes para largura de barras baseada na frequencia dos dados
+BAR_WIDTH_DEFAULT = 0.8
+BAR_WIDTH_MONTHLY = 20
+BAR_WIDTH_ANNUAL = 300
+DAYS_THRESHOLD_ANNUAL = 300
+DAYS_THRESHOLD_MONTHLY = 25
+
+
+def plot_bar(ax, x, y_data, highlight: bool = False, y_origin: str = 'zero', **kwargs):
+    """
+    Plota grafico de barras com largura automatica baseada na frequencia.
+
+    Args:
+        ax: Matplotlib Axes
+        x: Dados do eixo X (index ou coluna)
+        y_data: Series ou DataFrame com dados do eixo Y
+        highlight: Se True, destaca o ultimo valor com label
+        y_origin: Origem do eixo Y ('zero' inclui zero, 'auto' foca nos dados)
+        **kwargs: Argumentos extras para ax.bar()
+    """
     if 'color' not in kwargs:
         kwargs['color'] = theme.colors.primary
 
     # Largura da barra inteligente baseada na frequencia dos dados
-    width = 0.8
+    width = BAR_WIDTH_DEFAULT
     if pd.api.types.is_datetime64_any_dtype(x):
         if len(x) > 1:
             avg_diff = (x.max() - x.min()) / (len(x) - 1)
-            if avg_diff.days > 25:
-                width = 20  # Mensal
-            elif avg_diff.days > 300:
-                width = 300  # Anual
+            # Ordem importa: verificar anual primeiro (maior threshold)
+            if avg_diff.days > DAYS_THRESHOLD_ANNUAL:
+                width = BAR_WIDTH_ANNUAL
+            elif avg_diff.days > DAYS_THRESHOLD_MONTHLY:
+                width = BAR_WIDTH_MONTHLY
 
     if isinstance(y_data, pd.DataFrame):
         if y_data.shape[1] > 1:
@@ -42,3 +63,8 @@ def plot_bar(ax, x, y_data, y_origin: str = 'zero', **kwargs):
             ax.set_ylim(0, ymax)
         elif ymax < 0:
             ax.set_ylim(ymin, 0)
+
+    # Destaca ultimo valor se solicitado
+    if highlight:
+        color = kwargs.get('color', theme.colors.primary)
+        highlight_last_bar(ax, x, vals, color=color)

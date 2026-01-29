@@ -29,7 +29,7 @@ SGS_CONFIG = {
     "selic_acum_mensal": {
         "code": 4390,
         "name": "Selic Acumulada no Mes",
-        "frequency": "daily",
+        "frequency": "monthly",
         "description": "Taxa de juros acumulada no mes",
     },
     "dolar_ptax": {

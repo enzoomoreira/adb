@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 from bcb import sgs
 
 from adb.core.config import DEFAULT_CHUNK_DELAY

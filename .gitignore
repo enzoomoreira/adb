@@ -20,3 +20,6 @@ scripts/tests/benchmark/
 
 # Logs
 logs/
+
+# Claude
+.claude/
