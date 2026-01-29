@@ -191,13 +191,15 @@ class DataManager:
             if dedup:
                 # Streaming com deduplicacao por coluna 'date'
                 # ROW_NUMBER particiona por date, mantendo o registro mais recente (do novo df)
+                # UNION ALL BY NAME casa colunas por nome (nao posicao), evitando erro de tipo
+                # quando ordem das colunas difere entre Parquet (PyArrow) e DataFrame (reset_index)
                 query = f"""
                     COPY (
                         SELECT * EXCLUDE (_rn) FROM (
                             SELECT *, ROW_NUMBER() OVER (PARTITION BY date ORDER BY _source DESC) as _rn
                             FROM (
                                 SELECT *, 0 as _source FROM '{filepath}'
-                                UNION ALL 
+                                UNION ALL BY NAME
                                 SELECT *, 1 as _source FROM _new_data
                             )
                         ) WHERE _rn = 1
@@ -206,10 +208,11 @@ class DataManager:
                 """
             else:
                 # Streaming sem deduplicacao (append puro)
+                # UNION ALL BY NAME evita erro de conversao de tipos por ordem de colunas
                 query = f"""
                     COPY (
                         SELECT * FROM '{filepath}'
-                        UNION ALL
+                        UNION ALL BY NAME
                         SELECT * FROM _new_data
                     ) TO '{temp_path}' (FORMAT 'parquet', COMPRESSION 'snappy')
                 """

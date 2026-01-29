@@ -15,6 +15,7 @@ Uso:
 
 from .storage import DataManager
 from .query import QueryEngine
+from .validation import DataValidator, HealthReport, HealthStatus, Frequency, Gap
 
 # Lazy import dos explorers para evitar imports circulares
 _sgs = None
@@ -71,6 +72,11 @@ def __getattr__(name):
 __all__ = [
     'DataManager',
     'QueryEngine',
+    'DataValidator',
+    'HealthReport',
+    'HealthStatus',
+    'Frequency',
+    'Gap',
     'sgs',
     'caged',
     'expectations',

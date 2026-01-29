@@ -1,5 +1,32 @@
 # Project Changelog
 
+## [2026-01-29 04:13]
+
+### Added
+- Novo modulo `core/data/validation.py` para validacao de integridade de dados:
+  - Classe `DataValidator` com context manager para analise de saude dos dados
+  - `HealthReport` dataclass com metricas: cobertura, gaps, staleness, resultados cuallee
+  - `HealthStatus` enum: OK, STALE, GAPS, MISSING
+  - Usa calendario ANBIMA (bizdays) para calcular dias uteis brasileiros
+  - Usa cuallee para checks de qualidade (is_complete, is_unique na coluna date)
+- Novo indicador SGS `selic_acum_mensal` (codigo 4390) - Taxa Selic acumulada no mes
+- Dependencias: `bizdays>=1.0.14`, `cuallee[duckdb]>=0.5.2`
+
+### Changed
+- `BaseCollector.get_status()` agora usa DataValidator para calcular metricas de saude:
+  - Retorna cobertura percentual, contagem de gaps e status real (OK/STALE/GAPS/MISSING)
+  - Subclasses devem implementar `_get_frequency_for_file()` para lookup de frequencia
+- `BaseCollector._sync()` refatorado para usar health check antes de coletar:
+  - Valida dados existentes com DataValidator
+  - Determina estrategia de coleta baseada no status de saude
+- `BaseCollector._next_date()` agora suporta frequencia 'quarterly'
+- Collectors refatorados para implementar `_get_frequency_for_file()`:
+  - `SGSCollector`, `SidraCollector`, `IPEACollector`, `BloombergCollector`
+- `BloombergCollector.collect()` agora passa `subdir` e `check_first_run` para `_start()`
+- `DataManager.append()`: UNION ALL alterado para UNION ALL BY NAME (casa colunas por nome, evita erro de tipo)
+- `BaseExplorer._join()`: Simplificado usando `pd.concat(axis=1)` ao inves de loop com join
+- `plot_line()`: Removida conversao para numpy - matplotlib 3.0+ aceita pandas diretamente
+
 ## [2026-01-27 20:22]
 
 ### Changed

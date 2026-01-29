@@ -19,7 +19,6 @@ class SGSCollector(BaseCollector):
 
     API publica:
     - collect() - Coleta um ou mais indicadores usando config predefinida
-    - consolidate() - Consolida arquivos em DataFrame unico
     - get_status() - Status dos arquivos salvos
 
     Herda de BaseCollector para logging padronizado e get_status().
@@ -112,9 +111,6 @@ class SGSCollector(BaseCollector):
                 - string: 'selic' (um unico)
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
-
-        Returns:
-            Dict {indicator_key: DataFrame} com dados coletados
         """
         # Normalizar entrada
         keys = self._normalize_indicators(indicators, SGS_CONFIG)
@@ -129,13 +125,14 @@ class SGSCollector(BaseCollector):
 
         for key in keys:
             config = get_config(SGS_CONFIG, key)
-            subdir = f"bacen/sgs/{config['frequency']}"
+            frequency = self._get_frequency_for_file(key)
+            subdir = f"bacen/sgs/{frequency}"
 
             self._collect_series(
                 code=config['code'],
                 filename=key,
                 name=config['name'],
-                frequency=config['frequency'],
+                frequency=frequency,
                 subdir=subdir,
                 save=save,
                 verbose=verbose,
@@ -163,4 +160,17 @@ class SGSCollector(BaseCollector):
             return pd.DataFrame()
 
         return pd.concat(dfs, ignore_index=True)
+
+    def _get_frequency_for_file(self, filename: str) -> str | None:
+        """
+        Retorna a frequencia de um indicador SGS.
+
+        Args:
+            filename: Nome do arquivo (chave em SGS_CONFIG)
+
+        Returns:
+            'daily' ou 'monthly'
+        """
+        config = SGS_CONFIG.get(filename, {})
+        return config.get('frequency', 'daily')
 

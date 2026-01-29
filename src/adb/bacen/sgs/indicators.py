@@ -26,6 +26,12 @@ SGS_CONFIG = {
         "frequency": "daily",
         "description": "Taxa basica de juros da economia brasileira",
     },
+    "selic_acum_mensal": {
+        "code": 4390,
+        "name": "Selic Acumulada no Mes",
+        "frequency": "daily",
+        "description": "Taxa de juros acumulada no mes",
+    },
     "dolar_ptax": {
         "code": 10813,
         "name": "Dolar PTAX",

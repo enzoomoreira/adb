@@ -14,7 +14,7 @@ O modulo `adb.core` fornece a infraestrutura compartilhada por todos os coletore
 - **Resiliencia** - Retry com backoff exponencial para APIs
 - **Excecoes** - Hierarquia de erros customizados
 - **Collectors** - Classe base para coleta de dados
-- **Data** - Persistencia (DataManager), queries (QueryEngine) e exploradores (BaseExplorer)
+- **Data** - Persistencia (DataManager), queries (QueryEngine), exploradores (BaseExplorer) e validacao (DataValidator)
 - **Utils** - Funcoes auxiliares de datas e indicadores
 - **Charting** - Sistema de visualizacao (ver [charting.md](charting.md))
 
@@ -34,7 +34,8 @@ src/adb/core/
 ├── data/
 │   ├── storage.py        # DataManager (I/O Parquet)
 │   ├── query.py          # QueryEngine (DuckDB)
-│   └── explorers.py      # BaseExplorer
+│   ├── explorers.py      # BaseExplorer
+│   └── validation.py     # DataValidator (validacao de integridade)
 ├── utils/
 │   ├── dates.py          # parse_date, normalize_index
 │   └── indicators.py     # list_keys, get_config
@@ -271,7 +272,7 @@ Classe base para todos os coletores. Fornece:
 
 ##### get_status(subdir=None)
 
-Retorna DataFrame com status dos arquivos salvos.
+Retorna DataFrame com status dos arquivos salvos. Usa `DataValidator` para calcular metricas de saude dos dados.
 
 | Coluna | Descricao |
 |--------|-----------|
@@ -281,19 +282,24 @@ Retorna DataFrame com status dos arquivos salvos.
 | colunas | Numero de colunas |
 | primeira_data | Data inicial |
 | ultima_data | Data final |
-| status | 'OK' ou 'Vazio' |
+| cobertura | Percentual de cobertura (0-100) |
+| gaps | Numero de lacunas nos dados |
+| status | 'OK', 'STALE', 'GAPS' ou 'MISSING' |
+
+> **Nota:** Subclasses devem implementar `_get_frequency_for_file(filename, subdir)` para que o DataValidator calcule corretamente as metricas baseado na frequencia do indicador.
 
 #### Metodos Auxiliares (Protegidos)
 
 | Metodo | Descricao |
 |--------|-----------|
 | `_normalize_indicators(indicators, config)` | Normaliza entrada para lista |
-| `_next_date(last_date, frequency)` | Calcula data inicial para coleta incremental |
-| `_sync(fetch_fn, filename, ...)` | Template para coleta com sync automatico |
+| `_next_date(last_date, frequency)` | Calcula data inicial para coleta incremental (suporta 'daily', 'monthly', 'quarterly') |
+| `_sync(fetch_fn, filename, ...)` | Template para coleta com sync automatico (usa health check antes de coletar) |
 | `_start(title, num_indicators, ...)` | Banner de inicio |
 | `_end(results, verbose)` | Banner de fim |
 | `_fetch_start(name, start_date, verbose)` | Log de inicio de fetch |
 | `_fetch_result(name, count, verbose)` | Log de resultado |
+| `_get_frequency_for_file(filename, subdir)` | Retorna frequencia do indicador (subclasses devem implementar) |
 
 #### Exemplo de Implementacao
 
@@ -512,6 +518,80 @@ Acessiveis via `adb.core.data` (lazy-loaded):
 | `ipea` | IPEA | Dados agregados de emprego |
 | `bloomberg` | Bloomberg | Dados de mercado (Terminal) |
 | `sidra` | IBGE/SIDRA | Dados demograficos e economicos |
+
+---
+
+## core.data.validation
+
+**Localizacao:** `src/adb/core/data/validation.py`
+
+Sistema de validacao de integridade de dados. Usa **cuallee** para checks de qualidade e **bizdays** (calendario ANBIMA) para calcular dias uteis brasileiros.
+
+### HealthStatus
+
+Enum que representa o status de saude dos dados:
+
+| Status | Descricao |
+|--------|-----------|
+| `OK` | Dados completos e atualizados |
+| `STALE` | Dados desatualizados (ultima data muito antiga) |
+| `GAPS` | Dados com lacunas (cobertura < 95%) |
+| `MISSING` | Arquivo nao existe |
+
+### HealthReport
+
+Dataclass com metricas de saude:
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| `status` | HealthStatus | Status de saude |
+| `first_date` | date | Data inicial |
+| `last_date` | date | Data final |
+| `expected_records` | int | Registros esperados |
+| `actual_records` | int | Registros reais |
+| `coverage` | float | Cobertura percentual (0-100) |
+| `gaps` | list[Gap] | Lacunas nos dados |
+| `stale_days` | int | Dias desde ultima atualizacao |
+| `cuallee_results` | dict | Resultados dos checks cuallee (is_complete, is_unique) |
+
+### DataValidator
+
+Validador de integridade com context manager.
+
+#### Uso
+
+```python
+from adb.core.data.validation import DataValidator, HealthStatus
+
+with DataValidator() as validator:
+    health = validator.get_health('selic', 'bacen/sgs/daily', 'daily')
+    print(health.status)     # HealthStatus.OK
+    print(health.coverage)   # 98.5
+    print(health.stale_days) # 2
+```
+
+#### get_health(filename, subdir, frequency)
+
+Analisa saude dos dados de um arquivo.
+
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| filename | str | Nome do arquivo (sem .parquet) |
+| subdir | str | Subdiretorio dentro de raw/ |
+| frequency | str | 'daily', 'monthly' ou 'quarterly' |
+
+**Retorno:** `HealthReport`
+
+**Comportamento:**
+- Para `daily`: usa calendario ANBIMA para dias uteis brasileiros
+- Para `monthly`: espera primeiro dia de cada mes
+- Para `quarterly`: espera primeiro dia de cada trimestre (jan, abr, jul, out)
+- Executa checks cuallee: `is_complete` (sem nulos) e `is_unique` (sem duplicatas) na coluna date
+
+**Limiares de Staleness:**
+- Daily: 3 dias uteis
+- Monthly: 45 dias
+- Quarterly: 95 dias
 
 ---
 

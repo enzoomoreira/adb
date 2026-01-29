@@ -86,14 +86,21 @@ class BaseCollector:
 
     def get_status(self, subdir: str = None) -> pd.DataFrame:
         """
-        Retorna status dos arquivos salvos.
+        Retorna status dos arquivos salvos com informacoes de saude.
+
+        Usa DataValidator para calcular cobertura, gaps e status real dos dados.
 
         Args:
             subdir: Subdiretorio (default: default_subdir)
 
         Returns:
-            DataFrame com status de cada arquivo
+            DataFrame com status de cada arquivo incluindo cobertura e gaps
+
+        Raises:
+            ValueError: Se frequencia do indicador nao estiver configurada.
         """
+        from adb.core.data.validation import DataValidator
+
         subdir = subdir or self.default_subdir
         files = self.data_manager.list_files(subdir)
 
@@ -101,24 +108,47 @@ class BaseCollector:
             return pd.DataFrame()
 
         status_data = []
-        for filename in files:
-            metadata = self.data_manager.get_metadata(filename, subdir)
-            
-            if metadata:
-                status_data.append(metadata)
-            else:
-                 # Fallback apenas se get_metadata falhar ou arquivo vazio
+
+        with DataValidator(self.data_path) as validator:
+            for filename in files:
+                # Obter frequencia do indicador (subclasses devem implementar)
+                frequency = self._get_frequency_for_file(filename)
+                if frequency is None:
+                    raise ValueError(
+                        f"Frequencia desconhecida para '{filename}'. "
+                        f"Adicione 'frequency' na configuracao do indicador."
+                    )
+
+                # Validar saude dos dados
+                health = validator.get_health(filename, subdir, frequency)
+
                 status_data.append({
                     'arquivo': filename,
                     'subdir': subdir,
-                    'registros': 0,
-                    'colunas': 0,
-                    'primeira_data': None,
-                    'ultima_data': None,
-                    'status': 'Erro/Vazio',
+                    'registros': health.actual_records,
+                    'primeira_data': health.first_date,
+                    'ultima_data': health.last_date,
+                    'cobertura': health.coverage,
+                    'gaps': len(health.gaps) if health.gaps else 0,
+                    'status': health.status.value.upper(),
                 })
 
         return pd.DataFrame(status_data)
+
+    def _get_frequency_for_file(self, filename: str) -> str | None:
+        """
+        Retorna a frequencia de um indicador pelo nome do arquivo.
+
+        Subclasses devem sobrescrever para retornar a frequencia correta
+        baseada na configuracao do indicador.
+
+        Args:
+            filename: Nome do arquivo (sem extensao)
+
+        Returns:
+            'daily', 'monthly', 'quarterly' ou None se desconhecido
+        """
+        return None
 
     # =========================================================================
     # Helpers para Collectors (reduz duplicacao)
@@ -210,19 +240,41 @@ class BaseCollector:
 
 
     def _next_date(self, last_date: pd.Timestamp | None, frequency: str) -> str | None:
-        """Calcula data de inicio baseada na ultima data salva."""
+        """
+        Calcula data de inicio baseada na ultima data salva.
+
+        Args:
+            last_date: Ultima data presente nos dados
+            frequency: 'daily', 'monthly' ou 'quarterly'
+
+        Returns:
+            Proxima data esperada em formato 'YYYY-MM-DD', ou None se last_date invalido
+        """
         from datetime import timedelta
-        
+
         # Trata None e pd.NaT (Not-a-Time) como ausencia de dados
         if last_date is None or pd.isna(last_date):
             return None
-            
+
         if frequency == 'monthly':
             # Proximo mes (primeiro dia)
             next_month = (last_date.replace(day=1) + timedelta(days=32)).replace(day=1)
             return next_month.strftime('%Y-%m-%d')
+
+        elif frequency == 'quarterly':
+            # Proximo trimestre (primeiro dia de Jan, Abr, Jul, Out)
+            quarter = (last_date.month - 1) // 3  # 0, 1, 2, 3
+            next_quarter_month = (quarter + 1) * 3 + 1  # 4, 7, 10, 13
+            if next_quarter_month > 12:
+                return last_date.replace(
+                    year=last_date.year + 1, month=1, day=1
+                ).strftime('%Y-%m-%d')
+            return last_date.replace(
+                month=next_quarter_month, day=1
+            ).strftime('%Y-%m-%d')
+
         else:
-            # Proximo dia
+            # daily - proximo dia
             return (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
 
     def _sync(
@@ -236,40 +288,60 @@ class BaseCollector:
         verbose: bool = True,
     ) -> None:
         """
-        Orquestra coleta incremental: verifica ultima data, busca dados, salva/append.
-        
-        Dados sao salvos diretamente em disco. Nao retorna DataFrame para evitar
-        poluicao de output em notebooks (comportamento da API antiga collect()).
-        """
-        # 1. Determinar data de inicio
-        is_first_run = True
-        start_date = None
-        
-        if save and frequency:
-            last_date = self.data_manager.get_last_date(filename, subdir)
-            start_date = self._next_date(last_date, frequency)
-            is_first_run = last_date is None
+        Orquestra coleta incremental: valida dados existentes, busca novos, salva/append.
 
-        # 2. Wrapper de log
+        Usa DataValidator para verificar integridade dos dados existentes antes de
+        determinar estrategia de coleta.
+
+        Args:
+            fetch_fn: Funcao que recebe start_date e retorna DataFrame
+            filename: Nome do arquivo (sem extensao)
+            name: Nome para exibicao
+            subdir: Subdiretorio dentro de raw/
+            frequency: 'daily', 'monthly' ou 'quarterly'
+            save: Se True, salva resultados em Parquet
+            verbose: Se True, imprime progresso
+        """
+        from adb.core.data.validation import DataValidator, HealthStatus
+
+        # 1. Validar dados existentes
+        with DataValidator(self.data_path) as validator:
+            health = validator.get_health(filename, subdir, frequency)
+
+        self.logger.debug(
+            f"Health: {filename} - {health.status.value}, "
+            f"coverage={health.coverage}%, stale={health.stale_days}d"
+        )
+
+        # 2. Determinar estrategia baseada no health check
+        is_first_run = health.status == HealthStatus.MISSING
+        start_date = None
+
+        if not is_first_run and save:
+            # Arquivo existe - calcular data de inicio
+            if health.last_date:
+                start_date = self._next_date(pd.Timestamp(health.last_date), frequency)
+
+        # 3. Wrapper de log
         def fetch_with_log(date_param):
             self._fetch_start(name, date_param, verbose)
             return fetch_fn(date_param)
 
-        # 3. Executar fetch
+        # 4. Executar fetch
         try:
             df = fetch_with_log(start_date)
         except Exception as e:
             self.logger.error(f"Unexpected error during fetch for {name}: {e}")
             return pd.DataFrame()
 
-        # 4. Salvar resultados
+        # 5. Salvar resultados
         if not df.empty and save:
             if is_first_run:
                 self.data_manager.save(df, filename, subdir, verbose=verbose)
             else:
                 self.data_manager.append(df, filename, subdir, verbose=verbose)
 
-        # 5. Log final
+        # 6. Log final
         self._fetch_result(name, len(df), verbose)
 
         # Nao retorna df - dados ja salvos em disco

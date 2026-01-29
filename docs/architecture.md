@@ -95,6 +95,7 @@ graph TD
 | **BaseExplorer** | `core/data/explorers.py` | Interface unificada para leitura/coleta |
 | **DataManager** | `core/data/storage.py` | Persistencia I/O (Parquet) |
 | **QueryEngine** | `core/data/query.py` | Consultas SQL (DuckDB) |
+| **DataValidator** | `core/data/validation.py` | Validacao de integridade (cuallee, bizdays) |
 | **AgoraPlotter** | `core/charting/engine.py` | Motor de visualizacao |
 
 Para documentacao detalhada de cada componente, consulte [core.md](core.md).

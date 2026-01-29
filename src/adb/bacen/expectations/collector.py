@@ -19,7 +19,6 @@ class ExpectationsCollector(BaseCollector):
 
     API publica:
     - collect() - Coleta um ou mais indicadores usando config predefinida
-    - consolidate() - Consolida arquivos em DataFrame unico
     - get_status() - Status dos arquivos salvos
 
     Herda de BaseCollector para logging padronizado e get_status().
@@ -114,9 +113,6 @@ class ExpectationsCollector(BaseCollector):
                 - string: 'ipca_anual' (um unico)
             save: Se True, salva cada indicador em Parquet
             verbose: Se True, imprime progresso
-
-        Returns:
-            Dict {key: DataFrame} com dados coletados
         """
         # Normalizar entrada
         keys = self._normalize_indicators(indicators, EXPECTATIONS_CONFIG)

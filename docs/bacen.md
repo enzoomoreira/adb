@@ -63,6 +63,7 @@ Configurados em `src/adb/bacen/sgs/indicators.py`:
 | Chave | Codigo | Nome | Descricao |
 |-------|--------|------|-----------|
 | `selic` | 432 | Meta Selic | Taxa basica de juros da economia brasileira |
+| `selic_acum_mensal` | 4390 | Selic Acumulada no Mes | Taxa de juros acumulada no mes |
 | `cdi` | 12 | CDI | Certificado de Deposito Interbancario - Taxa Diaria |
 | `dolar_ptax` | 10813 | Dolar PTAX | Taxa de cambio Dolar/Real - PTAX Venda |
 | `euro_ptax` | 21619 | Euro PTAX | Taxa de cambio Euro/Real - PTAX Venda |

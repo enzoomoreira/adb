@@ -20,7 +20,6 @@ class BloombergCollector(BaseCollector):
 
     API publica:
     - collect() - Coleta um ou mais indicadores usando config predefinida
-    - consolidate() - Consolida arquivos em DataFrame unico
     - get_status() - Status dos arquivos salvos
 
     Herda de BaseCollector para logging padronizado e get_status().
@@ -113,9 +112,6 @@ class BloombergCollector(BaseCollector):
                 - string: 'msci_acwi_pe' (um unico)
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
-
-        Returns:
-            Dict {indicator_key: DataFrame} com dados coletados
         """
         # Normalizar para lista
         keys = self._normalize_indicators(indicators, BLOOMBERG_CONFIG)
@@ -123,6 +119,8 @@ class BloombergCollector(BaseCollector):
         self._start(
             title="BLOOMBERG - Market Data",
             num_indicators=len(keys),
+            subdir='bloomberg/daily',
+            check_first_run=True,
             verbose=verbose,
         )
 
@@ -142,10 +140,23 @@ class BloombergCollector(BaseCollector):
                 field=field,
                 filename=key,
                 name=config["name"],
-                frequency=config["frequency"],
+                frequency=self._get_frequency_for_file(key),
                 save=save,
                 verbose=verbose,
             )
 
         self._end(verbose=verbose)
+
+    def _get_frequency_for_file(self, filename: str) -> str | None:
+        """
+        Retorna a frequencia de um indicador Bloomberg.
+
+        Args:
+            filename: Nome do arquivo (chave em BLOOMBERG_CONFIG)
+
+        Returns:
+            'daily' (padrao para Bloomberg)
+        """
+        config = BLOOMBERG_CONFIG.get(filename, {})
+        return config.get('frequency', 'daily')
 

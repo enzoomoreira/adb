@@ -11,7 +11,9 @@ name = "agora-database"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "bizdays" },
     { name = "blpapi" },
+    { name = "cuallee", extra = ["duckdb"] },
     { name = "duckdb" },
     { name = "fastparquet" },
     { name = "ipeadatapy" },
@@ -32,7 +34,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bizdays", specifier = ">=1.0.14" },
     { name = "blpapi", specifier = ">=3.25.12.1" },
+    { name = "cuallee", extras = ["duckdb"], specifier = ">=0.5.2" },
     { name = "duckdb", specifier = ">=1.4.2" },
     { name = "fastparquet", specifier = ">=2024.11.0" },
     { name = "ipeadatapy", specifier = ">=0.1.9" },
@@ -139,6 +143,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/2e/e10d1b10f087094a108f542b91b44efe928800b6ecd8f1619c9967b6da5b/backports_zstd-1.2.0-cp313-cp313t-win32.whl", hash = "sha256:6c2bc4f7154d5c166912c5b7ee6cbb3a921726d1c2cee7c0f1bfaae736f7c250", size = 289660, upload-time = "2025-12-06T20:25:57.753Z" },
     { url = "https://files.pythonhosted.org/packages/d6/ae/68e5bca7f9990c45c7b1940deccfa4a106c956c5ddd63393332372dad131/backports_zstd-1.2.0-cp313-cp313t-win_amd64.whl", hash = "sha256:2b7b83331878041a259ec0b384bee7dbfd486b2a2579cd730aca718897d045d7", size = 315026, upload-time = "2025-12-06T20:25:58.952Z" },
     { url = "https://files.pythonhosted.org/packages/e4/33/a519b4da2015069fb36cded5181ff078ecceb852861b675e2c79547ad10d/backports_zstd-1.2.0-cp313-cp313t-win_arm64.whl", hash = "sha256:a884be79cd0897436e1e06566d0b6bcad2360afca8e8e27fb19422ba0cca4d7a", size = 289583, upload-time = "2025-12-06T20:26:00.127Z" },
+]
+
+[[package]]
+name = "bizdays"
+version = "1.0.14"
+source = { registry = "https://blpapi.bloomberg.com/repository/releases/python/simple/" }
+dependencies = [
+    { name = "pandas-market-calendars" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/72/8a/1d56447cecfb1a52a348b9b12b49edd5f2f74f8e1fb8e3c1c368d127bee8/bizdays-1.0.14.tar.gz", hash = "sha256:3410431f412b68c81726e32695de098f85100da8ea957859a310e5791a05ac3c", size = 13646, upload-time = "2024-06-17T10:33:37.283Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/36/9107d44bc78be58ff15174d22e9e8c748bd215cf5a7ffca87c5cfecdc953/bizdays-1.0.14-py3-none-any.whl", hash = "sha256:1423b42a17e32721acab8c47299c22b778944af1f7c270cf432b517d6d2707a6", size = 13189, upload-time = "2024-06-17T10:33:33.397Z" },
 ]
 
 [[package]]
@@ -480,6 +496,28 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/4b/85/3be6f0a1398f976070672be64f61895f8839857618a2d8cc0d3ab529d3dc/cramjam-2.11.0-cp314-cp314t-musllinux_1_1_x86_64.whl", hash = "sha256:d388bd5723732c3afe1dd1d181e4213cc4e1be210b080572e7d5749f6e955656", size = 2160229, upload-time = "2025-07-27T21:24:06.729Z" },
     { url = "https://files.pythonhosted.org/packages/57/5e/66cfc3635511b20014bbb3f2ecf0095efb3049e9e96a4a9e478e4f3d7b78/cramjam-2.11.0-cp314-cp314t-win32.whl", hash = "sha256:0a70ff17f8e1d13f322df616505550f0f4c39eda62290acb56f069d4857037c8", size = 1610267, upload-time = "2025-07-27T21:24:08.428Z" },
     { url = "https://files.pythonhosted.org/packages/ce/c6/c71e82e041c95ffe6a92ac707785500aa2a515a4339c2c7dd67e3c449249/cramjam-2.11.0-cp314-cp314t-win_amd64.whl", hash = "sha256:028400d699442d40dbda02f74158c73d05cb76587a12490d0bfedd958fd49188", size = 1713108, upload-time = "2025-07-27T21:24:10.147Z" },
+]
+
+[[package]]
+name = "cuallee"
+version = "0.5.2"
+source = { registry = "https://blpapi.bloomberg.com/repository/releases/python/simple/" }
+dependencies = [
+    { name = "colorama" },
+    { name = "lxml" },
+    { name = "pandas" },
+    { name = "pygments" },
+    { name = "requests" },
+    { name = "toolz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b5/3c/442e1967a4a9802da8c7271593307b9c7b259e5092f8c4b8755370361f17/cuallee-0.5.2.tar.gz", hash = "sha256:d066a348dd42331feac66f4ffa6bd35253bd1b42bde03d956082b1be65ceb507", size = 37254, upload-time = "2023-09-16T13:01:49.867Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9b/3f/07203c04c43a8e7cc17ce04efb7183046babc0021ebef497cecee2bd8379/cuallee-0.5.2-py3-none-any.whl", hash = "sha256:6e4791e89d4d3b05627e9ffd73613b8f7558c77f970ecaf33200a7dae4834b52", size = 39321, upload-time = "2023-09-16T13:01:47.553Z" },
+]
+
+[package.optional-dependencies]
+duckdb = [
+    { name = "duckdb" },
 ]
 
 [[package]]

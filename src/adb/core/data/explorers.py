@@ -78,11 +78,8 @@ class BaseExplorer:
         if not dfs:
             return pd.DataFrame()
 
-        result = dfs[0]
-        for df in dfs[1:]:
-            result = result.join(df, how='outer')
-
-        return result.sort_index()
+        # pd.concat com axis=1 faz outer join no indice automaticamente
+        return pd.concat(dfs, axis=1).sort_index()
 
     # =========================================================================
     # API Publica
