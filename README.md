@@ -2,14 +2,14 @@
 
 Coleta, armazenamento e visualizacao de dados economicos brasileiros. Suporta seis fontes de dados com interface unificada.
 
-| Fonte | Modulo | Dados | Docs |
-|-------|--------|-------|------|
-| BCB - SGS | `adb.sgs` | Series temporais (Selic, CDI, IPCA, cambio) | [bacen.md](docs/bacen.md) |
-| BCB - Focus | `adb.expectations` | Expectativas de mercado | [bacen.md](docs/bacen.md) |
-| IBGE - SIDRA | `adb.sidra` | Dados demograficos e economicos (IPCA, PIB) | [ibge.md](docs/ibge.md) |
-| IPEA | `adb.ipea` | Dados agregados de emprego | [ipea.md](docs/ipea.md) |
-| MTE - CAGED | `adb.caged` | Microdados de emprego formal | [mte.md](docs/mte.md) |
-| Bloomberg | `adb.bloomberg` | Dados de mercado financeiro (Terminal) | [bloomberg.md](docs/bloomberg.md) |
+| Fonte | Modulo | Dados |
+|-------|--------|-------|
+| BCB - SGS | `adb.sgs` | Series temporais (Selic, CDI, IPCA, cambio) |
+| BCB - Focus | `adb.expectations` | Expectativas de mercado |
+| IBGE - SIDRA | `adb.sidra` | Dados demograficos e economicos (IPCA, PIB) |
+| IPEA | `adb.ipea` | Dados agregados de emprego |
+| MTE - CAGED | `adb.caged` | Microdados de emprego formal |
+| Bloomberg | `adb.bloomberg` | Dados de mercado financeiro (Terminal) |
 
 ## Instalacao
 
@@ -41,6 +41,32 @@ adb.sgs.collect(['selic', 'cdi'])
 adb.sgs.get_status()
 ```
 
+## Documentacao
+
+### Guias de Uso
+
+- **[getting-started.md](docs2/getting-started.md)** - Instalacao e primeiro uso
+
+### Fontes de Dados
+
+- **[bacen.md](docs2/providers/bacen.md)** - BCB (SGS + Expectations)
+- **[ibge.md](docs2/providers/ibge.md)** - IBGE/SIDRA
+- **[ipea.md](docs2/providers/ipea.md)** - IPEA
+- **[mte.md](docs2/providers/mte.md)** - MTE/CAGED
+- **[bloomberg.md](docs2/providers/bloomberg.md)** - Bloomberg Terminal
+
+### Uso Avancado
+
+- **[querying.md](docs2/advanced/querying.md)** - Queries SQL com DuckDB
+- **[extending.md](docs2/advanced/extending.md)** - Como adicionar novos providers
+
+### Arquitetura Interna
+
+- **[architecture.md](docs2/internals/architecture.md)** - Visao geral da arquitetura
+- **[domain.md](docs2/internals/domain.md)** - BaseExplorer, Schemas, Exceptions
+- **[infra.md](docs2/internals/infra.md)** - Config, Logging, Persistencia
+- **[services.md](docs2/internals/services.md)** - BaseCollector, Registry
+
 ## Estrutura de Dados
 
 ```
@@ -61,16 +87,6 @@ data/raw/
     daily/            # ibov_points.parquet, brent.parquet...
 ```
 
-## Documentacao
-
-- **[architecture.md](docs/architecture.md)** - Visao geral da arquitetura, componentes e fluxos
-- **[core.md](docs/core.md)** - Modulo central (QueryEngine, DataManager, Explorers, utils)
-- **[bacen.md](docs/bacen.md)** - SGS e Expectations (Banco Central)
-- **[ibge.md](docs/ibge.md)** - SIDRA (IBGE)
-- **[ipea.md](docs/ipea.md)** - Dados agregados IPEA
-- **[mte.md](docs/mte.md)** - CAGED (microdados de emprego)
-- **[bloomberg.md](docs/bloomberg.md)** - Dados de mercado financeiro
-
 ## Visualizacao (chartkit)
 
 A visualizacao de graficos e feita pela biblioteca externa **chartkit**.
@@ -80,4 +96,3 @@ import chartkit
 
 df.chartkit.plot(title="Selic", kind='line', units='%')
 ```
-

@@ -1,5 +1,74 @@
 # Project Changelog
 
+## [2026-01-30 05:16]
+
+### Changed
+- **Refatoracao arquitetural completa**: Migracao de estrutura flat por provider para arquitetura em camadas (Clean Architecture):
+  - `core/` -> Distribuido entre `domain/`, `infra/`, `services/`, `shared/`
+  - `bacen/`, `bloomberg/`, `ibge/`, `ipea/`, `mte/` -> Consolidados em `providers/`
+
+### Added
+- Nova camada **domain/** (regras de negocio):
+  - `schemas/`: Schemas Pydantic para indicadores (`IndicatorConfig`, etc.)
+  - `exceptions.py`: Excecoes do dominio
+  - `explorers.py`: Classes base de exploracao de dados
+- Nova camada **infra/** (infraestrutura):
+  - `config.py`: Configuracoes globais
+  - `log.py`: Sistema de logging com loguru
+  - `resilience.py`: Retry com tenacity
+  - `persistence/`: Storage, query engine e validacao de dados
+- Nova camada **providers/** (fontes de dados):
+  - `bacen/sgs/`: Client, collector, explorer, indicators
+  - `bacen/expectations/`: Client, collector, explorer, indicators
+  - `bloomberg/`: Client, collector, explorer, indicators
+  - `ibge/sidra/`: Client, collector, explorer, indicators
+  - `ipea/`: Client, collector, explorer, indicators
+  - `mte/caged/`: Client, collector, explorer, indicators
+- Nova camada **services/** (servicos de aplicacao):
+  - `collectors/base.py`: BaseCollector
+  - `collectors/registry.py`: Registry de collectors
+- Nova camada **shared/** (utilitarios):
+  - `utils/dates.py`: Funcoes de manipulacao de datas
+  - `utils/indicators.py`: Funcoes de indicadores
+- Camada **ui/** expandida:
+  - `__init__.py` com exports publicos
+
+### Removed
+- Estrutura antiga com modulos por provider na raiz de `src/adb/`:
+  - `bacen/` (45 arquivos, ~1500 linhas)
+  - `bloomberg/` (5 arquivos, ~500 linhas)
+  - `ibge/` (6 arquivos, ~900 linhas)
+  - `ipea/` (5 arquivos, ~400 linhas)
+  - `mte/` (6 arquivos, ~750 linhas)
+  - `core/` monolitico (~2000 linhas)
+- Total: **~6000 linhas** de codigo legado removidas e reorganizadas
+
+## [2026-01-30 04:25]
+
+### Changed
+- Refatoracao arquitetural para **lazy loading** de dependencias pesadas (Rich, loguru):
+  - `core/log.py`: Imports de loguru e config movidos para dentro de `_ensure_configured()` (lazy)
+  - `core/data/query.py`: Logger agora e carregado sob demanda via `_get_logger()`
+  - `core/resilience.py`: Logger agora e carregado sob demanda via `_get_logger()`
+  - `core/collectors/base.py`: Imports de `display` e `log` movidos para dentro do `__init__`
+  - `core/__init__.py`: Display e get_display agora usam `__getattr__` para lazy loading
+- `core/data/storage.py` refatorado com **Callback Pattern** para desacoplar de display:
+  - `StorageCallback`: Protocol para feedback de operacoes
+  - `NullCallback`: Implementacao silenciosa (default)
+  - `DisplayCallback`: Adapter que conecta ao display Rich
+  - `DataManager` agora aceita `callback` opcional no construtor
+
+### Added
+- Novo modulo `ui/` para separacao de responsabilidades:
+  - `display.py` movido de `core/` para `ui/`
+  - `ui/__init__.py` com exports publicos
+- Alias de compatibilidade em `core/display.py` (deprecated, emite warning)
+
+### Performance
+- `import adb` agora **nao carrega Rich** (~90ms economizados no import time)
+- Display e carregado apenas quando um collector e instanciado ou display e explicitamente usado
+- `adb.sgs.available()` funciona sem carregar display
+
 ## [2026-01-30 01:57]
 
 ### Added
