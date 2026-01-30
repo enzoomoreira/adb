@@ -20,6 +20,8 @@ from rich.progress import (
     BarColumn,
     TaskProgressColumn,
     TimeRemainingColumn,
+    TimeElapsedColumn,
+    MofNCompleteColumn,
 )
 
 T = TypeVar('T')
@@ -55,12 +57,15 @@ class _ProgressBar(Iterator[T]):
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
+            MofNCompleteColumn(),
             TaskProgressColumn(),
+            TimeElapsedColumn(),
+            TextColumn("/"),
             TimeRemainingColumn(),
             console=display._console,
             disable=not display.verbose,
             transient=not leave and not is_jupyter,
-            refresh_per_second=4 if is_jupyter else 10,
+            refresh_per_second=4 if is_jupyter else 15,
         )
 
         # Iniciar o progress e a task

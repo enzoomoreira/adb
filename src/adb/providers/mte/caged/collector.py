@@ -235,7 +235,6 @@ class CAGEDCollector(BaseCollector):
                     as_completed(future_to_period),
                     total=len(missing),
                     desc=f"  {config['prefix']}",
-                    unit="mes",
                 ) as pbar:
                     for future in pbar:
                         year, month, rows, error = future.result()

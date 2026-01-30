@@ -292,7 +292,8 @@ selic = chartkit.to_month_end(sgs.read('selic_acum_mensal', start=START_JUROS_RE
 
 # Selic 12m composta e juros real via Fisher
 selic_12m = chartkit.compound_rolling(selic['value'])
-juros_real = chartkit.real_rate(selic_12m, ipca['value']).dropna().to_frame('value')
+juros_real = ((1 + selic_12m/100) / (1 + ipca['value']/100) - 1) * 100
+juros_real = juros_real.dropna().to_frame('value')
 
 save_chart(
     juros_real,

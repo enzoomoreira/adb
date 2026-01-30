@@ -1,5 +1,17 @@
 # Project Changelog
 
+## [2026-01-30 15:05]
+
+### Changed
+- **generate_full_report.py**: Calculo de juros real agora usa formula inline de Fisher ao inves de `chartkit.real_rate()`:
+  - Formula explicita: `((1 + selic_12m/100) / (1 + ipca/100) - 1) * 100`
+  - Remove dependencia de funcao externa para calculo simples
+- **display.py**: Barra de progresso Rich aprimorada com mais informacoes:
+  - Adicionado contador `MofNCompleteColumn` (ex: "15/100")
+  - Adicionado tempo decorrido `TimeElapsedColumn` com separador "/"
+  - Taxa de refresh aumentada de 10Hz para 15Hz (melhor responsividade)
+- **caged/collector.py**: Removido parametro `unit="mes"` da progress bar (deprecated no Rich)
+
 ## [2026-01-30 05:16]
 
 ### Changed
