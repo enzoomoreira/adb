@@ -1,5 +1,36 @@
 # Project Changelog
 
+## [2026-01-30 00:50]
+
+### Removed
+- Modulo `core/charting/` completamente removido do projeto:
+  - Accessor `df.agora.plot()` (accessor.py)
+  - Motor de plotagem `AgoraPlotter` (engine.py)
+  - Sistema de overlays (moving_average, bands, reference_lines)
+  - Componentes (footer, markers, collision detection)
+  - Tema e paleta de cores (styling/)
+  - Transformacoes (yoy, mom, accum_12m, annualize_daily, compound_rolling, real_rate, etc.)
+  - Fonte BradescoSans-Light.ttf
+- Documentacao `docs/charting.md` removida
+- Dependencias `matplotlib` e `statsmodels` removidas do pyproject.toml
+- Atributo `adb.charting` removido (lazy loading)
+
+### Changed
+- Visualizacao agora usa biblioteca externa **chartkit** (instalada localmente via path editable)
+- Script `generate_full_report.py` atualizado para usar `chartkit` ao inves de `adb.core.charting`:
+  - `df.agora.plot()` -> `df.chartkit.plot()`
+  - `charting.to_month_end()` -> `chartkit.to_month_end()`
+  - `charting.compound_rolling()` -> `chartkit.compound_rolling()`
+  - `charting.real_rate()` -> `chartkit.real_rate()`
+- Documentacoes atualizadas para referenciar chartkit:
+  - `README.md`: Nova secao "Visualizacao (chartkit)" com exemplo de uso
+  - `docs/architecture.md`: Diagramas atualizados, referencias ao chartkit externo
+  - `docs/core.md`: Removida secao charting, adicionada nota sobre chartkit
+- `.gitignore` atualizado: adicionada pasta `assets/`
+
+### Added
+- Arquivo `charting.toml` (nao rastreado) com configuracao de charting
+
 ## [2026-01-29 15:56]
 
 ### Added

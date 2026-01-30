@@ -14,7 +14,10 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 
 # Agora-Database
-from adb import sgs, sidra, charting, bloomberg, ipea
+from adb import sgs, sidra, bloomberg, ipea
+
+# Chartkit (biblioteca de graficos)
+import chartkit
 
 # Periodo padrao para filtros (em anos)
 ANOS_PADRAO = 12
@@ -59,7 +62,7 @@ def save_chart(df, filename, title, source=None, kind='line', units='%', **kwarg
         print(f"  [SKIP] {title} - dados vazios")
         return
 
-    df.agora.plot(
+    df.chartkit.plot(
         kind=kind,
         title=title,
         units=units,
@@ -284,12 +287,12 @@ save_chart(
 )
 
 # Juros real (precisa de dados desde o inicio do periodo de 26 anos para calculo rolling)
-ipca = charting.to_month_end(sidra.read('ipca_12m', start=START_JUROS_REAL))
-selic = charting.to_month_end(sgs.read('selic_acum_mensal', start=START_JUROS_REAL))
+ipca = chartkit.to_month_end(sidra.read('ipca_12m', start=START_JUROS_REAL))
+selic = chartkit.to_month_end(sgs.read('selic_acum_mensal', start=START_JUROS_REAL))
 
 # Selic 12m composta e juros real via Fisher
-selic_12m = charting.compound_rolling(selic['value'])
-juros_real = charting.real_rate(selic_12m, ipca['value']).dropna().to_frame('value')
+selic_12m = chartkit.compound_rolling(selic['value'])
+juros_real = chartkit.real_rate(selic_12m, ipca['value']).dropna().to_frame('value')
 
 save_chart(
     juros_real,
@@ -399,5 +402,5 @@ save_chart(
 # RESUMO
 # =============================================================================
 print(f"\n{'='*50}")
-print(f"Graficos gerados em: {charting.CHARTS_PATH}")
-print(f"Total: {len(list(charting.CHARTS_PATH.glob('*.png')))} arquivos")
+print(f"Graficos gerados em: {chartkit.CHARTS_PATH}")
+print(f"Total: {len(list(chartkit.CHARTS_PATH.glob('*.png')))} arquivos")

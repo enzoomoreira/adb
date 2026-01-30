@@ -65,9 +65,19 @@ data/raw/
 
 - **[architecture.md](docs/architecture.md)** - Visao geral da arquitetura, componentes e fluxos
 - **[core.md](docs/core.md)** - Modulo central (QueryEngine, DataManager, Explorers, utils)
-- **[charting.md](docs/charting.md)** - Visualizacao com `.agora.plot()`
 - **[bacen.md](docs/bacen.md)** - SGS e Expectations (Banco Central)
 - **[ibge.md](docs/ibge.md)** - SIDRA (IBGE)
 - **[ipea.md](docs/ipea.md)** - Dados agregados IPEA
 - **[mte.md](docs/mte.md)** - CAGED (microdados de emprego)
 - **[bloomberg.md](docs/bloomberg.md)** - Dados de mercado financeiro
+
+## Visualizacao (chartkit)
+
+A visualizacao de graficos e feita pela biblioteca externa **chartkit**.
+
+```python
+import chartkit
+
+df.chartkit.plot(title="Selic", kind='line', units='%')
+```
+

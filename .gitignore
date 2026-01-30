@@ -13,7 +13,7 @@ wheels/
 /data/
 
 # Temp files
-temp
+temp/
 
 # Test benchmarks
 scripts/tests/benchmark/
@@ -23,3 +23,6 @@ logs/
 
 # Claude
 .claude/
+
+# Assets
+assets/

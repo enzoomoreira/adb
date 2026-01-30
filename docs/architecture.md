@@ -35,7 +35,6 @@ agora-database/
 │       │   ├── exceptions.py     # Excecoes customizadas (ADBException)
 │       │   ├── collectors/       # Abstracao de coleta
 │       │   ├── data/             # Persistencia e queries
-│       │   ├── charting/         # Visualizacao
 │       │   └── utils/            # Utilitarios gerais
 │       ├── bacen/                # Modulo BCB (SGS + Expectations)
 │       ├── mte/                  # Modulo MTE (CAGED)
@@ -80,10 +79,9 @@ graph TD
         BE --> BBGExp[BloombergExplorer]
     end
 
-    subgraph Visualizacao
+    subgraph Visualizacao [Visualizacao - chartkit externo]
         DF[pandas.DataFrame]
-        DF --> AA["AgoraAccessor (.agora)"]
-        AA --> AP["AgoraPlotter (via .plot())"]
+        DF --> CK["chartkit<br/>(biblioteca externa)"]
     end
 ```
 
@@ -96,7 +94,8 @@ graph TD
 | **DataManager** | `core/data/storage.py` | Persistencia I/O (Parquet) |
 | **QueryEngine** | `core/data/query.py` | Consultas SQL (DuckDB) |
 | **DataValidator** | `core/data/validation.py` | Validacao de integridade (cuallee, bizdays) |
-| **AgoraPlotter** | `core/charting/engine.py` | Motor de visualizacao |
+
+> **Nota:** O sistema de visualizacao foi movido para a biblioteca externa **chartkit**.
 
 Para documentacao detalhada de cada componente, consulte [core.md](core.md).
 
@@ -125,8 +124,8 @@ flowchart TD
 
     subgraph Saida ["3. Saida"]
         DF[DataFrame]
-        VIZ[".agora.plot()"]
-        TRF["Transforms<br/>yoy, mom, accum_12m"]
+        VIZ[".chartkit.plot()<br/>(biblioteca externa)"]
+        TRF["chartkit.transforms<br/>yoy, mom, accum_12m"]
         CHART["Chart (PNG)"]
     end
 
@@ -181,20 +180,20 @@ adb.sgs.available()
 adb.sgs.info('selic')
 ```
 
-### Visualizacao
+### Visualizacao (chartkit)
 
 ```python
 import adb
-import adb.core.charting  # Registra o accessor 'agora'
-from adb.core.charting import yoy, mom, accum_12m
+import chartkit
+from chartkit import yoy, mom, accum_12m
 
 df = adb.sgs.read('selic', start='2020')
 
 # Plotagem basica
-df.agora.plot(title="Selic", kind='line')
+df.chartkit.plot(title="Selic", kind='line', units='%')
 
 # Com transformacao
-yoy(df).agora.plot(title="Selic - Variacao Anual")
+yoy(df).chartkit.plot(title="Selic - Variacao Anual", units='%')
 ```
 
 ---
@@ -207,7 +206,6 @@ yoy(df).agora.plot(title="Selic - Variacao Anual")
 | **Facade** | Explorers simplificam acesso a Collectors + QueryEngine |
 | **Lazy Loading** | Exploradores carregados sob demanda |
 | **Decorator** | `@retry` para resiliencia de rede |
-| **Pandas Accessor** | `df.agora` para plotagem integrada |
 
 ---
 
@@ -233,9 +231,11 @@ Para detalhes de implementacao, consulte [core.md](core.md).
 | Doc | Conteudo |
 |-----|----------|
 | [core.md](core.md) | API completa do modulo central (collectors, data, utils) |
-| [charting.md](charting.md) | Sistema de visualizacao |
 | [bacen.md](bacen.md) | Coletor BCB (SGS + Expectations) |
 | [ibge.md](ibge.md) | Coletor IBGE/SIDRA |
 | [ipea.md](ipea.md) | Coletor IPEA |
 | [mte.md](mte.md) | Coletor MTE/CAGED |
 | [bloomberg.md](bloomberg.md) | Coletor Bloomberg |
+
+> **Visualizacao:** Consulte a documentacao da biblioteca **chartkit** para graficos.
+

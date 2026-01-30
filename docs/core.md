@@ -16,7 +16,8 @@ O modulo `adb.core` fornece a infraestrutura compartilhada por todos os coletore
 - **Collectors** - Classe base para coleta de dados
 - **Data** - Persistencia (DataManager), queries (QueryEngine), exploradores (BaseExplorer) e validacao (DataValidator)
 - **Utils** - Funcoes auxiliares de datas e indicadores
-- **Charting** - Sistema de visualizacao (ver [charting.md](charting.md))
+
+> **Nota:** O sistema de visualizacao foi movido para a biblioteca externa **chartkit**.
 
 ### Estrutura de Arquivos
 
@@ -36,10 +37,9 @@ src/adb/core/
 │   ├── query.py          # QueryEngine (DuckDB)
 │   ├── explorers.py      # BaseExplorer
 │   └── validation.py     # DataValidator (validacao de integridade)
-├── utils/
-│   ├── dates.py          # parse_date, normalize_index
-│   └── indicators.py     # list_keys, get_config
-└── charting/             # Ver charting.md
+└── utils/
+    ├── dates.py          # parse_date, normalize_index
+    └── indicators.py     # list_keys, get_config
 ```
 
 ---
@@ -663,35 +663,6 @@ df = normalize_index(df)
 
 Lista de nomes reconhecidos como coluna de data:
 `['date', 'Date', 'data', 'Data', 'DATE']`
-
----
-
-## core.charting
-
-**Localizacao:** `src/adb/core/charting/`
-
-Sistema de visualizacao integrado ao Pandas. Para documentacao completa, consulte [charting.md](charting.md).
-
-### Resumo
-
-- **AgoraAccessor:** Pandas accessor (`df.agora.plot()`)
-- **AgoraPlotter:** Motor de plotagem padronizado
-- **Transforms:** `yoy`, `mom`, `accum_12m`, `diff`, `normalize`
-- **Theme:** Tema visual Agora com paleta de cores institucional
-
-```python
-import adb
-import adb.core.charting  # Registra o accessor
-from adb.core.charting import yoy, mom
-
-df = adb.sgs.read('selic', start='2020')
-
-# Plotagem basica
-df.agora.plot(title="Selic", kind='line')
-
-# Com transformacao
-yoy(df).agora.plot(title="Selic - Variacao Anual")
-```
 
 ---
 

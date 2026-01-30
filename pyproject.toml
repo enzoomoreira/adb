@@ -7,13 +7,13 @@ requires-python = ">=3.12"
 dependencies = [
     "bizdays>=1.0.14",
     "blpapi>=3.25.12.1",
+    "chartkit",
     "cuallee[duckdb]>=0.5.2",
     "duckdb>=1.4.2",
     "fastparquet>=2024.11.0",
     "ipeadatapy>=0.1.9",
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",
-    "matplotlib>=3.10.7",
     "openpyxl>=3.1.5",
     "pandas>=2.3.3",
     "py7zr>=0.20.0",
@@ -21,7 +21,6 @@ dependencies = [
     "python-bcb>=0.3.3",
     "scipy>=1.16.3",
     "seaborn>=0.13.2",
-    "statsmodels>=0.14.5",
     "tqdm>=4.67.1",
     "xbbg>=0.10.3",
 ]
@@ -36,3 +35,6 @@ packages = ["src/adb"]
 [[tool.uv.index]]
 name = "bloomberg"
 url = "https://blpapi.bloomberg.com/repository/releases/python/simple/"
+
+[tool.uv.sources]
+chartkit = { path = "../chartkit", editable = true }

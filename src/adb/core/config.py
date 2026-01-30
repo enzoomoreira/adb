@@ -30,6 +30,7 @@ PROJECT_ROOT = get_project_root()
 DATA_PATH = PROJECT_ROOT / 'data'
 OUTPUTS_PATH = DATA_PATH / 'outputs'
 LOG_PATH = PROJECT_ROOT / 'logs'
+ASSETS_PATH = PROJECT_ROOT / 'assets'
 
 # =========================================================================
 # Resilience defaults (retry, timeout)
