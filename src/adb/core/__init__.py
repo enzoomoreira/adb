@@ -22,6 +22,15 @@ from .display import Display, get_display
 # Config global
 from .config import PROJECT_ROOT, DATA_PATH
 
+# Schemas Pydantic para validacao
+from .schemas import (
+    IndicatorConfig,
+    SGSIndicatorConfig,
+    IPEAIndicatorConfig,
+    SIDRAIndicatorConfig,
+    validate_indicator_config,
+)
+
 __all__ = [
     # Coleta (interno)
     'BaseCollector',
@@ -34,4 +43,10 @@ __all__ = [
     # Config
     'PROJECT_ROOT',
     'DATA_PATH',
+    # Schemas
+    'IndicatorConfig',
+    'SGSIndicatorConfig',
+    'IPEAIndicatorConfig',
+    'SIDRAIndicatorConfig',
+    'validate_indicator_config',
 ]

@@ -10,8 +10,9 @@ O modulo `adb.core` fornece a infraestrutura compartilhada por todos os coletore
 
 - **Configuracao** - Paths e constantes globais
 - **Logging** - Logs tecnicos em arquivo com rotacao
-- **Display** - Output visual ao usuario (banners, progresso, cores ANSI)
-- **Resiliencia** - Retry com backoff exponencial para APIs
+- **Display** - Output visual ao usuario (banners, progresso via Rich)
+- **Resiliencia** - Retry com backoff exponencial para APIs (via tenacity)
+- **Schemas** - Validacao Pydantic para configuracoes de indicadores
 - **Excecoes** - Hierarquia de erros customizados
 - **Collectors** - Classe base para coleta de dados
 - **Data** - Persistencia (DataManager), queries (QueryEngine), exploradores (BaseExplorer) e validacao (DataValidator)
@@ -25,10 +26,13 @@ O modulo `adb.core` fornece a infraestrutura compartilhada por todos os coletore
 src/adb/core/
 ├── __init__.py           # API publica centralizada
 ├── config.py             # Configuracao global (paths, timeouts)
-├── log.py                # Logging tecnico (apenas arquivo)
-├── display.py            # Output visual ao usuario (console)
-├── resilience.py         # Decorator @retry
+├── log.py                # Logging tecnico (loguru, apenas arquivo)
+├── display.py            # Output visual ao usuario (Rich)
+├── resilience.py         # Decorator @retry (tenacity)
 ├── exceptions.py         # Excecoes customizadas
+├── schemas/              # Validacao Pydantic
+│   ├── __init__.py       # Exports
+│   └── indicators.py     # Schemas de indicadores
 ├── collectors/
 │   ├── base.py           # BaseCollector
 │   └── registry.py       # Registro de collectors
@@ -99,21 +103,22 @@ print(DATA_PATH)     # Path do diretorio de dados
 
 **Localizacao:** `src/adb/core/log.py`
 
-Sistema de logging tecnico centralizado. Registra informacoes detalhadas apenas em arquivo para debugging e auditoria.
+Sistema de logging tecnico centralizado usando **loguru**. Registra informacoes detalhadas apenas em arquivo para debugging e auditoria.
 
 ### get_logger(name)
 
-Cria ou retorna logger configurado.
+Cria ou retorna logger configurado com contexto.
 
 | Parametro | Tipo | Descricao |
 |-----------|------|-----------|
 | name | str | Nome do logger (geralmente `__name__`) |
 
-**Retorno:** `logging.Logger`
+**Retorno:** Logger loguru com contexto do modulo (`logger.bind(name=name)`)
 
 **Caracteristicas:**
-- **Arquivo:** DEBUG+, rotacao 10MB, 5 backups em `logs/adb_YYYY-MM-DD.log`
+- **Arquivo:** DEBUG+, rotacao 10MB, retencao 30 dias em `logs/adb_YYYY-MM-DD.log`
 - **Formato:** `[YYYY-MM-DD HH:MM:SS] LEVEL [logger_name] message`
+- **Lazy initialization:** Configura apenas na primeira chamada de `get_logger()`
 - **Sem console:** Output visual ao usuario e feito via `Display` (ver `core.display`)
 
 ```python
@@ -130,32 +135,31 @@ logger.debug("Detalhes de debugging")
 
 **Localizacao:** `src/adb/core/display.py`
 
-Sistema de output visual para o usuario. Separa feedback visual (console) de logging tecnico (arquivo).
+Sistema de output visual para o usuario usando **Rich**. Separa feedback visual (console) de logging tecnico (arquivo).
 
 ### Display
 
 Classe que gerencia output visual. Responsabilidades:
-- Banners e separadores
-- Mensagens de progresso e status
-- Barras de progresso (via tqdm)
+- Banners e separadores (via `rich.panel.Panel`)
+- Mensagens de progresso e status (com markup Rich para cores)
+- Barras de progresso (via `rich.progress.Progress` com spinner, barra e tempo restante)
 - Formatacao consistente
-- Cores ANSI para destaque (warning/error/banners)
+- Detecta automaticamente ambiente Jupyter e ajusta comportamento
 
 **Thread-safety:**
-- Usa `tqdm.write()` quando ha barras ativas (evita output corrompido)
 - Contador de barras protegido por lock
 
 | Parametro | Tipo | Default | Descricao |
 |-----------|------|---------|-----------|
 | verbose | bool | True | Se True, exibe mensagens. Se False, silencia tudo |
 | stream | TextIO | sys.stdout | Stream de saida |
-| colors | bool | True | Usa cores ANSI quando suportado |
+| colors | bool | True | Usa cores quando suportado |
 
 #### Metodos
 
 | Metodo | Descricao |
 |--------|-----------|
-| `banner(title, subtitle, first_run, indicator_count)` | Banner de inicio de coleta |
+| `banner(title, subtitle, first_run, indicator_count)` | Banner de inicio de coleta (Panel com borda verde) |
 | `end_banner(total)` | Banner de conclusao |
 | `separator()` | Linha separadora |
 | `fetch_start(name, since)` | Inicio de fetch de indicador |
@@ -163,9 +167,11 @@ Classe que gerencia output visual. Responsabilidades:
 | `saved(path)` | Arquivo salvo |
 | `appended(path)` | Arquivo atualizado (append) |
 | `warning(message)` | Aviso (amarelo) |
-| `error(message)` | Erro (vermelho) |
+| `error(message)` | Erro (vermelho) - sempre exibido, mesmo com verbose=False |
 | `info(message)` | Mensagem informativa |
-| `progress(iterable, total, desc, unit, leave)` | Barra de progresso |
+| `progress(iterable, total, desc, leave)` | Barra de progresso |
+
+> **Nota:** O parametro `unit` de `progress()` esta deprecated e sera removido em versao futura.
 
 ### get_display(verbose=True)
 
@@ -195,7 +201,7 @@ for item in display.progress(items, total=100, desc="Processando"):
 
 **Localizacao:** `src/adb/core/resilience.py`
 
-Decorator para retry automatico com backoff exponencial.
+Decorator para retry automatico com backoff exponencial usando **tenacity**.
 
 ### @retry()
 
@@ -205,7 +211,12 @@ Decorator para retry automatico com backoff exponencial.
 | delay | float | 1.0 | Delay inicial em segundos |
 | backoff_factor | float | 2.0 | Multiplicador do delay |
 | exceptions | tuple | TRANSIENT_EXCEPTIONS | Excecoes que disparam retry |
-| jitter | bool | True | Adiciona variacao aleatoria (0.5x-1.5x) |
+| jitter | bool | True | Usa `wait_random_exponential` (variacao aleatoria) |
+
+**Comportamento:**
+- Com jitter=True: usa `wait_random_exponential` para delays aleatorios
+- Com jitter=False: usa `wait_exponential` para delays fixos
+- Logs de retry via callbacks integrados com loguru
 
 **Excecoes Transientes (retry automatico):**
 - `requests.RequestException`, `ConnectionError`, `Timeout`
@@ -219,6 +230,79 @@ from adb.core.resilience import retry
 @retry(max_attempts=3, delay=1.0)
 def fetch_data(url):
     return requests.get(url, timeout=30)
+```
+
+---
+
+## core.schemas
+
+**Localizacao:** `src/adb/core/schemas/`
+
+Sistema de validacao de configuracoes de indicadores usando **Pydantic**. Garante que configuracoes estejam corretas antes de fazer requisicoes a APIs externas.
+
+### Schemas Disponiveis
+
+| Schema | Fonte | Campos Validados |
+|--------|-------|------------------|
+| `IndicatorConfig` | Base | name (str), frequency (Literal), description (str|None) |
+| `SGSIndicatorConfig` | BCB/SGS | code (int > 0) |
+| `IPEAIndicatorConfig` | IPEA | code (str nao-vazia), unit (str|None), source (str|None) |
+| `SIDRAIndicatorConfig` | IBGE/SIDRA | code (int > 0), parameters (dict com campos obrigatorios) |
+
+### FrequencyType
+
+Tipo literal para frequencias suportadas:
+```python
+FrequencyType = Literal["daily", "monthly", "quarterly", "yearly"]
+```
+
+### validate_indicator_config(config, schema_class)
+
+Valida um dicionario de configuracoes de indicadores.
+
+| Parametro | Tipo | Descricao |
+|-----------|------|-----------|
+| config | dict[str, dict] | Dicionario {chave: config_dict} |
+| schema_class | type[IndicatorConfig] | Classe do schema a usar |
+
+**Retorno:** `dict[str, IndicatorConfig]` - Dicionario com schemas validados
+
+**Raises:** `ValueError` se alguma configuracao for invalida (indica qual key falhou)
+
+```python
+from adb.core.schemas import (
+    SGSIndicatorConfig,
+    IPEAIndicatorConfig,
+    validate_indicator_config,
+)
+
+# Validar configuracao de indicadores SGS
+from adb.bacen.sgs.indicators import SGS_CONFIG
+validated = validate_indicator_config(SGS_CONFIG, SGSIndicatorConfig)
+
+# Acessar schema validado
+print(validated['selic'].code)       # 432
+print(validated['selic'].frequency)  # 'daily'
+```
+
+### Exemplo de Schema
+
+```python
+from adb.core.schemas import SGSIndicatorConfig
+
+# Validacao em runtime
+config = SGSIndicatorConfig(
+    name="Taxa Selic",
+    code=432,
+    frequency="daily",
+    description="Meta da taxa Selic"
+)
+
+# Erro se codigo invalido
+try:
+    invalid = SGSIndicatorConfig(name="Test", code=-1, frequency="daily")
+except ValueError as e:
+    print(f"Erro: {e}")  # code > 0
 ```
 
 ---

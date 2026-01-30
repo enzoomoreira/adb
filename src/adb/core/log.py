@@ -1,23 +1,58 @@
 """
 Configuracao centralizada de logging para o projeto.
 
+Usa loguru para logging simplificado com rotacao automatica.
 Logs sao salvos em {PROJECT_ROOT}/logs/ com rotacao automatica.
 """
 
-import logging
 from datetime import datetime
-from logging.handlers import RotatingFileHandler
+
+from loguru import logger
 
 from adb.core.config import LOG_PATH
 
-# Criar diretorio de logs uma vez no import (nao em cada get_logger)
+# Criar diretorio de logs uma vez no import
 LOG_PATH.mkdir(exist_ok=True)
 
+# Flag para evitar configuracao duplicada
+_configured = False
 
-def get_logger(name: str) -> logging.Logger:
+
+def _configure_logger():
     """
-    Retorna logger configurado apenas para arquivo.
+    Configura loguru na primeira chamada de get_logger() (lazy initialization).
 
+    Remove handler padrao e adiciona file handler com rotacao.
+    Console handler foi removido - usar Display para output visual.
+    """
+    global _configured
+    if _configured:
+        return
+
+    # Remove handler padrao do loguru (console colorido)
+    logger.remove()
+
+    # File handler com rotacao (10MB max, 30 dias retencao)
+    today = datetime.now().strftime('%Y-%m-%d')
+    log_file = LOG_PATH / f"adb_{today}.log"
+
+    logger.add(
+        log_file,
+        format="[{time:YYYY-MM-DD HH:mm:ss}] {level} [{name}] {message}",
+        level="DEBUG",
+        rotation="10 MB",
+        retention="30 days",
+        encoding="utf-8",
+    )
+
+    _configured = True
+
+
+def get_logger(name: str):
+    """
+    Retorna logger configurado para o modulo especificado.
+
+    Configura o logger na primeira chamada (lazy initialization).
     Logs vao para {PROJECT_ROOT}/logs/adb_YYYY-MM-DD.log
 
     O arquivo .log contem informacoes tecnicas para debugging:
@@ -32,36 +67,7 @@ def get_logger(name: str) -> logging.Logger:
         name: Nome do logger (geralmente __name__ ou nome da classe)
 
     Returns:
-        logging.Logger configurado (apenas file handler)
+        Logger loguru com contexto do modulo
     """
-    logger = logging.getLogger(name)
-
-    # Se logger ja tem handlers, assume que ja esta configurado
-    if logger.handlers:
-        return logger
-
-    logger.setLevel(logging.DEBUG)
-
-    # Formatter para arquivo (detalhado)
-    file_formatter = logging.Formatter(
-        '[%(asctime)s] %(levelname)s [%(name)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-    # File Handler com rotacao (10MB max, 5 backups)
-    today = datetime.now().strftime('%Y-%m-%d')
-    log_file = LOG_PATH / f"adb_{today}.log"
-
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
-        encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
-
-    # Console handler removido - usar Display para output visual
-
-    return logger
+    _configure_logger()
+    return logger.bind(name=name)

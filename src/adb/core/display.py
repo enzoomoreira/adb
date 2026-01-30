@@ -1,91 +1,36 @@
 """
 Sistema de display para output visual ao usuario.
 
+Usa Rich para formatacao e cores no terminal.
 Separa feedback visual (console) de logging tecnico (arquivo).
 Para logging tecnico, use get_logger() de core.log.
 """
 
 import sys
 import threading
+import warnings
 from typing import TextIO, Iterator, Iterable, TypeVar
 
-from tqdm.auto import tqdm
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TimeRemainingColumn,
+)
 
 T = TypeVar('T')
 
 
-# =============================================================================
-# Cores ANSI
-# =============================================================================
-
-class _Colors:
-    """
-    Codigos ANSI para cores no terminal.
-
-    Suporta deteccao automatica de TTY e habilita VIRTUAL_TERMINAL_PROCESSING
-    no Windows para compatibilidade com cores ANSI.
-    """
-
-    # Codigos de cores
-    RESET = '\033[0m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-
-    # Cache do resultado de enabled() - avaliado uma vez
-    _enabled: bool | None = None
-
-    @classmethod
-    def enabled(cls) -> bool:
-        """
-        Verifica se cores ANSI sao suportadas no terminal atual.
-
-        Resultado e cacheado apos primeira chamada, pois suporte a cores
-        nao muda durante execucao.
-
-        Returns:
-            True se cores sao suportadas, False caso contrario.
-        """
-        if cls._enabled is not None:
-            return cls._enabled
-
-        # Verifica se stdout e um TTY (nao redirecionado para arquivo)
-        if not hasattr(sys.stdout, 'isatty') or not sys.stdout.isatty():
-            cls._enabled = False
-            return cls._enabled
-
-        # No Windows, precisamos habilitar VIRTUAL_TERMINAL_PROCESSING
-        if sys.platform == 'win32':
-            try:
-                import ctypes
-                kernel32 = ctypes.windll.kernel32
-                # STD_OUTPUT_HANDLE = -11
-                handle = kernel32.GetStdHandle(-11)
-                # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
-                mode = ctypes.c_ulong()
-                kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-                kernel32.SetConsoleMode(handle, mode.value | 0x0004)
-                cls._enabled = True
-            except Exception:
-                # Fallback se falhar (terminal antigo ou sem suporte)
-                cls._enabled = False
-        else:
-            # Em sistemas Unix-like, TTY geralmente suporta cores
-            cls._enabled = True
-
-        return cls._enabled
-
-
-# =============================================================================
-# Progress Bar Wrapper
-# =============================================================================
-
 class _ProgressBar(Iterator[T]):
     """
-    Wrapper em volta do tqdm que notifica o Display quando inicia/finaliza.
+    Wrapper em volta do Rich Progress que mantem compatibilidade com a API anterior.
 
-    Isso permite que Display._print() use tqdm.write() automaticamente
-    quando ha barras de progresso ativas, evitando output corrompido.
+    Permite uso em for-loops e como context manager.
+    Detecta automaticamente ambiente Jupyter para ajustar comportamento.
     """
 
     def __init__(
@@ -94,21 +39,37 @@ class _ProgressBar(Iterator[T]):
         display: 'Display',
         total: int = None,
         desc: str = None,
-        unit: str = "it",
         leave: bool = False,
     ):
         self._display = display
-        self._pbar = tqdm(
-            iterable,
-            total=total,
-            desc=desc,
-            unit=unit,
-            leave=leave,
+        self._iterable = iterable
+        self._total = total
+        self._desc = desc or "Processando"
+        self._leave = leave
+
+        # Em Jupyter: nao usar transient (causa duplicacao) e refresh mais lento
+        is_jupyter = display._is_jupyter
+
+        # Criar progress bar do Rich
+        self._progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            console=display._console,
             disable=not display.verbose,
-            file=display.stream,
+            transient=not leave and not is_jupyter,
+            refresh_per_second=4 if is_jupyter else 10,
         )
-        # Obter iterador do tqdm (necessario para tqdm_asyncio)
-        self._iter = iter(self._pbar)
+
+        # Iniciar o progress e a task
+        self._progress.start()
+        self._task_id = self._progress.add_task(self._desc, total=total)
+
+        # Obter iterador
+        self._iter = iter(iterable)
+
         # Incrementa contador de barras ativas (thread-safe)
         with self._display._bars_lock:
             self._display._active_bars += 1
@@ -118,19 +79,21 @@ class _ProgressBar(Iterator[T]):
 
     def __next__(self) -> T:
         try:
-            return next(self._iter)
+            item = next(self._iter)
+            self._progress.advance(self._task_id)
+            return item
         except StopIteration:
             self.close()
             raise
 
     def close(self):
         """Fecha a barra e decrementa contador."""
-        if self._pbar is not None:
-            self._pbar.close()
+        if self._progress is not None:
+            self._progress.stop()
             # Decrementa contador de barras ativas (thread-safe)
             with self._display._bars_lock:
                 self._display._active_bars = max(0, self._display._active_bars - 1)
-            self._pbar = None
+            self._progress = None
 
     def __enter__(self) -> '_ProgressBar[T]':
         return self
@@ -141,17 +104,16 @@ class _ProgressBar(Iterator[T]):
 
 class Display:
     """
-    Gerencia output visual para o usuario.
+    Gerencia output visual para o usuario usando Rich.
 
     Responsabilidades:
     - Banners e separadores
     - Mensagens de progresso e status
-    - Barras de progresso (via tqdm)
+    - Barras de progresso
     - Formatacao consistente
-    - Cores ANSI para destaque (warning/error/banners)
+    - Cores para destaque (warning/error/banners)
 
     Thread-safety:
-    - Usa tqdm.write() quando ha barras ativas (evita output corrompido)
     - Contador de barras protegido por lock
 
     Para logging tecnico (arquivo), use get_logger() de core.log.
@@ -159,7 +121,7 @@ class Display:
     Args:
         verbose: Se True, exibe mensagens. Se False, silencia tudo.
         stream: Stream de saida (default: sys.stdout).
-        colors: Se True, usa cores ANSI quando suportado.
+        colors: Se True, usa cores quando suportado.
 
     Exemplo:
         display = Display(verbose=True)
@@ -181,7 +143,19 @@ class Display:
     ):
         self.verbose = verbose
         self.stream = stream or sys.stdout
-        self._use_colors = colors and _Colors.enabled()
+
+        # Detecta Jupyter primeiro (antes de criar Console final)
+        detect_console = Console()
+        self._is_jupyter = detect_console.is_jupyter
+
+        # Em Jupyter, Rich usa IPython.display.display() para cada print, criando outputs
+        # separados (bug conhecida: github.com/Textualize/rich/issues/3483).
+        # Solucao: force_jupyter=False faz Rich usar ANSI codes (suportados por notebooks modernos)
+        self._console = Console(
+            file=self.stream,
+            no_color=not colors,
+            force_jupyter=False if self._is_jupyter else None,  # Desativa HTML rendering em Jupyter
+        )
 
         # Thread-safety para barras de progresso
         self._active_bars = 0
@@ -196,36 +170,18 @@ class Display:
         """
         self.verbose = verbose
 
-    def _colorize(self, text: str, color: str) -> str:
+    def _print(self, message: str = "", style: str = None):
         """
-        Aplica cor ANSI ao texto se cores estiverem habilitadas.
+        Print interno com controle de verbose.
 
         Args:
-            text: Texto a colorir.
-            color: Codigo de cor ANSI (ex: _Colors.YELLOW).
-
-        Returns:
-            Texto com codigos de cor ou texto original se cores desabilitadas.
-        """
-        if self._use_colors:
-            return f"{color}{text}{_Colors.RESET}"
-        return text
-
-    def _print(self, message: str = ""):
-        """
-        Print interno com controle de verbose e compatibilidade com tqdm.
-
-        Quando ha barras de progresso ativas, usa tqdm.write() para evitar
-        que o output quebre a renderizacao das barras.
+            message: Mensagem a imprimir.
+            style: Estilo Rich (ex: "green", "bold red").
         """
         if not self.verbose:
             return
 
-        # Se ha barras ativas, usar tqdm.write para nao corromper output
-        if self._active_bars > 0:
-            tqdm.write(message, file=self.stream)
-        else:
-            print(message, file=self.stream)
+        self._console.print(message, style=style)
 
     # =========================================================================
     # Progress Bar
@@ -236,20 +192,17 @@ class Display:
         iterable: Iterable[T],
         total: int = None,
         desc: str = None,
-        unit: str = "it",
+        unit: str = None,
         leave: bool = False,
     ) -> _ProgressBar[T]:
         """
         Retorna iterador com barra de progresso.
 
-        Quando ha barra ativa, todos os metodos de print do Display
-        usam tqdm.write() automaticamente para evitar output corrompido.
-
         Args:
             iterable: Iteravel a percorrer
             total: Numero total de itens (obrigatorio se iterable nao tem __len__)
             desc: Descricao exibida a esquerda da barra
-            unit: Unidade dos itens (ex: "arquivo", "registro")
+            unit: DEPRECATED - nao utilizado pelo Rich Progress. Sera removido.
             leave: Se True, mantem barra apos conclusao
 
         Returns:
@@ -264,12 +217,18 @@ class Display:
                 for future in pbar:
                     result = future.result()
         """
+        if unit is not None:
+            warnings.warn(
+                "Parametro 'unit' esta deprecated e sera removido em versao futura",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         return _ProgressBar(
             iterable=iterable,
             display=self,
             total=total,
             desc=desc,
-            unit=unit,
             leave=leave,
         )
 
@@ -294,27 +253,32 @@ class Display:
                        Se None, nao mostra status de execucao.
             indicator_count: Numero de indicadores a coletar
         """
-        separator = self._colorize("=" * 70, _Colors.GREEN)
-        self._print(separator)
+        if not self.verbose:
+            return
+
+        # Construir conteudo do banner
+        content_lines = []
 
         if first_run is not None:
             if first_run:
-                self._print("PRIMEIRA EXECUCAO - Download de Historico Completo")
+                content_lines.append("[bold]PRIMEIRA EXECUCAO[/bold] - Download de Historico Completo")
             else:
-                self._print("ATUALIZACAO INCREMENTAL")
-            self._print(separator)
+                content_lines.append("[bold]ATUALIZACAO INCREMENTAL[/bold]")
+            content_lines.append("")
 
-        self._print(title)
+        content_lines.append(f"[bold]{title}[/bold]")
 
         if subtitle:
-            self._print(subtitle)
-
-        self._print(separator)
+            content_lines.append(subtitle)
 
         if indicator_count is not None:
-            self._print(f"Indicadores a coletar: {indicator_count}")
+            content_lines.append("")
+            content_lines.append(f"Indicadores a coletar: {indicator_count}")
 
-        self._print()
+        content = "\n".join(content_lines)
+
+        self._console.print(Panel(content, border_style="green"))
+        self._console.print()
 
     def end_banner(self, total: int = None):
         """
@@ -323,19 +287,19 @@ class Display:
         Args:
             total: Total de registros coletados (opcional)
         """
-        separator = self._colorize("=" * 70, _Colors.GREEN)
-        self._print(separator)
+        if not self.verbose:
+            return
 
         if total is not None:
-            self._print(f"Coleta concluida! Total: {total:,} registros")
+            content = f"[bold]Coleta concluida![/bold] Total: {total:,} registros"
         else:
-            self._print("Coleta concluida!")
+            content = "[bold]Coleta concluida![/bold]"
 
-        self._print(separator)
+        self._console.print(Panel(content, border_style="green"))
 
     def separator(self):
         """Exibe linha separadora."""
-        self._print("-" * 70)
+        self._print("-" * 70, style="dim")
 
     # =========================================================================
     # Status de Fetch
@@ -349,10 +313,13 @@ class Display:
             name: Nome do indicador
             since: Data de inicio (se incremental)
         """
+        if not self.verbose:
+            return
+
         if since:
-            self._print(f"  Buscando {name} desde {since}...")
+            self._console.print(f"  [cyan]>[/cyan] Buscando {name} desde {since}...")
         else:
-            self._print(f"  Buscando {name} (historico completo)...")
+            self._console.print(f"  [cyan]>[/cyan] Buscando {name} (historico completo)...")
 
     def fetch_result(self, count: int):
         """
@@ -361,11 +328,14 @@ class Display:
         Args:
             count: Numero de registros obtidos
         """
+        if not self.verbose:
+            return
+
         if count:
-            self._print(f"  {count:,} registros")
+            self._console.print(f"    [green]{count:,} registros[/green]")
         else:
-            self._print(f"  Sem dados disponiveis")
-        self._print()
+            self._console.print("    [yellow]Sem dados disponiveis[/yellow]")
+        self._console.print()
 
     # =========================================================================
     # Arquivos
@@ -378,7 +348,7 @@ class Display:
         Args:
             path: Caminho relativo do arquivo
         """
-        self._print(f"Salvo: {path}")
+        self._print(f"[green]Salvo:[/green] {path}")
 
     def appended(self, path: str):
         """
@@ -387,7 +357,7 @@ class Display:
         Args:
             path: Caminho relativo do arquivo
         """
-        self._print(f"Append: {path}")
+        self._print(f"[green]Append:[/green] {path}")
 
     # =========================================================================
     # Warnings e Errors
@@ -395,23 +365,24 @@ class Display:
 
     def warning(self, message: str):
         """
-        Exibe warning para usuario (em amarelo se cores habilitadas).
+        Exibe warning para usuario (em amarelo).
 
         Args:
             message: Mensagem de aviso
         """
-        colored_msg = self._colorize(f"  {message}", _Colors.YELLOW)
-        self._print(colored_msg)
+        if not self.verbose:
+            return
+        self._console.print(f"  [yellow]Aviso:[/yellow] {message}")
 
     def error(self, message: str):
         """
-        Exibe erro para usuario (em vermelho se cores habilitadas).
+        Exibe erro para usuario (em vermelho).
 
         Args:
             message: Mensagem de erro
         """
-        colored_msg = self._colorize(f"Erro: {message}", _Colors.RED)
-        self._print(colored_msg)
+        # Erros sempre sao exibidos, mesmo com verbose=False
+        self._console.print(f"[red]Erro:[/red] {message}")
 
     def info(self, message: str):
         """
@@ -423,7 +394,7 @@ class Display:
         self._print(message)
 
     def __repr__(self) -> str:
-        return f"Display(verbose={self.verbose}, colors={self._use_colors})"
+        return f"Display(verbose={self.verbose})"
 
 
 # =============================================================================

@@ -2,16 +2,22 @@
 Utilitarios de resiliencia: retry, backoff, tratamento de erros.
 
 Fornece decorators para lidar com falhas transientes em APIs externas.
+Usa tenacity para implementacao robusta de retry com exponential backoff.
 """
 
-import functools
 import json
-import random
-import time
-from typing import Any, Callable, Tuple, Type
+from typing import Tuple, Type
 
 import requests
 import urllib3
+from tenacity import (
+    retry as tenacity_retry,
+    stop_after_attempt,
+    wait_exponential,
+    wait_random_exponential,
+    retry_if_exception_type,
+    RetryCallState,
+)
 
 from adb.core.config import (
     DEFAULT_BACKOFF_FACTOR,
@@ -24,7 +30,40 @@ from adb.core.log import get_logger
 logger = get_logger("adb.core.resilience")
 
 
-# Excecoes transientes que justificam retry (rede, parsing, APIs instáveis)
+def _before_sleep_log(retry_state: RetryCallState):
+    """
+    Callback para logar antes de dormir entre tentativas.
+
+    Usa loguru ao inves do before_sleep_log padrao do tenacity.
+    """
+    if retry_state.outcome is None:
+        return
+
+    exception = retry_state.outcome.exception()
+    logger.warning(
+        f"Tentativa {retry_state.attempt_number} falhou para {retry_state.fn.__name__}. "
+        f"Retry em {retry_state.upcoming_sleep:.1f}s. Erro: {exception}"
+    )
+
+
+def _log_final_failure(retry_state: RetryCallState):
+    """
+    Callback quando todas tentativas falharam.
+
+    Loga erro final e re-levanta a excecao original.
+    Este callback e necessario pois before_sleep nao e chamado na ultima
+    tentativa (nao ha sleep apos a falha final).
+    """
+    exception = retry_state.outcome.exception()
+    logger.error(
+        f"Funcao {retry_state.fn.__name__} falhou apos "
+        f"{retry_state.attempt_number} tentativas. Erro: {exception}"
+    )
+    # Re-levanta a excecao original
+    raise retry_state.outcome.result()
+
+
+# Excecoes transientes que justificam retry (rede, parsing, APIs instaveis)
 TRANSIENT_EXCEPTIONS: Tuple[Type[Exception], ...] = (
     # Rede/HTTP
     requests.RequestException,
@@ -49,9 +88,11 @@ def retry(
     backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
     exceptions: Tuple[Type[Exception], ...] = TRANSIENT_EXCEPTIONS,
     jitter: bool = True,
-) -> Callable:
+):
     """
     Decorator para retry com exponential backoff e jitter.
+
+    Usa tenacity internamente para implementacao robusta.
 
     Args:
         max_attempts: Numero maximo de tentativas
@@ -68,36 +109,21 @@ def retry(
         def fetch_data():
             return requests.get(url, timeout=30)
     """
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            current_delay = delay
+    # Calcula delay maximo baseado nos parametros
+    # Com 3 tentativas e backoff 2.0: delays podem ser 1, 2, 4 -> max ~4s
+    max_delay = delay * (backoff_factor ** (max_attempts - 1))
 
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as e:
-                    if attempt == max_attempts:
-                        logger.error(
-                            f"Funcao {func.__name__} falhou apos {max_attempts} tentativas. "
-                            f"Erro: {e}"
-                        )
-                        raise
+    # Seleciona estrategia de wait baseado em jitter
+    if jitter:
+        wait_strategy = wait_random_exponential(multiplier=delay, max=max_delay)
+    else:
+        wait_strategy = wait_exponential(multiplier=delay, max=max_delay)
 
-                    # Calcular delay com jitter opcional
-                    if jitter:
-                        jitter_factor = random.uniform(0.5, 1.5)
-                        sleep_time = current_delay * jitter_factor
-                    else:
-                        sleep_time = current_delay
-
-                    logger.warning(
-                        f"Tentativa {attempt}/{max_attempts} falhou para {func.__name__}. "
-                        f"Retry em {sleep_time:.1f}s. Erro: {e}"
-                    )
-
-                    time.sleep(sleep_time)
-                    current_delay *= backoff_factor
-
-        return wrapper
-    return decorator
+    return tenacity_retry(
+        stop=stop_after_attempt(max_attempts),
+        wait=wait_strategy,
+        retry=retry_if_exception_type(exceptions),
+        before_sleep=_before_sleep_log,
+        retry_error_callback=_log_final_failure,
+        reraise=True,  # Re-levanta excecao original apos todas tentativas
+    )

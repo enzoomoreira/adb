@@ -1,5 +1,37 @@
 # Project Changelog
 
+## [2026-01-30 01:57]
+
+### Added
+- Novo modulo `core/schemas/` com validacao Pydantic para configuracoes de indicadores:
+  - `IndicatorConfig`: Schema base com campos comuns (name, frequency, description)
+  - `SGSIndicatorConfig`: Valida codigo SGS (int > 0)
+  - `IPEAIndicatorConfig`: Valida codigo IPEA (string nao-vazia) com unit/source opcionais
+  - `SIDRAIndicatorConfig`: Valida tabela SIDRA com parametros obrigatorios
+  - `validate_indicator_config()`: Funcao para validar dicionarios de configuracao
+- Schemas exportados em `core/__init__.py` para facil acesso
+- Dependencias: `pydantic>=2.12.5`, `loguru>=0.7.3`, `rich>=14.3.1`, `tenacity>=9.1.2`
+
+### Changed
+- Modulo `core/display.py` reescrito para usar **Rich** ao inves de tqdm:
+  - `_ProgressBar` agora usa `rich.progress.Progress` com spinner, barra e tempo restante
+  - Detecta automaticamente ambiente Jupyter e desativa HTML rendering (evita duplicacao de outputs)
+  - Banners agora usam `rich.panel.Panel` com bordas coloridas
+  - Mensagens de fetch/status usam markup Rich para cores
+  - Removida classe `_Colors` (cores ANSI manuais) - Rich gerencia automaticamente
+  - Parametro `unit` de `progress()` esta deprecated (nao usado pelo Rich Progress)
+- Modulo `core/log.py` reescrito para usar **loguru**:
+  - Lazy initialization via `_configure_logger()` (configura apenas na primeira chamada)
+  - Retencao de logs aumentada para 30 dias
+  - `get_logger()` retorna `logger.bind(name=name)` para contexto
+- Modulo `core/resilience.py` reescrito para usar **tenacity**:
+  - Decorator `retry()` agora e wrapper do `tenacity.retry`
+  - Callbacks `_before_sleep_log` e `_log_final_failure` para logging com loguru
+  - Suporta jitter via `wait_random_exponential` ou backoff fixo via `wait_exponential`
+
+### Removed
+- Dependencia `tqdm` removida (substituida por Rich)
+
 ## [2026-01-30 00:50]
 
 ### Removed
