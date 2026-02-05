@@ -521,17 +521,16 @@ SIDRA_CONFIG = {
         "description": "IPCA - Variacao Mensal por Grupos",
     },
     "pnad_desocupacao": {
-        "code": 4099,
+        "code": 6381,
         "name": "Taxa de Desocupacao (PNAD)",
-        "frequency": "quarterly",
+        "frequency": "monthly",  # Trimestres moveis com publicacao mensal
         "parameters": {
-            "agregados": "4099",
+            "agregados": "6381",
             "periodos": "all",
-            "variaveis": "4099", # Taxa de desocupacao
+            "variaveis": "4099",  # Taxa de desocupacao
             "nivel_territorial": "1",
             "localidades": "all",
-            "frequency": "quarterly",
         },
-        "description": "Taxa de Desocupacao - PNAD Continua",
+        "description": "Taxa de Desocupacao - PNAD Continua (Trimestre Movel)",
     }
 }

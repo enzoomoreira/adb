@@ -103,7 +103,7 @@ class BaseExplorer:
 
         Returns:
             DataFrame com series temporais
-            - Um indicador: DatetimeIndex + colunas do arquivo
+            - Um indicador: DatetimeIndex + coluna com nome do indicador
             - Multiplos: DatetimeIndex + coluna por indicador (join por data)
         """
         # Default: todos os indicadores
@@ -127,6 +127,8 @@ class BaseExplorer:
             df = normalize_index(df)
             if df.empty:
                 self.logger.warning(f"Nenhum dado encontrado para '{indicators[0]}'")
+            if 'value' in df.columns:
+                df = df.rename(columns={'value': indicators[0]})
             return df
 
         # Multiplos indicadores: join por data

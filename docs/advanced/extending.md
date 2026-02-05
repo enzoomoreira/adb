@@ -183,7 +183,8 @@ class NovaFonteClient:
             start_date: Data inicial 'YYYY-MM-DD' (opcional)
 
         Returns:
-            DataFrame com colunas ['date', 'value']
+            DataFrame com colunas ['date', 'value'] (convencao interna de storage;
+            o explorer renomeia 'value' para o nome do indicador no read())
         """
         params = {"codigo": code}
         if start_date:

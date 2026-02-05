@@ -291,9 +291,9 @@ ipca = chartkit.to_month_end(sidra.read('ipca_12m', start=START_JUROS_REAL))
 selic = chartkit.to_month_end(sgs.read('selic_acum_mensal', start=START_JUROS_REAL))
 
 # Selic 12m composta e juros real via Fisher
-selic_12m = chartkit.compound_rolling(selic['value'])
-juros_real = ((1 + selic_12m/100) / (1 + ipca['value']/100) - 1) * 100
-juros_real = juros_real.dropna().to_frame('value')
+selic_12m = chartkit.compound_rolling(selic['selic_acum_mensal'])
+juros_real = ((1 + selic_12m/100) / (1 + ipca['ipca_12m']/100) - 1) * 100
+juros_real = juros_real.dropna().to_frame('juros_real')
 
 save_chart(
     juros_real,

@@ -36,7 +36,7 @@ class ExpectationsExplorer(BaseExplorer):
         metric: Metrica a extrair ('Mediana', 'Media', 'Minimo', 'Maximo') - default 'Mediana'
 
     Quando year ou smooth sao passados, o resultado e agregado e retornado
-    no formato padrao (DatetimeIndex + coluna 'value'), compativel com outros explorers.
+    no formato padrao (DatetimeIndex + coluna com nome do indicador), compativel com outros explorers.
     """
 
     _CONFIG = EXPECTATIONS_CONFIG
@@ -79,7 +79,7 @@ class ExpectationsExplorer(BaseExplorer):
         Returns:
             DataFrame com expectativas.
             - Sem year/smooth: dados brutos com todas as colunas
-            - Com year/smooth: serie processada (DatetimeIndex + coluna 'value')
+            - Com year/smooth: serie processada (DatetimeIndex + coluna com nome do indicador)
 
         Examples:
             # Dados brutos
@@ -105,7 +105,10 @@ class ExpectationsExplorer(BaseExplorer):
             return df
 
         # Aplica filtros e processa para serie
-        return self._process_to_series(df, year=year, smooth=smooth, metric=metric)
+        df = self._process_to_series(df, year=year, smooth=smooth, metric=metric)
+        if len(indicators) == 1 and 'value' in df.columns:
+            df = df.rename(columns={'value': indicators[0]})
+        return df
 
     def _process_to_series(
         self,

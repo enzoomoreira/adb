@@ -1,5 +1,14 @@
 # Project Changelog
 
+## [2026-02-05 00:21]
+
+### Changed
+- **BaseExplorer.read()**: Coluna `value` agora e renomeada para o nome do indicador ao ler um unico indicador (ex: `selic` ao inves de `value`)
+- **ExpectationsExplorer.read()**: Mesma convencao de rename aplicada quando `year` ou `smooth` sao usados com indicador unico
+- **pnad_desocupacao**: Migrado da tabela SIDRA 4099 (trimestral) para 6381 (trimestre movel com publicacao mensal), refletindo a metodologia correta da PNAD Continua
+- **generate_full_report.py**: Referencias de coluna atualizadas de `'value'` para nomes especificos (`'selic_acum_mensal'`, `'ipca_12m'`, `'juros_real'`) conforme nova convencao
+- **docs/advanced/extending.md**: Documentacao atualizada para refletir que explorers renomeiam `value` para o nome do indicador no `read()`
+
 ## [2026-01-30 15:05]
 
 ### Changed
