@@ -30,4 +30,13 @@ class BloombergExplorer(BaseExplorer):
     def _COLLECTOR_CLASS(self):
         """Retorna a classe do coletor associado."""
         from adb.providers.bloomberg.collector import BloombergCollector
+
         return BloombergCollector
+
+    # =========================================================================
+    # Metodos auxiliares
+    # =========================================================================
+
+    def _subdir(self, indicator: str) -> str:
+        """Bloomberg tem subdir dinamico baseado em frequency."""
+        return f"bloomberg/{self._CONFIG[indicator]['frequency']}"

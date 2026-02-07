@@ -9,7 +9,7 @@ Series temporais de mercado via Bloomberg Terminal (xbbg).
 # =============================================================================
 
 # Lookback maximo para primeira execucao (evitar quotas Bloomberg)
-LOOKBACK_DAYS = 730  # 2 anos de historico
+LOOKBACK_DAYS = 365 * 6
 
 # =============================================================================
 # CONFIGURACAO DE INDICADORES BLOOMBERG
@@ -58,6 +58,22 @@ BLOOMBERG_CONFIG = {
         "description": "Indice Ibovespa em dolares",
         "category": "brazil_equities",
     },
+    "ibov_pl": {
+        "ticker": "IBOV Index",
+        "fields": ["INDX_ADJ_PE"],
+        "name": "P/L Ibovespa",
+        "frequency": "daily",
+        "description": "P/L Ibovespa",
+        "category": "brazil_equities",
+    },
+    "ibov_dy": {
+        "ticker": "IBOV Index",
+        "fields": ["EQY_DVD_YLD_12M"],
+        "name": "DY Ibovespa",
+        "frequency": "daily",
+        "description": "DY Ibovespa",
+        "category": "brazil_equities",
+    },
     "ifix": {
         "ticker": "IFIX Index",
         "fields": ["PX_LAST"],
@@ -90,5 +106,14 @@ BLOOMBERG_CONFIG = {
         "frequency": "daily",
         "description": "Ouro Spot em USD",
         "category": "commodities",
+    },
+    # === INDICES DE INFLACAO ===
+    "igpm": {
+        "ticker": "IBREGPMY Index",
+        "fields": ["PX_LAST"],
+        "name": "IGPM-10",
+        "frequency": "monthly",
+        "description": "Indice IGPM-10 FGV",
+        "category": "indexes",
     },
 }

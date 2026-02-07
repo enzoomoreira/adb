@@ -119,13 +119,15 @@ class BloombergCollector(BaseCollector):
         self._start(
             title="BLOOMBERG - Market Data",
             num_indicators=len(keys),
-            subdir='bloomberg/daily',
+            subdir="bloomberg/daily",
             check_first_run=True,
             verbose=verbose,
         )
 
         for key in keys:
             config = get_config(BLOOMBERG_CONFIG, key)
+            frequency = self._get_frequency_for_file(key)
+            subdir = f"bloomberg/{frequency}"
 
             # Bloomberg CONFIG tem 'fields' como lista, pegar primeiro field
             # (cada indicador tem exatamente 1 field por design)
@@ -141,11 +143,31 @@ class BloombergCollector(BaseCollector):
                 filename=key,
                 name=config["name"],
                 frequency=self._get_frequency_for_file(key),
+                subdir=subdir,
                 save=save,
                 verbose=verbose,
             )
 
         self._end(verbose=verbose)
+
+    def get_status(self) -> pd.DataFrame:
+        """
+        Retorna status dos arquivos Bloomberg (daily e monthly).
+
+        Returns:
+            DataFrame com status de cada arquivo
+        """
+        dfs = []
+        subdirs = ["bloomberg/daily", "bloomberg/monthly"]
+        for subdir in subdirs:
+            df = super().get_status(subdir)
+            if not df.empty:
+                dfs.append(df)
+
+        if not dfs:
+            return pd.DataFrame()
+
+        return pd.concat(dfs, ignore_index=True)
 
     def _get_frequency_for_file(self, filename: str) -> str | None:
         """
@@ -155,8 +177,7 @@ class BloombergCollector(BaseCollector):
             filename: Nome do arquivo (chave em BLOOMBERG_CONFIG)
 
         Returns:
-            'daily' (padrao para Bloomberg)
+            'daily' ou 'monthly'
         """
         config = BLOOMBERG_CONFIG.get(filename, {})
-        return config.get('frequency', 'daily')
-
+        return config.get("frequency", "daily")
