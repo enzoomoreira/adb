@@ -34,6 +34,7 @@ def _get_logger():
     global _logger
     if _logger is None:
         from adb.infra.log import get_logger  # ATUALIZADO
+
         _logger = get_logger("adb.infra.resilience")
     return _logger
 
@@ -48,8 +49,9 @@ def _before_sleep_log(retry_state: RetryCallState):
         return
 
     exception = retry_state.outcome.exception()
+    fn_name = retry_state.fn.__name__ if retry_state.fn else "unknown"
     _get_logger().warning(
-        f"Tentativa {retry_state.attempt_number} falhou para {retry_state.fn.__name__}. "
+        f"Tentativa {retry_state.attempt_number} falhou para {fn_name}. "
         f"Retry em {retry_state.upcoming_sleep:.1f}s. Erro: {exception}"
     )
 
@@ -62,9 +64,12 @@ def _log_final_failure(retry_state: RetryCallState):
     Este callback e necessario pois before_sleep nao e chamado na ultima
     tentativa (nao ha sleep apos a falha final).
     """
+    if retry_state.outcome is None:
+        return
     exception = retry_state.outcome.exception()
+    fn_name = retry_state.fn.__name__ if retry_state.fn else "unknown"
     _get_logger().error(
-        f"Funcao {retry_state.fn.__name__} falhou apos "
+        f"Funcao {fn_name} falhou apos "
         f"{retry_state.attempt_number} tentativas. Erro: {exception}"
     )
     # Re-levanta a excecao original

@@ -27,7 +27,7 @@ class BloombergCollector(BaseCollector):
 
     default_subdir = "bloomberg/daily"
 
-    def __init__(self, data_path: Path = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Inicializa o coletor.
 
@@ -46,12 +46,12 @@ class BloombergCollector(BaseCollector):
         ticker: str,
         field: str,
         filename: str,
-        name: str = None,
+        name: str | None = None,
         frequency: str = "daily",
-        subdir: str = None,
+        subdir: str | None = None,
         save: bool = True,
         verbose: bool = True,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame | None:
         """
         Coleta uma serie temporal Bloomberg.
 
@@ -150,7 +150,7 @@ class BloombergCollector(BaseCollector):
 
         self._end(verbose=verbose)
 
-    def get_status(self) -> pd.DataFrame:
+    def get_status(self, subdir: str | None = None) -> pd.DataFrame:
         """
         Retorna status dos arquivos Bloomberg (daily e monthly).
 
@@ -169,7 +169,7 @@ class BloombergCollector(BaseCollector):
 
         return pd.concat(dfs, ignore_index=True)
 
-    def _get_frequency_for_file(self, filename: str) -> str | None:
+    def _get_frequency_for_file(self, filename: str) -> str:
         """
         Retorna a frequencia de um indicador Bloomberg.
 

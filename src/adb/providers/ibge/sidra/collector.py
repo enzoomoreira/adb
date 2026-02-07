@@ -12,6 +12,7 @@ from adb.shared.utils import get_config
 from .client import SidraClient
 from .indicators import SIDRA_CONFIG
 
+
 class SidraCollector(BaseCollector):
     """
     Orquestrador de coleta de dados IBGE Sidra.
@@ -23,9 +24,9 @@ class SidraCollector(BaseCollector):
     Herda de BaseCollector para logging padronizado e get_status().
     """
 
-    default_subdir = 'ibge/sidra/monthly'
+    default_subdir = "ibge/sidra/monthly"
 
-    def __init__(self, data_path: Path = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Inicializa o coletor.
 
@@ -41,7 +42,7 @@ class SidraCollector(BaseCollector):
 
     def collect(
         self,
-        indicators: list[str] | str = 'all',
+        indicators: list[str] | str = "all",
         save: bool = True,
         verbose: bool = True,
     ) -> None:
@@ -74,7 +75,7 @@ class SidraCollector(BaseCollector):
             # Logica de fetch
             def fetch(start_date: str | None) -> pd.DataFrame:
                 return self.client.get_data(
-                    config=config['parameters'],
+                    config=config["parameters"],
                     start_date=start_date,
                 )
 
@@ -83,16 +84,16 @@ class SidraCollector(BaseCollector):
             self._sync(
                 fetch_fn=fetch,
                 filename=key,
-                name=config['name'],
+                name=config["name"],
                 subdir=subdir,
                 frequency=frequency,
                 save=save,
                 verbose=verbose,
             )
-            
+
         self._end(verbose=verbose)
 
-    def get_status(self) -> pd.DataFrame:
+    def get_status(self, subdir: str | None = None) -> pd.DataFrame:
         """
         Retorna status dos arquivos IBGE Sidra.
 
@@ -102,7 +103,7 @@ class SidraCollector(BaseCollector):
             DataFrame com status de cada arquivo
         """
         dfs = []
-        subdirs = ['ibge/sidra/monthly', 'ibge/sidra/quarterly']
+        subdirs = ["ibge/sidra/monthly", "ibge/sidra/quarterly"]
         for subdir in subdirs:
             df = super().get_status(subdir)
             if not df.empty:
@@ -113,7 +114,7 @@ class SidraCollector(BaseCollector):
 
         return pd.concat(dfs, ignore_index=True)
 
-    def _get_frequency_for_file(self, filename: str) -> str | None:
+    def _get_frequency_for_file(self, filename: str) -> str:
         """
         Retorna a frequencia de um indicador IBGE Sidra.
 
@@ -124,5 +125,4 @@ class SidraCollector(BaseCollector):
             'monthly' ou 'quarterly'
         """
         config = SIDRA_CONFIG.get(filename, {})
-        return config.get('frequency', 'monthly')
-
+        return config.get("frequency", "monthly")

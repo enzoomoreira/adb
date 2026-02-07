@@ -24,9 +24,9 @@ class SGSCollector(BaseCollector):
     Herda de BaseCollector para logging padronizado e get_status().
     """
 
-    default_subdir = 'bacen/sgs/daily'
+    default_subdir = "bacen/sgs/daily"
 
-    def __init__(self, data_path: Path = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Inicializa o coletor.
 
@@ -44,12 +44,12 @@ class SGSCollector(BaseCollector):
         self,
         code: int,
         filename: str,
-        name: str = None,
-        frequency: str = 'daily',
-        subdir: str = None,
+        name: str | None = None,
+        frequency: str = "daily",
+        subdir: str | None = None,
         save: bool = True,
         verbose: bool = True,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame | None:
         """
         Coleta uma serie temporal com controle total.
 
@@ -97,7 +97,7 @@ class SGSCollector(BaseCollector):
 
     def collect(
         self,
-        indicators: list[str] | str = 'all',
+        indicators: list[str] | str = "all",
         save: bool = True,
         verbose: bool = True,
     ) -> None:
@@ -118,7 +118,7 @@ class SGSCollector(BaseCollector):
         self._start(
             title="BACEN - Sistema Gerenciador de Series",
             num_indicators=len(keys),
-            subdir='bacen/sgs/daily',
+            subdir="bacen/sgs/daily",
             check_first_run=True,
             verbose=verbose,
         )
@@ -129,9 +129,9 @@ class SGSCollector(BaseCollector):
             subdir = f"bacen/sgs/{frequency}"
 
             self._collect_series(
-                code=config['code'],
+                code=config["code"],
                 filename=key,
-                name=config['name'],
+                name=config["name"],
                 frequency=frequency,
                 subdir=subdir,
                 save=save,
@@ -142,7 +142,7 @@ class SGSCollector(BaseCollector):
 
     # =========================================================================
 
-    def get_status(self) -> pd.DataFrame:
+    def get_status(self, subdir: str | None = None) -> pd.DataFrame:
         """
         Retorna status dos arquivos SGS (daily e monthly).
 
@@ -150,7 +150,7 @@ class SGSCollector(BaseCollector):
             DataFrame com status de cada arquivo
         """
         dfs = []
-        subdirs = ['bacen/sgs/daily', 'bacen/sgs/monthly']
+        subdirs = ["bacen/sgs/daily", "bacen/sgs/monthly"]
         for subdir in subdirs:
             df = super().get_status(subdir)
             if not df.empty:
@@ -161,7 +161,7 @@ class SGSCollector(BaseCollector):
 
         return pd.concat(dfs, ignore_index=True)
 
-    def _get_frequency_for_file(self, filename: str) -> str | None:
+    def _get_frequency_for_file(self, filename: str) -> str:
         """
         Retorna a frequencia de um indicador SGS.
 
@@ -172,5 +172,4 @@ class SGSCollector(BaseCollector):
             'daily' ou 'monthly'
         """
         config = SGS_CONFIG.get(filename, {})
-        return config.get('frequency', 'daily')
-
+        return config.get("frequency", "daily")

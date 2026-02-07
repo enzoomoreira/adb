@@ -27,9 +27,9 @@ class BaseCollector:
     - get_status() - para logica especifica (ex: CAGED usa periodos)
     """
 
-    default_subdir: str = 'raw'
+    default_subdir: str = "raw"
 
-    def __init__(self, data_path: Path = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Inicializa o coletor base.
 
@@ -37,10 +37,12 @@ class BaseCollector:
             data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
         """
         from adb.infra.config import DATA_PATH
+
         self.data_path = Path(data_path) if data_path else DATA_PATH
 
         # DataManager com callback para feedback visual
         from adb.infra.persistence.storage import DisplayCallback
+
         self.data_manager = DataManager(self.data_path, callback=DisplayCallback())
 
         # Imports lazy - so carrega quando collector e instanciado
@@ -55,7 +57,9 @@ class BaseCollector:
     # Display (output visual ao usuario)
     # =========================================================================
 
-    def _fetch_start(self, name: str, start_date: str = None, verbose: bool = True):
+    def _fetch_start(
+        self, name: str, start_date: str | None = None, verbose: bool = True
+    ):
         """Exibe inicio de fetch de indicador (console + log tecnico)."""
         self.display.set_verbose(verbose)
         self.display.fetch_start(name, start_date)
@@ -90,7 +94,7 @@ class BaseCollector:
     # Status
     # =========================================================================
 
-    def get_status(self, subdir: str = None) -> pd.DataFrame:
+    def get_status(self, subdir: str | None = None) -> pd.DataFrame:
         """
         Retorna status dos arquivos salvos com informacoes de saude.
 
@@ -128,16 +132,18 @@ class BaseCollector:
                 # Validar saude dos dados
                 health = validator.get_health(filename, subdir, frequency)
 
-                status_data.append({
-                    'arquivo': filename,
-                    'subdir': subdir,
-                    'registros': health.actual_records,
-                    'primeira_data': health.first_date,
-                    'ultima_data': health.last_date,
-                    'cobertura': health.coverage,
-                    'gaps': len(health.gaps) if health.gaps else 0,
-                    'status': health.status.value.upper(),
-                })
+                status_data.append(
+                    {
+                        "arquivo": filename,
+                        "subdir": subdir,
+                        "registros": health.actual_records,
+                        "primeira_data": health.first_date,
+                        "ultima_data": health.last_date,
+                        "cobertura": health.coverage,
+                        "gaps": len(health.gaps) if health.gaps else 0,
+                        "status": health.status.value.upper(),
+                    }
+                )
 
         return pd.DataFrame(status_data)
 
@@ -161,9 +167,7 @@ class BaseCollector:
     # =========================================================================
 
     def _normalize_indicators(
-        self,
-        indicators: list[str] | str,
-        config: dict
+        self, indicators: list[str] | str, config: dict
     ) -> list[str]:
         """
         Normaliza entrada de indicadores para lista.
@@ -175,21 +179,20 @@ class BaseCollector:
         Returns:
             Lista de chaves de indicadores
         """
-        if indicators == 'all':
+        if indicators == "all":
             return list(config.keys())
         elif isinstance(indicators, str):
             return [indicators]
         else:
             return list(indicators)
 
-
     def _start(
         self,
         title: str,
         num_indicators: int,
-        subdir: str = None,
+        subdir: str | None = None,
         check_first_run: bool = False,
-        verbose: bool = True
+        verbose: bool = True,
     ):
         """
         Exibe banner de inicio de coleta (console + log tecnico).
@@ -244,7 +247,6 @@ class BaseCollector:
         else:
             self.logger.info("Coleta concluida")
 
-
     def _next_date(self, last_date: pd.Timestamp | None, frequency: str) -> str | None:
         """
         Calcula data de inicio baseada na ultima data salva.
@@ -262,26 +264,26 @@ class BaseCollector:
         if last_date is None or pd.isna(last_date):
             return None
 
-        if frequency == 'monthly':
+        if frequency == "monthly":
             # Proximo mes (primeiro dia)
             next_month = (last_date.replace(day=1) + timedelta(days=32)).replace(day=1)
-            return next_month.strftime('%Y-%m-%d')
+            return next_month.strftime("%Y-%m-%d")
 
-        elif frequency == 'quarterly':
+        elif frequency == "quarterly":
             # Proximo trimestre (primeiro dia de Jan, Abr, Jul, Out)
             quarter = (last_date.month - 1) // 3  # 0, 1, 2, 3
             next_quarter_month = (quarter + 1) * 3 + 1  # 4, 7, 10, 13
             if next_quarter_month > 12:
                 return last_date.replace(
                     year=last_date.year + 1, month=1, day=1
-                ).strftime('%Y-%m-%d')
-            return last_date.replace(
-                month=next_quarter_month, day=1
-            ).strftime('%Y-%m-%d')
+                ).strftime("%Y-%m-%d")
+            return last_date.replace(month=next_quarter_month, day=1).strftime(
+                "%Y-%m-%d"
+            )
 
         else:
             # daily - proximo dia
-            return (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
+            return (last_date + timedelta(days=1)).strftime("%Y-%m-%d")
 
     def _sync(
         self,
@@ -289,10 +291,10 @@ class BaseCollector:
         filename: str,
         name: str,
         subdir: str,
-        frequency: str = 'daily',
+        frequency: str = "daily",
         save: bool = True,
         verbose: bool = True,
-    ) -> None:
+    ) -> pd.DataFrame | None:
         """
         Orquestra coleta incremental: valida dados existentes, busca novos, salva/append.
 
@@ -326,7 +328,9 @@ class BaseCollector:
         if not is_first_run and save:
             # Arquivo existe - calcular data de inicio
             if health.last_date:
-                start_date = self._next_date(pd.Timestamp(health.last_date), frequency)
+                ts = pd.Timestamp(health.last_date)
+                if isinstance(ts, pd.Timestamp):
+                    start_date = self._next_date(ts, frequency)
 
         # 3. Wrapper de log
         def fetch_with_log(date_param):

@@ -31,8 +31,8 @@ class IPEAClient:
     def get_data(
         self,
         code: str,
-        name: str = None,
-        start_date: str = None,
+        name: str | None = None,
+        start_date: str | None = None,
     ) -> pd.DataFrame:
         """
         Busca serie temporal do IPEADATA.
@@ -67,7 +67,7 @@ class IPEAClient:
         return df
 
     @retry()  # usa defaults de NETWORK_EXCEPTIONS, attempts, delay
-    def _fetch_timeseries(self, code: str, year: int = None) -> pd.DataFrame:
+    def _fetch_timeseries(self, code: str, year: int | None = None) -> pd.DataFrame:
         """Busca dados brutos do IPEA com retry."""
         if year:
             return ipeadatapy.timeseries(code, yearGreaterThan=year)
@@ -103,7 +103,7 @@ class IPEAClient:
         except Exception:
             return {}
 
-    def list_series(self, keyword: str = None) -> pd.DataFrame:
+    def list_series(self, keyword: str | None = None) -> pd.DataFrame:
         """
         Lista series disponiveis.
 
@@ -167,11 +167,7 @@ class IPEAClient:
 
         return df
 
-    def _filter_by_start_date(
-        self,
-        df: pd.DataFrame,
-        start_date: str
-    ) -> pd.DataFrame:
+    def _filter_by_start_date(self, df: pd.DataFrame, start_date: str) -> pd.DataFrame:
         """
         Filtra DataFrame por data inicial.
 

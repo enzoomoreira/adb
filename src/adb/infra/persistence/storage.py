@@ -7,7 +7,7 @@ Usado por todos os collectors do projeto.
 
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Protocol
+from typing import Protocol
 import tempfile
 
 import duckdb
@@ -50,6 +50,7 @@ class DisplayCallback:
 
     def __init__(self):
         from adb.ui.display import get_display
+
         self._display = get_display()
 
     def on_saved(self, path: str) -> None:
@@ -75,8 +76,8 @@ class DataManager:
 
     def __init__(
         self,
-        base_path: Path = None,
-        callback: Optional[StorageCallback] = None,
+        base_path: Path | None = None,
+        callback: StorageCallback | None = None,
     ):
         """
         Inicializa o gerenciador de dados.
@@ -86,12 +87,14 @@ class DataManager:
             callback: Callback para feedback de operacoes (opcional, default silencioso)
         """
         from adb.infra.config import DATA_PATH
+
         self.base_path = Path(base_path) if base_path else DATA_PATH
-        self.raw_path = self.base_path / 'raw'
-        self.processed_path = self.base_path / 'processed'
+        self.raw_path = self.base_path / "raw"
+        self.processed_path = self.base_path / "processed"
 
         # Composicao: usa QueryEngine para leituras otimizadas (DuckDB)
         from adb.infra.persistence.query import QueryEngine
+
         self._qe = QueryEngine(self.base_path)
 
         # Callback para feedback de operacoes (default silencioso)
@@ -105,9 +108,9 @@ class DataManager:
         self,
         df: pd.DataFrame,
         filename: str,
-        subdir: str = 'daily',
-        format: str = 'parquet',
-        metadata: dict = None,
+        subdir: str = "daily",
+        format: str = "parquet",
+        metadata: dict | None = None,
         verbose: bool = False,
     ):
         """
@@ -128,25 +131,22 @@ class DataManager:
         df = normalize_index(df)
 
         # Adicionar metadata ao DataFrame
-        df.attrs['filename'] = filename
-        df.attrs['subdir'] = subdir
-        df.attrs['saved_at'] = datetime.now().isoformat()
+        df.attrs["filename"] = filename
+        df.attrs["subdir"] = subdir
+        df.attrs["saved_at"] = datetime.now().isoformat()
         if metadata:
             df.attrs.update(metadata)
 
-        if format == 'parquet':
+        if format == "parquet":
             filepath = output_dir / f"{filename}.parquet"
-            df.to_parquet(
-                filepath,
-                engine='pyarrow',
-                compression='snappy',
-                index=True
-            )
-        elif format == 'csv':
+            df.to_parquet(filepath, engine="pyarrow", compression="snappy", index=True)
+        elif format == "csv":
             filepath = output_dir / f"{filename}.csv"
             df.to_csv(filepath, index=True)
         else:
-            raise ValueError(f"Formato '{format}' nao suportado. Use 'parquet' ou 'csv'.")
+            raise ValueError(
+                f"Formato '{format}' nao suportado. Use 'parquet' ou 'csv'."
+            )
 
         if verbose:
             self._callback.on_saved(str(filepath.relative_to(self.base_path)))
@@ -154,7 +154,7 @@ class DataManager:
     def read(
         self,
         filename: str,
-        subdir: str = 'daily',
+        subdir: str = "daily",
     ) -> pd.DataFrame:
         """
         Le arquivo de dados via DuckDB (otimizado).
@@ -181,8 +181,8 @@ class DataManager:
     def get_metadata(
         self,
         filename: str,
-        subdir: str = 'daily',
-    ) -> dict:
+        subdir: str = "daily",
+    ) -> dict | None:
         """
         Retorna metadados do arquivo (count, datas) de forma otimizada.
 
@@ -199,7 +199,7 @@ class DataManager:
         self,
         df: pd.DataFrame,
         filename: str,
-        subdir: str = 'daily',
+        subdir: str = "daily",
         dedup: bool = True,
         verbose: bool = False,
     ):
@@ -230,12 +230,14 @@ class DataManager:
         df = normalize_index(df)
 
         # Arquivo temporario para escrita atomica
-        temp_fd, temp_path_str = tempfile.mkstemp(suffix='.parquet', dir=filepath.parent)
+        temp_fd, temp_path_str = tempfile.mkstemp(
+            suffix=".parquet", dir=filepath.parent
+        )
         temp_path = Path(temp_path_str)
 
         try:
             # Registrar DataFrame como view temporaria no DuckDB
-            duckdb.register('_new_data', df.reset_index())
+            duckdb.register("_new_data", df.reset_index())
 
             if dedup:
                 # Streaming com deduplicacao por coluna 'date'
@@ -267,10 +269,11 @@ class DataManager:
                 """
 
             duckdb.sql(query)
-            duckdb.unregister('_new_data')
+            duckdb.unregister("_new_data")
 
             # Replace atomico
             import os
+
             os.close(temp_fd)
             temp_path.replace(filepath)
 
@@ -281,9 +284,10 @@ class DataManager:
             # Cleanup em caso de erro
             try:
                 import os
+
                 os.close(temp_fd)
                 temp_path.unlink(missing_ok=True)
-            except:
+            except Exception:
                 pass
             raise e
 
@@ -293,7 +297,7 @@ class DataManager:
 
     def list_files(
         self,
-        subdir: str = 'daily',
+        subdir: str = "daily",
     ) -> list[str]:
         """
         Lista arquivos salvos em um subdiretorio.
@@ -309,12 +313,12 @@ class DataManager:
         if not dir_path.exists():
             return []
 
-        return [f.stem for f in dir_path.glob('*.parquet')]
+        return [f.stem for f in dir_path.glob("*.parquet")]
 
     def get_last_date(
         self,
         filename: str,
-        subdir: str = 'daily',
+        subdir: str = "daily",
     ):
         """
         Retorna a ultima data disponivel em um arquivo.
@@ -337,8 +341,8 @@ class DataManager:
         # Tenta coluna 'date' (padronizado via normalize_index no save)
         try:
             result = self._qe.sql(f"SELECT MAX(date) as max_date FROM '{filepath}'")
-            if not result.empty and result['max_date'].iloc[0] is not None:
-                return pd.to_datetime(result['max_date'].iloc[0])
+            if not result.empty and result["max_date"].iloc[0] is not None:
+                return pd.to_datetime(result["max_date"].iloc[0])
         except Exception:
             pass
 
@@ -357,7 +361,7 @@ class DataManager:
         path = self.raw_path / subdir
         if not path.exists():
             return True
-        return len(list(path.glob('*.parquet'))) == 0
+        return len(list(path.glob("*.parquet"))) == 0
 
     def get_file_path(self, filename: str, subdir: str) -> Path:
         """
@@ -371,5 +375,3 @@ class DataManager:
             Path do arquivo Parquet
         """
         return self.raw_path / subdir / f"{filename}.parquet"
-
-

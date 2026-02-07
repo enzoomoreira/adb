@@ -47,6 +47,7 @@ class ExpectationsExplorer(BaseExplorer):
     def _COLLECTOR_CLASS(self):
         """Retorna a classe do coletor associado."""
         from adb.providers.bacen.expectations.collector import ExpectationsCollector
+
         return ExpectationsCollector
 
     # =========================================================================
@@ -56,12 +57,12 @@ class ExpectationsExplorer(BaseExplorer):
     def read(
         self,
         *indicators: str,
-        start: str = None,
-        end: str = None,
-        columns: List[str] = None,
-        year: int = None,
-        smooth: bool = None,
-        metric: str = 'Mediana',
+        start: str | None = None,
+        end: str | None = None,
+        columns: List[str] | None = None,
+        year: int | None = None,
+        smooth: bool | None = None,
+        metric: str = "Mediana",
     ) -> pd.DataFrame:
         """
         Le expectativas do Relatorio Focus.
@@ -106,16 +107,16 @@ class ExpectationsExplorer(BaseExplorer):
 
         # Aplica filtros e processa para serie
         df = self._process_to_series(df, year=year, smooth=smooth, metric=metric)
-        if len(indicators) == 1 and 'value' in df.columns:
-            df = df.rename(columns={'value': indicators[0]})
+        if len(indicators) == 1 and "value" in df.columns:
+            df = df.rename(columns={"value": indicators[0]})
         return df
 
     def _process_to_series(
         self,
         df: pd.DataFrame,
-        year: int = None,
-        smooth: bool = None,
-        metric: str = 'Mediana',
+        year: int | None = None,
+        smooth: bool | None = None,
+        metric: str = "Mediana",
     ) -> pd.DataFrame:
         """
         Processa DataFrame bruto para serie temporal padrao.
@@ -125,23 +126,29 @@ class ExpectationsExplorer(BaseExplorer):
         result = df.copy()
 
         # Filtro por ano de referencia (DataReferencia)
-        if year is not None and 'DataReferencia' in result.columns:
+        if year is not None and "DataReferencia" in result.columns:
             # DataReferencia pode ser int ou str dependendo da fonte
-            result['DataReferencia'] = result['DataReferencia'].astype(str)
-            result = result[result['DataReferencia'] == str(year)]
+            result["DataReferencia"] = result["DataReferencia"].astype(str)
+            result = result[result["DataReferencia"] == str(year)]
 
         # Filtro por serie suavizada
-        if smooth is not None and 'Suavizada' in result.columns:
-            flag = 'S' if smooth else 'N'
-            result = result[result['Suavizada'] == flag]
+        if smooth is not None and "Suavizada" in result.columns:
+            flag = "S" if smooth else "N"
+            result = result[result["Suavizada"] == flag]
 
         if result.empty:
-            return pd.DataFrame(columns=['value'])
+            return pd.DataFrame(columns=["value"])
 
         # Seleciona metrica
         if metric not in result.columns:
-            available = [c for c in result.columns if c in ['Mediana', 'Media', 'Minimo', 'Maximo']]
-            raise ValueError(f"Metrica '{metric}' nao encontrada. Disponiveis: {available}")
+            available = [
+                c
+                for c in result.columns
+                if c in ["Mediana", "Media", "Minimo", "Maximo"]
+            ]
+            raise ValueError(
+                f"Metrica '{metric}' nao encontrada. Disponiveis: {available}"
+            )
 
         result = result[[metric]]
 
@@ -150,7 +157,7 @@ class ExpectationsExplorer(BaseExplorer):
             result = result.groupby(result.index).mean()
 
         # Renomeia para formato padrao
-        result.columns = ['value']
+        result.columns = ["value"]
 
         return result.sort_index()
 
@@ -161,7 +168,7 @@ class ExpectationsExplorer(BaseExplorer):
     def _join(self, dfs: list, indicators: tuple) -> pd.DataFrame:
         """
         Override: Expectations concatena ao invés de join.
-        
+
         Cada indicador pode ter estrutura diferente, entao concatenamos
         com uma coluna 'indicator' para identificar.
         """
@@ -169,6 +176,6 @@ class ExpectationsExplorer(BaseExplorer):
             return pd.DataFrame()
 
         for df, ind in zip(dfs, indicators):
-            df['indicator'] = ind
+            df["indicator"] = ind
 
         return pd.concat(dfs, ignore_index=True)

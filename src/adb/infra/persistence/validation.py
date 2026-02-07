@@ -16,22 +16,25 @@ from bizdays import Calendar
 
 class HealthStatus(Enum):
     """Status de saude dos dados."""
-    OK = "ok"           # Dados completos e atualizados
-    STALE = "stale"     # Dados desatualizados
-    GAPS = "gaps"       # Dados com lacunas
-    MISSING = "missing" # Arquivo nao existe
+
+    OK = "ok"  # Dados completos e atualizados
+    STALE = "stale"  # Dados desatualizados
+    GAPS = "gaps"  # Dados com lacunas
+    MISSING = "missing"  # Arquivo nao existe
 
 
 class Frequency(Enum):
     """Frequencias de dados suportadas."""
-    DAILY = "daily"         # Dias uteis (ANBIMA)
-    MONTHLY = "monthly"     # Mensal
-    QUARTERLY = "quarterly" # Trimestral
+
+    DAILY = "daily"  # Dias uteis (ANBIMA)
+    MONTHLY = "monthly"  # Mensal
+    QUARTERLY = "quarterly"  # Trimestral
 
 
 @dataclass
 class Gap:
     """Representa uma lacuna nos dados."""
+
     start: date
     end: date
     expected_records: int
@@ -40,6 +43,7 @@ class Gap:
 @dataclass
 class HealthReport:
     """Relatorio de saude dos dados."""
+
     status: HealthStatus
     first_date: date | None = None
     last_date: date | None = None
@@ -67,15 +71,15 @@ class DataValidator:
 
     # Limites para considerar dados como desatualizados (stale)
     STALE_THRESHOLD = {
-        Frequency.DAILY: 3,      # 3 dias uteis
-        Frequency.MONTHLY: 45,   # 45 dias
-        Frequency.QUARTERLY: 95, # 95 dias (~3 meses)
+        Frequency.DAILY: 3,  # 3 dias uteis
+        Frequency.MONTHLY: 45,  # 45 dias
+        Frequency.QUARTERLY: 95,  # 95 dias (~3 meses)
     }
 
     # Limiar minimo de cobertura para considerar dados OK
     COVERAGE_THRESHOLD = 95.0
 
-    def __init__(self, base_path: Path = None):
+    def __init__(self, base_path: Path | None = None):
         """
         Inicializa o validador.
 
@@ -83,13 +87,14 @@ class DataValidator:
             base_path: Caminho base para dados. Default usa DATA_PATH.
         """
         from adb.infra.config import DATA_PATH
+
         self.base_path = Path(base_path) if base_path else DATA_PATH
-        self.raw_path = self.base_path / 'raw'
-        self._conn = duckdb.connect()
+        self.raw_path = self.base_path / "raw"
+        self._conn: duckdb.DuckDBPyConnection | None = duckdb.connect()
 
         # Calendario ANBIMA para dias uteis brasileiros
         try:
-            self._calendar = Calendar.load('ANBIMA')
+            self._calendar = Calendar.load("ANBIMA")
         except Exception:
             # Calendario fora do range ou erro ao carregar - usa fallback weekdays
             self._calendar = None
@@ -157,7 +162,9 @@ class DataValidator:
         last_date = max(actual_dates)
 
         # 3. Gerar datas esperadas baseado na frequencia
-        expected_dates = self._generate_expected_dates(first_date, date.today(), frequency)
+        expected_dates = self._generate_expected_dates(
+            first_date, date.today(), frequency
+        )
 
         # 4. Calcular gaps (datas faltantes)
         missing_dates = expected_dates - actual_dates
@@ -191,19 +198,23 @@ class DataValidator:
 
     def _has_date_column(self, filepath: Path) -> bool:
         """Verifica se arquivo tem coluna ou indice 'date'."""
+        assert self._conn is not None
         try:
             # DuckDB le indice como coluna automaticamente
             sql = f"DESCRIBE SELECT * FROM '{filepath}' LIMIT 0"
             schema = self._conn.execute(sql).df()
-            return 'date' in schema['column_name'].values
+            return "date" in schema["column_name"].values
         except Exception:
             return False
 
     def _get_row_count(self, filepath: Path) -> int:
         """Retorna contagem de linhas do arquivo."""
+        assert self._conn is not None
         try:
             sql = f"SELECT COUNT(*) FROM '{filepath}'"
-            return self._conn.execute(sql).fetchone()[0]
+            row = self._conn.execute(sql).fetchone()
+            assert row is not None
+            return row[0]
         except Exception:
             return 0
 
@@ -217,29 +228,31 @@ class DataValidator:
         """
         from cuallee import Check, CheckLevel
 
+        assert self._conn is not None
         try:
             # Ler apenas coluna date via DuckDB (mais eficiente que pd.read_parquet)
             sql = f"SELECT date FROM '{filepath}'"
             df = self._conn.execute(sql).df()
 
-            if df.empty or 'date' not in df.columns:
-                return {'passed': True, 'details': []}
+            if df.empty or "date" not in df.columns:
+                return {"passed": True, "details": []}
 
             check = Check(CheckLevel.WARNING, "HealthCheck")
             check.is_complete("date")  # Sem nulos
-            check.is_unique("date")    # Sem duplicatas
+            check.is_unique("date")  # Sem duplicatas
 
             result = check.validate(df)
 
             return {
-                'passed': result['status'].eq('PASS').all(),
-                'details': result.to_dict('records'),
+                "passed": result["status"].eq("PASS").all(),
+                "details": result.to_dict("records"),
             }
         except Exception as e:
-            return {'passed': False, 'error': str(e)}
+            return {"passed": False, "error": str(e)}
 
     def _get_actual_dates(self, filepath: Path) -> set[date]:
         """Extrai datas unicas do arquivo via DuckDB."""
+        assert self._conn is not None
         try:
             sql = f"SELECT DISTINCT CAST(date AS DATE) as d FROM '{filepath}'"
             result = self._conn.execute(sql).fetchall()
@@ -278,7 +291,7 @@ class DataValidator:
         elif frequency == Frequency.MONTHLY:
             # Primeiro dia de cada mes usando pandas date_range
             start_adjusted = start.replace(day=1)
-            return set(pd.date_range(start_adjusted, end, freq='MS').date)
+            return set(pd.date_range(start_adjusted, end, freq="MS").date)
 
         elif frequency == Frequency.QUARTERLY:
             # Primeiro dia de cada trimestre (jan, abr, jul, out)
@@ -290,7 +303,7 @@ class DataValidator:
                     current = current.replace(year=current.year + 1, month=1)
                 else:
                     current = current.replace(month=current.month + 1)
-            return set(pd.date_range(current, end, freq='QS').date)
+            return set(pd.date_range(current, end, freq="QS").date)
 
         return set()
 
@@ -337,21 +350,25 @@ class DataValidator:
                 gap_count += 1
             else:
                 # Fecha gap atual e inicia novo
-                gaps.append(Gap(
-                    start=gap_start,
-                    end=prev_date,
-                    expected_records=gap_count,
-                ))
+                gaps.append(
+                    Gap(
+                        start=gap_start,
+                        end=prev_date,
+                        expected_records=gap_count,
+                    )
+                )
                 gap_start = current_date
                 gap_count = 1
             prev_date = current_date
 
         # Adicionar ultimo gap
-        gaps.append(Gap(
-            start=gap_start,
-            end=prev_date,
-            expected_records=gap_count,
-        ))
+        gaps.append(
+            Gap(
+                start=gap_start,
+                end=prev_date,
+                expected_records=gap_count,
+            )
+        )
 
         return gaps
 

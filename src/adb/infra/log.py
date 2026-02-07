@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from loguru import Logger
 
 _configured: bool = False
-_logger_instance = None
+_logger_instance: "Logger | None" = None
 
 
 def _ensure_configured():
@@ -38,7 +38,7 @@ def _ensure_configured():
     logger.remove()
 
     # File handler com rotacao (10MB max, 30 dias retencao)
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now().strftime("%Y-%m-%d")
     log_file = LOG_PATH / f"adb_{today}.log"
 
     logger.add(
@@ -76,4 +76,5 @@ def get_logger(name: str) -> "Logger":
         Logger loguru com contexto do modulo
     """
     _ensure_configured()
+    assert _logger_instance is not None
     return _logger_instance.bind(name=name)

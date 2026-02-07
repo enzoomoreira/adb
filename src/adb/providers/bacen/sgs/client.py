@@ -21,9 +21,9 @@ class SGSClient:
     def get_series(
         self,
         codes: dict[str, int],
-        start_date: str = None,
-        end_date: str = None,
-        last: int = None
+        start_date: str | None = None,
+        end_date: str | None = None,
+        last: int | None = None,
     ) -> pd.DataFrame:
         """
         Busca series temporais do SGS.
@@ -53,7 +53,7 @@ class SGSClient:
         code: int,
         name: str,
         frequency: str,
-        start_date: str = None,
+        start_date: str | None = None,
     ) -> pd.DataFrame:
         """
         Busca serie temporal do SGS.
@@ -72,9 +72,9 @@ class SGSClient:
         """
         # Se nao tem start_date, busca historico completo
         if start_date is None:
-            start_date = '1980-01-01'
+            start_date = "1980-01-01"
 
-        if frequency == 'daily':
+        if frequency == "daily":
             # Series diarias: usar chunking (API limita ~10 anos por request)
             df = self._fetch_with_chunking(code, name, start_date)
         else:
@@ -86,7 +86,7 @@ class SGSClient:
 
         # Renomear coluna para 'value' (padrao do DataManager)
         if name in df.columns:
-            df = df.rename(columns={name: 'value'})
+            df = df.rename(columns={name: "value"})
 
         return df
 
@@ -112,11 +112,11 @@ class SGSClient:
             if chunk_start == start_year:
                 chunk_start_date = start_date
             else:
-                chunk_start_date = f'{chunk_start}-01-01'
+                chunk_start_date = f"{chunk_start}-01-01"
                 # Delay entre requests para evitar rate limit
                 time.sleep(DEFAULT_CHUNK_DELAY)
 
-            end_date = f'{chunk_end}-12-31'
+            end_date = f"{chunk_end}-12-31"
 
             chunk = self._fetch_series(code, name, chunk_start_date, end_date)
 
@@ -127,7 +127,7 @@ class SGSClient:
             return pd.DataFrame()
 
         df = pd.concat(chunks)
-        df = df[~df.index.duplicated(keep='last')]
+        df = df[~df.index.duplicated(keep="last")]
         df = df.sort_index()
 
         return df
@@ -138,11 +138,7 @@ class SGSClient:
 
     @retry(delay=2.0)  # delay maior para API BCB, demais params usam defaults
     def _fetch_series(
-        self,
-        code: int,
-        name: str,
-        start_date: str,
-        end_date: str = None
+        self, code: int, name: str, start_date: str, end_date: str | None = None
     ) -> pd.DataFrame:
         """
         Busca serie do SGS. Faz raise em erros para retry funcionar.
@@ -156,4 +152,3 @@ class SGSClient:
             if "Value(s) not found" in str(e):
                 return pd.DataFrame()
             raise
-

@@ -25,9 +25,9 @@ class IPEACollector(BaseCollector):
     Herda de BaseCollector para logging padronizado e get_status().
     """
 
-    default_subdir = 'ipea/monthly'
+    default_subdir = "ipea/monthly"
 
-    def __init__(self, data_path: Path = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Inicializa o coletor.
 
@@ -45,12 +45,12 @@ class IPEACollector(BaseCollector):
         self,
         code: str,
         filename: str,
-        name: str = None,
+        name: str | None = None,
         frequency: str = "monthly",
-        subdir: str = None,
+        subdir: str | None = None,
         save: bool = True,
         verbose: bool = True,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame | None:
         """
         Coleta uma serie temporal com controle total.
 
@@ -138,7 +138,7 @@ class IPEACollector(BaseCollector):
 
         self._end(verbose=verbose)
 
-    def _get_frequency_for_file(self, filename: str) -> str | None:
+    def _get_frequency_for_file(self, filename: str) -> str:
         """
         Retorna a frequencia de um indicador IPEA.
 
@@ -149,5 +149,4 @@ class IPEACollector(BaseCollector):
             'daily', 'monthly' ou 'quarterly'
         """
         config = IPEA_CONFIG.get(filename, {})
-        return config.get('frequency', 'monthly')
-
+        return config.get("frequency", "monthly")

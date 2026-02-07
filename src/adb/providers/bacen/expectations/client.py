@@ -39,12 +39,12 @@ class ExpectationsClient:
     def query(
         self,
         endpoint_key: str,
-        indicator: str = None,
-        start_date: str = None,
-        end_date: str = None,
-        reference_year: int = None,
-        limit: int = None,
-        select_columns: list[str] = None,
+        indicator: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        reference_year: int | None = None,
+        limit: int | None = None,
+        select_columns: list[str] | None = None,
     ) -> pd.DataFrame:
         """
         Busca expectativas com filtros.
@@ -96,10 +96,10 @@ class ExpectationsClient:
     def raw_query(
         self,
         endpoint_key: str,
-        filter_func: Callable = None,
-        select_func: Callable = None,
-        orderby_func: Callable = None,
-        limit: int = None
+        filter_func: Callable | None = None,
+        select_func: Callable | None = None,
+        orderby_func: Callable | None = None,
+        limit: int | None = None,
     ) -> pd.DataFrame:
         """
         Query customizada com funcoes lambda para maior flexibilidade.

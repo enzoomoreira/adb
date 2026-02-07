@@ -1,5 +1,26 @@
 # Project Changelog
 
+## [2026-02-07 03:09]
+
+### Added
+- Indicadores Bloomberg: P/L Ibovespa (`ibov_pl`), DY Ibovespa (`ibov_dy`), IGPM (`igpm`)
+- Graficos no report: P/L Ibovespa, DY Ibovespa, IGPM
+- `pyrightconfig.json` para integracao Pyright com venv UV
+- `CLAUDE.md` com documentacao de erros conhecidos de stubs de terceiros
+
+### Changed
+- Bloomberg collector/explorer agora usam subdiretorio dinamico por frequencia (`daily`/`monthly`), alinhado com padrao SGS/Sidra
+- `BloombergCollector.get_status()` agora agrega status de `bloomberg/daily` e `bloomberg/monthly`
+- Lookback de coleta Bloomberg aumentado de 2 para 6 anos
+- Periodo de graficos Bloomberg no report aumentado de 2 para 5 anos
+- Titulos de servicos no report ajustados para "Servicos - Volume"
+
+### Fixed
+- Type hints corrigidos em 24 arquivos: `param: Type = None` -> `param: Type | None = None` (184 -> 45 erros Pyright, restantes sao stubs de terceiros)
+- `get_status()` overrides agora compatíveis com assinatura do `BaseCollector`
+- Guards adicionados em `resilience.py` para `retry_state.fn` e `retry_state.outcome` possivelmente None
+- Ruff lint: removida variavel morta `has_files`, `except Exception as e` nao utilizado, bare `except` -> `except Exception`
+
 ## [2026-02-05 00:21]
 
 ### Changed

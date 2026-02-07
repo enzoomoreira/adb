@@ -22,6 +22,7 @@ def _get_logger():
     global _logger
     if _logger is None:
         from adb.infra.log import get_logger
+
         _logger = get_logger(__name__)
     return _logger
 
@@ -34,7 +35,7 @@ class QueryEngine:
     para o DuckDB, mantendo uma interface Pythonica simples.
     """
 
-    def __init__(self, base_path: Path = None, progress_bar: bool = False):
+    def __init__(self, base_path: Path | None = None, progress_bar: bool = False):
         """
         Inicializa o motor de consultas.
 
@@ -43,9 +44,10 @@ class QueryEngine:
             progress_bar: Se True, exibe barra de progresso do DuckDB (default: False)
         """
         from adb.infra.config import DATA_PATH
+
         self.base_path = Path(base_path) if base_path else DATA_PATH
-        self.raw_path = self.base_path / 'raw'
-        self.processed_path = self.base_path / 'processed'
+        self.raw_path = self.base_path / "raw"
+        self.processed_path = self.base_path / "processed"
 
         self._conn = duckdb.connect()
         self._conn.execute(f"SET enable_progress_bar = {str(progress_bar).lower()}")
@@ -54,7 +56,9 @@ class QueryEngine:
     # Helpers Internos
     # =========================================================================
 
-    def _ensure_dates(self, path_or_glob: str, columns: list[str]) -> list[str]:
+    def _ensure_dates(
+        self, path_or_glob: str, columns: list[str] | None
+    ) -> list[str] | None:
         """
         Garante que colunas de data sejam incluídas na selecao para indexacao correta.
         """
@@ -69,8 +73,10 @@ class QueryEngine:
         # Se não, precisamos descobrir se existe coluna de data no arquivo
         try:
             # DuckDB DESCRIBE é rápido
-            schema_df = duckdb.sql(f"DESCRIBE SELECT * FROM '{path_or_glob}' LIMIT 0").df()
-            available_cols = set(schema_df['column_name'].values)
+            schema_df = duckdb.sql(
+                f"DESCRIBE SELECT * FROM '{path_or_glob}' LIMIT 0"
+            ).df()
+            available_cols = set(schema_df["column_name"].values)
 
             for date_col in DATE_COLUMNS:
                 if date_col in available_cols:
@@ -82,7 +88,9 @@ class QueryEngine:
 
         return columns
 
-    def _query(self, source: str, columns: list[str] = None, where: str = None) -> str:
+    def _query(
+        self, source: str, columns: list[str] | None = None, where: str | None = None
+    ) -> str:
         """Constroi a query SQL para o DuckDB."""
 
         # Selecao de colunas com garantia de data
@@ -103,9 +111,9 @@ class QueryEngine:
     def read(
         self,
         filename: str,
-        subdir: str = 'daily',
-        columns: list[str] = None,
-        where: str = None,
+        subdir: str = "daily",
+        columns: list[str] | None = None,
+        where: str | None = None,
     ) -> pd.DataFrame:
         """
         Lê arquivo Parquet de forma eficiente.
@@ -137,9 +145,9 @@ class QueryEngine:
     def read_glob(
         self,
         pattern: str,
-        subdir: str = None,
-        columns: list[str] = None,
-        where: str = None,
+        subdir: str | None = None,
+        columns: list[str] | None = None,
+        where: str | None = None,
     ) -> pd.DataFrame:
         """
         Lê múltiplos arquivos Parquet usando glob pattern.
@@ -154,31 +162,26 @@ class QueryEngine:
             full_pattern = pattern
 
         try:
-            # Verifica se existem arquivos correspondentes antes de tentar ler
-            # (DuckDB lançaria erro em glob vazio)
-            has_files = bool(list(Path(self.raw_path).glob(f"{subdir}/{pattern}"))) if subdir else bool(list(Path('.').glob(pattern)))
-            # A verificação acima pode ser imprecisa dependendo do CWD vs absolute path.
-            # Vamos confiar no DuckDB, mas tratar erro.
             if subdir and not list((self.raw_path / subdir).glob(pattern)):
-                 return pd.DataFrame()
+                return pd.DataFrame()
 
             sql = self._query(full_pattern, columns, where)
             df = duckdb.sql(sql).df()
             # Nota: normalize_date_index é chamado apenas no save() (Schema on Write)
             return df
-        except Exception as e:
+        except Exception:
             # Glob vazio ou erro de leitura
             return pd.DataFrame()
 
-    def sql(self, query: str, subdir: str = None) -> pd.DataFrame:
+    def sql(self, query: str, subdir: str | None = None) -> pd.DataFrame:
         """
         Executa SQL arbitrário com substituição de variáveis de caminho.
         """
         # Substituir variaveis no SQL
-        query = query.replace('{raw}', str(self.raw_path))
-        query = query.replace('{processed}', str(self.processed_path))
+        query = query.replace("{raw}", str(self.raw_path))
+        query = query.replace("{processed}", str(self.processed_path))
         if subdir:
-            query = query.replace('{subdir}', str(self.raw_path / subdir))
+            query = query.replace("{subdir}", str(self.raw_path / subdir))
 
         return duckdb.sql(query).df()
 
@@ -192,7 +195,7 @@ class QueryEngine:
         subdir: str,
         group_by: str | list[str],
         agg: dict[str, str],
-        where: str = None
+        where: str | None = None,
     ) -> pd.DataFrame:
         """
         Executa agregação otimizada.
@@ -200,8 +203,8 @@ class QueryEngine:
             agg: Dict {coluna: funcao} (ex: {'value': 'AVG'})
         """
         filepath = self.raw_path / subdir / filename
-        if not filename.endswith('.parquet') and '*' not in filename:
-             filepath = self.raw_path / subdir / f"{filename}.parquet"
+        if not filename.endswith(".parquet") and "*" not in filename:
+            filepath = self.raw_path / subdir / f"{filename}.parquet"
 
         path_str = str(filepath)
 
@@ -209,12 +212,16 @@ class QueryEngine:
         if isinstance(group_by, str):
             group_cols = group_by
         else:
-            group_cols = ', '.join(group_by)
+            group_cols = ", ".join(group_by)
 
-        agg_exprs = ', '.join([
-            f"{func}({col}) as {col}" if func.upper() != 'COUNT(*)' else f"COUNT(*) as {col}"
-            for col, func in agg.items()
-        ])
+        agg_exprs = ", ".join(
+            [
+                f"{func}({col}) as {col}"
+                if func.upper() != "COUNT(*)"
+                else f"COUNT(*) as {col}"
+                for col, func in agg.items()
+            ]
+        )
 
         sql = f"SELECT {group_cols}, {agg_exprs} FROM '{path_str}'"
         if where:
@@ -223,7 +230,7 @@ class QueryEngine:
 
         return duckdb.sql(sql).df()
 
-    def get_metadata(self, filename: str, subdir: str) -> dict:
+    def get_metadata(self, filename: str, subdir: str) -> dict | None:
         """Retorna metadados básicos do arquivo."""
         filepath = self.raw_path / subdir / f"{filename}.parquet"
         if not filepath.exists():
@@ -236,9 +243,9 @@ class QueryEngine:
 
             # 1. Discover date column
             schema = duckdb.sql(f"DESCRIBE SELECT * FROM '{filepath}' LIMIT 0").df()
-            cols = set(schema['column_name'].tolist())
+            cols = set(schema["column_name"].tolist())
 
-            date_col = 'date' if 'date' in cols else None
+            date_col = "date" if "date" in cols else None
 
             # 2. Build Query
             if date_col:
@@ -248,19 +255,20 @@ class QueryEngine:
 
             # 3. Execute
             res = duckdb.sql(sql).fetchone()
+            assert res is not None
             total, min_d, max_d = res
 
             return {
-                'arquivo': filename,
-                'subdir': subdir,
-                'registros': total,
-                'colunas': len(cols),
-                'primeira_data': pd.to_datetime(min_d) if min_d else None,
-                'ultima_data': pd.to_datetime(max_d) if max_d else None,
-                'status': 'OK'
+                "arquivo": filename,
+                "subdir": subdir,
+                "registros": total,
+                "colunas": len(cols),
+                "primeira_data": pd.to_datetime(min_d) if min_d else None,
+                "ultima_data": pd.to_datetime(max_d) if max_d else None,
+                "status": "OK",
             }
         except Exception as e:
-             return {'arquivo': filename, 'status': 'Erro', 'error': str(e)}
+            return {"arquivo": filename, "status": "Erro", "error": str(e)}
 
     def connection(self) -> duckdb.DuckDBPyConnection:
         """Retorna uma conexão DuckDB configurada com variáveis de ambiente."""

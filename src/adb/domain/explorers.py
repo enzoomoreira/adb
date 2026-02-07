@@ -5,7 +5,6 @@ Fornece implementacao comum para leitura, listagem e coleta de dados,
 reduzindo duplicacao entre os explorers especificos.
 """
 
-from typing import List
 import pandas as pd
 
 from adb.infra.log import get_logger
@@ -28,9 +27,9 @@ class BaseExplorer:
     - _join(): Para logica de join diferente
     """
 
-    _CONFIG: dict = None
-    _SUBDIR: str = None
-    _DATE_COLUMN: str = 'date'
+    _CONFIG: dict
+    _SUBDIR: str
+    _DATE_COLUMN: str = "date"
 
     def __init__(self, query_engine=None):
         """
@@ -40,6 +39,7 @@ class BaseExplorer:
             query_engine: QueryEngine customizado (opcional, cria novo se None)
         """
         from adb.infra.persistence import QueryEngine
+
         self._qe = query_engine or QueryEngine()
         self.logger = get_logger(self.__class__.__name__)
 
@@ -60,7 +60,7 @@ class BaseExplorer:
         """
         return self._SUBDIR
 
-    def _where(self, start: str = None, end: str = None) -> str | None:
+    def _where(self, start: str | None = None, end: str | None = None) -> str | None:
         """Constroi clausula WHERE para filtro de data."""
         where_clauses = []
         if start:
@@ -88,9 +88,9 @@ class BaseExplorer:
     def read(
         self,
         *indicators: str,
-        start: str = None,
-        end: str = None,
-        columns: List[str] = None,
+        start: str | None = None,
+        end: str | None = None,
+        columns: list[str] | None = None,
     ) -> pd.DataFrame:
         """
         Le series temporais.
@@ -113,8 +113,10 @@ class BaseExplorer:
         # Validar indicadores
         for ind in indicators:
             if ind not in self._CONFIG:
-                available = ', '.join(self._CONFIG.keys())
-                raise KeyError(f"Indicador '{ind}' nao encontrado. Disponiveis: {available}")
+                available = ", ".join(self._CONFIG.keys())
+                raise KeyError(
+                    f"Indicador '{ind}' nao encontrado. Disponiveis: {available}"
+                )
 
         self.logger.debug(f"Lendo {len(indicators)} indicador(es): {indicators}")
 
@@ -127,18 +129,18 @@ class BaseExplorer:
             df = normalize_index(df)
             if df.empty:
                 self.logger.warning(f"Nenhum dado encontrado para '{indicators[0]}'")
-            if 'value' in df.columns:
-                df = df.rename(columns={'value': indicators[0]})
+            if "value" in df.columns:
+                df = df.rename(columns={"value": indicators[0]})
             return df
 
         # Multiplos indicadores: join por data
         dfs = []
         for ind in indicators:
             subdir = self._subdir(ind)
-            df = self._qe.read(ind, subdir, columns=['value'], where=where)
+            df = self._qe.read(ind, subdir, columns=["value"], where=where)
             df = normalize_index(df)
             if not df.empty:
-                df = df.rename(columns={'value': ind})
+                df = df.rename(columns={"value": ind})
                 dfs.append(df)
             else:
                 self.logger.warning(f"Nenhum dado encontrado para '{ind}'")
@@ -165,7 +167,7 @@ class BaseExplorer:
                 result.append(key)
         return result
 
-    def info(self, indicator: str = None) -> dict:
+    def info(self, indicator: str | None = None) -> dict:
         """
         Retorna informacoes sobre indicador(es).
 
@@ -183,7 +185,7 @@ class BaseExplorer:
 
     def collect(
         self,
-        indicators: list[str] | str = 'all',
+        indicators: list[str] | str = "all",
         save: bool = True,
         verbose: bool = True,
         **kwargs,

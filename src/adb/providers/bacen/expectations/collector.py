@@ -24,9 +24,9 @@ class ExpectationsCollector(BaseCollector):
     Herda de BaseCollector para logging padronizado e get_status().
     """
 
-    default_subdir = 'bacen/expectations'
+    default_subdir = "bacen/expectations"
 
-    def __init__(self, data_path: Path = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Inicializa o coletor.
 
@@ -44,12 +44,12 @@ class ExpectationsCollector(BaseCollector):
         self,
         endpoint: str,
         filename: str,
-        indicator: str = None,
-        end_date: str = None,
-        subdir: str = None,
+        indicator: str | None = None,
+        end_date: str | None = None,
+        subdir: str | None = None,
         save: bool = True,
         verbose: bool = True,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame | None:
         """
         Coleta dados de um endpoint com controle total.
 
@@ -88,9 +88,9 @@ class ExpectationsCollector(BaseCollector):
             filename=filename,
             name=log_name,
             subdir=subdir,
-            frequency='daily', # Focus updates are effectively daily events
+            frequency="daily",  # Focus updates are effectively daily events
             save=save,
-            verbose=verbose
+            verbose=verbose,
         )
 
     # =========================================================================
@@ -99,7 +99,7 @@ class ExpectationsCollector(BaseCollector):
 
     def collect(
         self,
-        indicators: list[str] | str = 'all',
+        indicators: list[str] | str = "all",
         save: bool = True,
         verbose: bool = True,
     ) -> None:
@@ -129,9 +129,9 @@ class ExpectationsCollector(BaseCollector):
             config = get_config(EXPECTATIONS_CONFIG, key)
 
             self._collect_endpoint(
-                endpoint=config['endpoint'],
+                endpoint=config["endpoint"],
                 filename=key,
-                indicator=config['indicator'],
+                indicator=config["indicator"],
                 subdir=self.default_subdir,
                 save=save,
                 verbose=verbose,
@@ -153,6 +153,5 @@ class ExpectationsCollector(BaseCollector):
             'daily' se indicador existe, None caso contrario
         """
         if filename in EXPECTATIONS_CONFIG:
-            return 'daily'
+            return "daily"
         return None
-

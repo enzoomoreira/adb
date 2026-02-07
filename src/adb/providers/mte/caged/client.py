@@ -41,7 +41,7 @@ class CAGEDClient:
             Instancia FTP conectada
         """
         self._ftp = FTP(self.FTP_HOST, timeout=self.timeout)
-        self._ftp.encoding = 'latin-1'  # Servidor usa Latin-1
+        self._ftp.encoding = "latin-1"  # Servidor usa Latin-1
         self._ftp.login()  # anonymous
         return self._ftp
 
@@ -90,7 +90,7 @@ class CAGEDClient:
         prefix: str,
         year: int,
         month: int,
-        target_path: Path | str = None,
+        target_path: Path | str | None = None,
     ) -> Path:
         """
         Baixa arquivo 7z diretamente para disco.
@@ -108,26 +108,27 @@ class CAGEDClient:
             Exception: Propaga erros de conexao/download apos retries
         """
         self._ensure_connected()
-        
+
         filepath = self._build_filepath(prefix, year, month)
-        
+
         # Se não especificou destino, usa arquivo temporário
         if target_path is None:
             ym = f"{year}{month:02d}"
             target_path = Path(tempfile.gettempdir()) / f"{prefix}{ym}.7z"
         else:
             target_path = Path(target_path)
-        
+
         # Garantir que diretório existe
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Download direto para arquivo
-        with open(target_path, 'wb') as f:
+        assert self._ftp is not None
+        with open(target_path, "wb") as f:
             self._ftp.retrbinary(f"RETR {filepath}", f.write)
-        
+
         return target_path
 
-    def list_files(self, year: int = None) -> list[str]:
+    def list_files(self, year: int | None = None) -> list[str]:
         """
         Lista arquivos disponiveis no FTP.
 
@@ -145,6 +146,7 @@ class CAGEDClient:
             path = self.BASE_PATH
 
         try:
+            assert self._ftp is not None
             return self._ftp.nlst(path)
         except Exception:
             return []

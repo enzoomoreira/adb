@@ -35,7 +35,7 @@ def get_config(config: dict, key: str) -> dict:
     return config[key]
 
 
-def list_keys(config: dict, frequency: str = None) -> list[str]:
+def list_keys(config: dict, frequency: str | None = None) -> list[str]:
     """
     Lista chaves de indicadores disponiveis.
 
@@ -56,10 +56,7 @@ def list_keys(config: dict, frequency: str = None) -> list[str]:
     """
     if frequency is None:
         return list(config.keys())
-    return [
-        key for key, cfg in config.items()
-        if cfg.get("frequency") == frequency
-    ]
+    return [key for key, cfg in config.items() if cfg.get("frequency") == frequency]
 
 
 def filter_by(config: dict, field: str, value: Any) -> dict:
@@ -79,7 +76,4 @@ def filter_by(config: dict, field: str, value: Any) -> dict:
         >>> from adb.bacen.sgs.indicators import SGS_CONFIG
         >>> daily_indicators = filter_by(SGS_CONFIG, 'frequency', 'daily')
     """
-    return {
-        key: cfg for key, cfg in config.items()
-        if cfg.get(field) == value
-    }
+    return {key: cfg for key, cfg in config.items() if cfg.get(field) == value}

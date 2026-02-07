@@ -24,7 +24,7 @@ from rich.progress import (
     MofNCompleteColumn,
 )
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class _ProgressBar(Iterator[T]):
@@ -38,9 +38,9 @@ class _ProgressBar(Iterator[T]):
     def __init__(
         self,
         iterable: Iterable[T],
-        display: 'Display',
-        total: int = None,
-        desc: str = None,
+        display: "Display",
+        total: int | None = None,
+        desc: str | None = None,
         leave: bool = False,
     ):
         self._display = display
@@ -83,6 +83,7 @@ class _ProgressBar(Iterator[T]):
         return self
 
     def __next__(self) -> T:
+        assert self._progress is not None
         try:
             item = next(self._iter)
             self._progress.advance(self._task_id)
@@ -100,7 +101,7 @@ class _ProgressBar(Iterator[T]):
                 self._display._active_bars = max(0, self._display._active_bars - 1)
             self._progress = None
 
-    def __enter__(self) -> '_ProgressBar[T]':
+    def __enter__(self) -> "_ProgressBar[T]":
         return self
 
     def __exit__(self, *args):
@@ -143,7 +144,7 @@ class Display:
     def __init__(
         self,
         verbose: bool = True,
-        stream: TextIO = None,
+        stream: TextIO | None = None,
         colors: bool = True,
     ):
         self.verbose = verbose
@@ -159,7 +160,9 @@ class Display:
         self._console = Console(
             file=self.stream,
             no_color=not colors,
-            force_jupyter=False if self._is_jupyter else None,  # Desativa HTML rendering em Jupyter
+            force_jupyter=False
+            if self._is_jupyter
+            else None,  # Desativa HTML rendering em Jupyter
         )
 
         # Thread-safety para barras de progresso
@@ -175,7 +178,7 @@ class Display:
         """
         self.verbose = verbose
 
-    def _print(self, message: str = "", style: str = None):
+    def _print(self, message: str = "", style: str | None = None):
         """
         Print interno com controle de verbose.
 
@@ -195,9 +198,9 @@ class Display:
     def progress(
         self,
         iterable: Iterable[T],
-        total: int = None,
-        desc: str = None,
-        unit: str = None,
+        total: int | None = None,
+        desc: str | None = None,
+        unit: str | None = None,
         leave: bool = False,
     ) -> _ProgressBar[T]:
         """
@@ -244,9 +247,9 @@ class Display:
     def banner(
         self,
         title: str,
-        subtitle: str = None,
-        first_run: bool = None,
-        indicator_count: int = None,
+        subtitle: str | None = None,
+        first_run: bool | None = None,
+        indicator_count: int | None = None,
     ):
         """
         Exibe banner de inicio de coleta.
@@ -266,7 +269,9 @@ class Display:
 
         if first_run is not None:
             if first_run:
-                content_lines.append("[bold]PRIMEIRA EXECUCAO[/bold] - Download de Historico Completo")
+                content_lines.append(
+                    "[bold]PRIMEIRA EXECUCAO[/bold] - Download de Historico Completo"
+                )
             else:
                 content_lines.append("[bold]ATUALIZACAO INCREMENTAL[/bold]")
             content_lines.append("")
@@ -285,7 +290,7 @@ class Display:
         self._console.print(Panel(content, border_style="green"))
         self._console.print()
 
-    def end_banner(self, total: int = None):
+    def end_banner(self, total: int | None = None):
         """
         Exibe banner de conclusao.
 
@@ -310,7 +315,7 @@ class Display:
     # Status de Fetch
     # =========================================================================
 
-    def fetch_start(self, name: str, since: str = None):
+    def fetch_start(self, name: str, since: str | None = None):
         """
         Exibe inicio de fetch de indicador.
 
@@ -324,7 +329,9 @@ class Display:
         if since:
             self._console.print(f"  [cyan]>[/cyan] Buscando {name} desde {since}...")
         else:
-            self._console.print(f"  [cyan]>[/cyan] Buscando {name} (historico completo)...")
+            self._console.print(
+                f"  [cyan]>[/cyan] Buscando {name} (historico completo)..."
+            )
 
     def fetch_result(self, count: int):
         """

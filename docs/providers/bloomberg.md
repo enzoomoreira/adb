@@ -8,7 +8,7 @@ Dados de mercado financeiro via Bloomberg Terminal.
 |----------------|-------|
 | Fonte | Bloomberg Terminal (via xbbg) |
 | Dados | Series temporais de mercado financeiro |
-| Categorias | Equities globais, equities Brasil, commodities |
+| Categorias | Equities globais, equities Brasil, commodities, indices de inflacao |
 | Requisito | Bloomberg Terminal ativo para coleta |
 
 **Importante:** A coleta requer o Bloomberg Terminal aberto e conectado. A leitura de dados ja salvos funciona offline.
@@ -31,6 +31,8 @@ Dados de mercado financeiro via Bloomberg Terminal.
 |-----------|------|-----------|
 | `ibov_points` | Ibovespa - Pontos | Indice Bovespa em pontos |
 | `ibov_usd` | Ibovespa - USD | Indice Bovespa em dolares |
+| `ibov_pl` | P/L Ibovespa | Price-to-Earnings do Ibovespa |
+| `ibov_dy` | DY Ibovespa | Dividend Yield do Ibovespa |
 | `ifix` | IFIX | Indice de fundos imobiliarios |
 
 ### Commodities
@@ -40,6 +42,12 @@ Dados de mercado financeiro via Bloomberg Terminal.
 | `brent` | Brent Crude | Petroleo Brent |
 | `iron_ore` | Iron Ore | Minerio de ferro |
 | `gold` | Gold Spot | Ouro spot |
+
+### Indices de Inflacao
+
+| Indicador | Nome | Descricao |
+|-----------|------|-----------|
+| `igpm` | IGPM-10 | Indice IGPM-10 FGV (mensal) |
 
 ---
 
@@ -93,7 +101,7 @@ adb.bloomberg.available(category='commodities')
 # ['brent', 'iron_ore', 'gold']
 
 adb.bloomberg.available(category='brazil_equities')
-# ['ibov_points', 'ibov_usd', 'ifix']
+# ['ibov_points', 'ibov_usd', 'ibov_pl', 'ibov_dy', 'ifix']
 
 # Informacoes de um indicador
 adb.bloomberg.info('brent')
@@ -116,16 +124,21 @@ adb.bloomberg.get_status()
 Apos a coleta, os dados sao salvos em:
 
 ```
-data/raw/bloomberg/daily/
-    msci_acwi_mktcap.parquet
-    msci_acwi_pe.parquet
-    msci_acwi_dividend.parquet
-    ibov_points.parquet
-    ibov_usd.parquet
-    ifix.parquet
-    brent.parquet
-    iron_ore.parquet
-    gold.parquet
+data/raw/bloomberg/
+    daily/
+        msci_acwi_mktcap.parquet
+        msci_acwi_pe.parquet
+        msci_acwi_dividend.parquet
+        ibov_points.parquet
+        ibov_usd.parquet
+        ibov_pl.parquet
+        ibov_dy.parquet
+        ifix.parquet
+        brent.parquet
+        iron_ore.parquet
+        gold.parquet
+    monthly/
+        igpm.parquet
 ```
 
 Cada arquivo contem a serie temporal completa do indicador.
@@ -144,7 +157,7 @@ Se voce nao tem acesso ao Bloomberg Terminal, pode usar os dados ja coletados (l
 
 ### Lookback Padrao
 
-Por padrao, a coleta busca 2 anos de historico (730 dias) para novos indicadores. Atualizacoes posteriores buscam apenas dados novos desde a ultima coleta.
+Por padrao, a coleta busca 6 anos de historico (2190 dias) para novos indicadores. Atualizacoes posteriores buscam apenas dados novos desde a ultima coleta.
 
 ### Funcionamento Offline
 

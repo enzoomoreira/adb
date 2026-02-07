@@ -48,12 +48,12 @@ def _capture_external_output(logger):
         stderr_content = stderr_capture.getvalue().strip()
 
         if stdout_content:
-            for line in stdout_content.split('\n'):
+            for line in stdout_content.split("\n"):
                 if line.strip():
                     logger.debug(f"SDK stdout: {line}")
 
         if stderr_content:
-            for line in stderr_content.split('\n'):
+            for line in stderr_content.split("\n"):
                 if line.strip():
                     logger.warning(f"SDK stderr: {line}")
 
@@ -81,9 +81,9 @@ class BloombergClient:
         self,
         ticker: str,
         field: str,
-        name: str = None,
-        start_date: str = None,
-        end_date: str = None,
+        name: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> pd.DataFrame:
         """
         Busca serie temporal historica do Bloomberg.
@@ -110,9 +110,9 @@ class BloombergClient:
 
             # Se start_date=None, limitar a LOOKBACK_DAYS para evitar quotas
             if start_date is None:
-                start_date = (datetime.today() - timedelta(days=LOOKBACK_DAYS)).strftime(
-                    "%Y-%m-%d"
-                )
+                start_date = (
+                    datetime.today() - timedelta(days=LOOKBACK_DAYS)
+                ).strftime("%Y-%m-%d")
 
             # Se end_date=None, usa hoje
             if end_date is None:
@@ -234,6 +234,6 @@ class BloombergClient:
         df = df.sort_index()
 
         # 5. Garantir nome do indice para Parquet
-        df.index.name = 'date'
+        df.index.name = "date"
 
         return df

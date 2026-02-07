@@ -24,7 +24,7 @@ class CAGEDExplorer(BaseExplorer):
 
     Fornece interface pythonica para leitura e agregacao de microdados
     do Cadastro Geral de Empregados e Desempregados.
-    
+
     Nota: CAGED tem API diferente dos outros explorers (usa year/month).
     """
 
@@ -34,6 +34,7 @@ class CAGEDExplorer(BaseExplorer):
     @property
     def _COLLECTOR_CLASS(self):
         from adb.providers.mte.caged.collector import CAGEDCollector
+
         return CAGEDCollector
 
     # =========================================================================
@@ -43,11 +44,11 @@ class CAGEDExplorer(BaseExplorer):
     def read(
         self,
         year: int,
-        month: int = None,
+        month: int | None = None,
         dataset: str = "cagedmov",
-        uf: int = None,
-        columns: List[str] = None,
-        where: str = None,
+        uf: int | None = None,
+        columns: List[str] | None = None,
+        where: str | None = None,
     ) -> pd.DataFrame:
         """
         Le microdados CAGED.
@@ -64,7 +65,7 @@ class CAGEDExplorer(BaseExplorer):
             DataFrame com microdados
         """
         if dataset not in self._CONFIG:
-            available = ', '.join(self._CONFIG.keys())
+            available = ", ".join(self._CONFIG.keys())
             raise ValueError(f"Dataset '{dataset}' invalido. Disponiveis: {available}")
 
         if year < 2020:
@@ -81,10 +82,14 @@ class CAGEDExplorer(BaseExplorer):
         # Arquivo unico ou glob
         if month is not None:
             filename = f"{dataset}_{year}-{month:02d}"
-            df = self._qe.read(filename, self._SUBDIR, columns=columns, where=combined_where)
+            df = self._qe.read(
+                filename, self._SUBDIR, columns=columns, where=combined_where
+            )
         else:
             pattern = f"{dataset}_{year}-*.parquet"
-            df = self._qe.read_glob(pattern, self._SUBDIR, columns=columns, where=combined_where)
+            df = self._qe.read_glob(
+                pattern, self._SUBDIR, columns=columns, where=combined_where
+            )
 
         # Nota: Colunas numéricas (salario, horascontratuais, valorsalariofixo)
         # são limpas no CAGEDCollector durante a ingestão (CSV→Parquet)
@@ -98,7 +103,7 @@ class CAGEDExplorer(BaseExplorer):
     def saldo_por_uf(
         self,
         year: int,
-        month: int = None,
+        month: int | None = None,
         dataset: str = "cagedmov",
     ) -> pd.DataFrame:
         """
@@ -125,7 +130,7 @@ class CAGEDExplorer(BaseExplorer):
     def saldo_mensal(
         self,
         year: int,
-        uf: int = None,
+        uf: int | None = None,
         dataset: str = "cagedmov",
     ) -> pd.DataFrame:
         """
@@ -155,8 +160,8 @@ class CAGEDExplorer(BaseExplorer):
     def saldo_por_setor(
         self,
         year: int,
-        month: int = None,
-        uf: int = None,
+        month: int | None = None,
+        uf: int | None = None,
         dataset: str = "cagedmov",
     ) -> pd.DataFrame:
         """
@@ -203,7 +208,7 @@ class CAGEDExplorer(BaseExplorer):
         return sorted(periods)
 
     @staticmethod
-    def _build_pattern(dataset: str, year: int, month: int = None) -> str:
+    def _build_pattern(dataset: str, year: int, month: int | None = None) -> str:
         """Constroi pattern de arquivo."""
         if month is not None:
             return f"{dataset}_{year}-{month:02d}.parquet"
