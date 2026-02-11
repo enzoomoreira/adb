@@ -62,15 +62,15 @@ def save_chart(df, filename, title, source=None, kind="line", units="%", **kwarg
         print(f"  [SKIP] {title} - dados vazios")
         return
 
-    df.chartkit.plot(
+    result = df.chartkit.plot(
         kind=kind,
         title=title,
         units=units,
         source=source,
-        highlight_last=True,
-        save_path=filename,
+        highlight=True,
         **kwargs,
     )
+    result.save(filename)
     print(f"  [OK] {filename}")
     plt.close("all")
 
@@ -293,7 +293,7 @@ ipca = chartkit.to_month_end(sidra.read("ipca_12m", start=START_JUROS_REAL))
 selic = chartkit.to_month_end(sgs.read("selic_acum_mensal", start=START_JUROS_REAL))
 
 # Selic 12m composta e juros real via Fisher
-selic_12m = chartkit.compound_rolling(selic["selic_acum_mensal"])
+selic_12m = chartkit.accum(selic["selic_acum_mensal"])
 juros_real = ((1 + selic_12m / 100) / (1 + ipca["ipca_12m"] / 100) - 1) * 100
 juros_real = juros_real.dropna().to_frame("juros_real")
 
