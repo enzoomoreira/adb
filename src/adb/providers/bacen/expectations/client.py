@@ -15,8 +15,15 @@ class ExpectationsClient:
 
     def __init__(self):
         """Inicializa o cliente de Expectativas."""
-        self._api = Expectativas()
+        self._api: Expectativas | None = None
         self.logger = get_logger(self.__class__.__name__)
+
+    @property
+    def api(self) -> Expectativas:
+        """Inicializa a API OData sob demanda (lazy)."""
+        if self._api is None:
+            self._api = Expectativas()
+        return self._api
 
     # =========================================================================
     # Metodos Publicos
@@ -33,7 +40,7 @@ class ExpectationsClient:
             Objeto Endpoint para construir queries OData
         """
         endpoint_name = ENDPOINTS.get(endpoint_key, endpoint_key)
-        return self._api.get_endpoint(endpoint_name)
+        return self.api.get_endpoint(endpoint_name)
 
     @retry()  # usa defaults para falhas de rede
     def query(

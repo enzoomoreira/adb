@@ -1,5 +1,10 @@
 # Project Changelog
 
+## [2026-02-11 19:30]
+
+### Fixed
+- ExpectationsClient: inicializacao da API OData do BCB agora e lazy (sob demanda), evitando JSONDecodeError quando a API retorna resposta vazia durante o construtor. A inicializacao agora ocorre dentro de metodos protegidos por `@retry`, garantindo resiliencia a falhas transientes
+
 ## [2026-02-07 03:09]
 
 ### Added
