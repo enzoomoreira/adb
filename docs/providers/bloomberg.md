@@ -8,7 +8,7 @@ Dados de mercado financeiro via Bloomberg Terminal.
 |----------------|-------|
 | Fonte | Bloomberg Terminal (via xbbg) |
 | Dados | Series temporais de mercado financeiro |
-| Categorias | Equities globais, equities Brasil, commodities, indices de inflacao |
+| Categorias | Equities globais, equities Brasil, equity valuations, commodities, indices de inflacao |
 | Requisito | Bloomberg Terminal ativo para coleta |
 
 **Importante:** A coleta requer o Bloomberg Terminal aberto e conectado. A leitura de dados ja salvos funciona offline.
@@ -31,9 +31,41 @@ Dados de mercado financeiro via Bloomberg Terminal.
 |-----------|------|-----------|
 | `ibov_points` | Ibovespa - Pontos | Indice Bovespa em pontos |
 | `ibov_usd` | Ibovespa - USD | Indice Bovespa em dolares |
-| `ibov_pl` | P/L Ibovespa | Price-to-Earnings do Ibovespa |
-| `ibov_dy` | DY Ibovespa | Dividend Yield do Ibovespa |
 | `ifix` | IFIX | Indice de fundos imobiliarios |
+
+### Equity Valuations
+
+Metricas de valuation (P/E forward e Dividend Yield) para indices globais. Podem ser lidas em grupo via constantes `GLOBAL_PE_FWD` e `GLOBAL_DY`.
+
+| Indicador | Nome | Ticker | Campo |
+|-----------|------|--------|-------|
+| `cac_dy` | CAC 40 - DY | CAC Index | BEST_DIV_YLD |
+| `cac_pe_fwd` | CAC 40 - P/E Fwd | CAC Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `dax_dy` | DAX - DY | DAX Index | BEST_DIV_YLD |
+| `dax_pe_fwd` | DAX - P/E Fwd | DAX Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `dm_dy` | MSCI DM - DY | DM Index | BEST_DIV_YLD |
+| `dm_pe_fwd` | MSCI DM - P/E Fwd | DM Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `ftsemib_pe_fwd` | FTSE MIB - P/E Fwd | FTSEMIB Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `ibov_dy` | Ibovespa - DY | IBOV Index | BEST_DIV_YLD |
+| `ibov_pe_fwd` | Ibovespa - P/E Fwd | IBOV Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `ipsa_dy` | IPSA Chile - DY | IPSA Index | BEST_DIV_YLD |
+| `jalsh_dy` | JSE All Share - DY | JALSH Index | BEST_DIV_YLD |
+| `merval_dy` | MERVAL - DY | MERVAL Index | BEST_DIV_YLD |
+| `merval_pe_fwd` | MERVAL - P/E Fwd | MERVAL Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `mexbol_dy` | IPC Mexico - DY | MEXBOL Index | BEST_DIV_YLD |
+| `mexbol_pe_fwd` | IPC Mexico - P/E Fwd | MEXBOL Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `mxef_dy` | MSCI EM - DY | MXEF Index | BEST_DIV_YLD |
+| `mxef_pe_fwd` | MSCI EM - P/E Fwd | MXEF Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `mxwo_pe_fwd` | MSCI World - P/E Fwd | MXWO Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `nky_dy` | Nikkei 225 - DY | NKY Index | BEST_DIV_YLD |
+| `nky_pe_fwd` | Nikkei 225 - P/E Fwd | NKY Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `sensex_dy` | Sensex - DY | SENSEX Index | BEST_DIV_YLD |
+| `sensex_pe_fwd` | Sensex - P/E Fwd | SENSEX Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `shcomp_dy` | Shanghai Comp - DY | SHCOMP Index | BEST_DIV_YLD |
+| `shcomp_pe_fwd` | Shanghai Comp - P/E Fwd | SHCOMP Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `spx_dy` | S&P 500 - DY | SPX Index | BEST_DIV_YLD |
+| `spx_pe_fwd` | S&P 500 - P/E Fwd | SPX Index | GEN_EST_PE_NEXT_YR_AGGTE |
+| `ukx_dy` | FTSE 100 - DY | UKX Index | BEST_DIV_YLD |
 
 ### Commodities
 
@@ -87,6 +119,24 @@ df = adb.bloomberg.read('brent', 'gold')
 df = adb.bloomberg.read('brent', 'gold', 'ibov_points', start='2024')
 ```
 
+### Constantes de Grupo
+
+Para leitura conjunta de metricas de valuation globais:
+
+```python
+from adb.providers.bloomberg.indicators import GLOBAL_PE_FWD, GLOBAL_DY
+import adb
+
+# P/E Forward de todas as bolsas (13 indices)
+df_pe = adb.bloomberg.read(*GLOBAL_PE_FWD, start="2024")
+
+# Dividend Yield de todas as bolsas (14 indices)
+df_dy = adb.bloomberg.read(*GLOBAL_DY, start="2024")
+
+# Coletar apenas valuations
+adb.bloomberg.collect(GLOBAL_PE_FWD + GLOBAL_DY)
+```
+
 ### Consultas e Status
 
 ```python
@@ -100,8 +150,8 @@ adb.bloomberg.available()
 adb.bloomberg.available(category='commodities')
 # ['brent', 'iron_ore', 'gold']
 
-adb.bloomberg.available(category='brazil_equities')
-# ['ibov_points', 'ibov_usd', 'ibov_pl', 'ibov_dy', 'ifix']
+adb.bloomberg.available(category='equity_valuations')
+# ['cac_dy', 'cac_pe_fwd', 'dax_dy', ..., 'ukx_dy']
 
 # Informacoes de um indicador
 adb.bloomberg.info('brent')
@@ -131,12 +181,14 @@ data/raw/bloomberg/
         msci_acwi_dividend.parquet
         ibov_points.parquet
         ibov_usd.parquet
-        ibov_pl.parquet
         ibov_dy.parquet
         ifix.parquet
         brent.parquet
         iron_ore.parquet
         gold.parquet
+        cac_dy.parquet
+        cac_pe_fwd.parquet
+        ...  (26 indicadores de equity valuations)
     monthly/
         igpm.parquet
 ```

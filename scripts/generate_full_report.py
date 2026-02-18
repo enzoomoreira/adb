@@ -15,6 +15,7 @@ from dateutil.relativedelta import relativedelta
 
 # Agora-Database
 from adb import sgs, sidra, bloomberg, ipea
+from adb.providers.bloomberg.indicators import GLOBAL_DY, GLOBAL_PE_FWD
 
 # Chartkit (biblioteca de graficos)
 import chartkit
@@ -45,7 +46,9 @@ START_BBG = get_start_date(ANOS_BBG)
 START_JUROS_REAL = get_start_date(ANOS_JUROS_REAL)
 
 
-def save_chart(df, filename, title, source=None, kind="line", units="%", **kwargs):
+def save_chart(
+    df, filename, title, source=None, kind="line", units="%", highlight=True, **kwargs
+):
     """
     Helper para gerar e salvar grafico.
 
@@ -56,6 +59,7 @@ def save_chart(df, filename, title, source=None, kind="line", units="%", **kwarg
         source: Fonte dos dados (opcional).
         kind: Tipo de grafico ('line' ou 'bar').
         units: Unidade dos dados para formatacao do eixo Y.
+        highlight: Modo de highlight (True, "all", ["max", "min"], etc).
         **kwargs: Argumentos adicionais para o plot.
     """
     if df.empty:
@@ -67,7 +71,7 @@ def save_chart(df, filename, title, source=None, kind="line", units="%", **kwarg
         title=title,
         units=units,
         source=source,
-        highlight=True,
+        highlight=highlight,
         **kwargs,
     )
     result.save(filename)
@@ -361,14 +365,14 @@ save_chart(
     units="points",
 )
 
-# PL Ibovespa
+# P/E Fwd Ibovespa
 save_chart(
-    bloomberg.read("ibov_pl", start=START_BBG),
-    filename="ibovespa_pl.png",
-    title="P/L Ibovespa",
+    bloomberg.read("ibov_pe_fwd", start=START_BBG),
+    filename="ibovespa_pe_fwd.png",
+    title="P/E Fwd Ibovespa",
     source="Bloomberg",
     kind="line",
-    units="BRL",
+    units="x",
 )
 
 # DY Ibovespa
@@ -378,7 +382,7 @@ save_chart(
     title="DY Ibovespa",
     source="Bloomberg",
     kind="line",
-    units="BRL",
+    units="%",
 )
 
 # IFIX
@@ -430,6 +434,89 @@ save_chart(
     kind="line",
     units="%",
 )
+
+# =============================================================================
+# 10. VALUATIONS GLOBAIS
+# =============================================================================
+print("\n[10] Valuations Globais")
+
+PE_FWD_LABELS: dict[str, str] = {
+    "cac_pe_fwd": "CAC 40",
+    "dax_pe_fwd": "DAX",
+    "dm_pe_fwd": "MSCI DM",
+    "ftsemib_pe_fwd": "FTSE MIB",
+    "ibov_pe_fwd": "Ibovespa",
+    "merval_pe_fwd": "MERVAL",
+    "mexbol_pe_fwd": "IPC Mexico",
+    "mxef_pe_fwd": "MSCI EM",
+    "mxwo_pe_fwd": "MSCI World",
+    "nky_pe_fwd": "Nikkei 225",
+    "sensex_pe_fwd": "Sensex",
+    "shcomp_pe_fwd": "Shanghai",
+    "spx_pe_fwd": "S&P 500",
+}
+
+DY_LABELS: dict[str, str] = {
+    "cac_dy": "CAC 40",
+    "dax_dy": "DAX",
+    "dm_dy": "MSCI DM",
+    "ibov_dy": "Ibovespa",
+    "ipsa_dy": "IPSA Chile",
+    "jalsh_dy": "JSE All Share",
+    "merval_dy": "MERVAL",
+    "mexbol_dy": "IPC Mexico",
+    "mxef_dy": "MSCI EM",
+    "nky_dy": "Nikkei 225",
+    "sensex_dy": "Sensex",
+    "shcomp_dy": "Shanghai",
+    "spx_dy": "S&P 500",
+    "ukx_dy": "FTSE 100",
+}
+
+# P/E Forward - Bolsas Globais
+df_pe_global = bloomberg.read(*GLOBAL_PE_FWD)
+if not df_pe_global.empty:
+    last_pe = (
+        df_pe_global.ffill()
+        .iloc[-1]
+        .rename(PE_FWD_LABELS)
+        .dropna()
+        .to_frame("P/E Forward")
+    )
+    save_chart(
+        last_pe,
+        filename="global_pe_fwd.png",
+        title="P/E Forward - Bolsas Globais",
+        source="Bloomberg",
+        kind="bar",
+        units="x",
+        highlight="all",
+        sort="descending",
+        color="cycle",
+    )
+
+# Dividend Yield - Bolsas Globais
+df_dy_global = bloomberg.read(*GLOBAL_DY)
+if not df_dy_global.empty:
+    last_dy = (
+        df_dy_global.ffill()
+        .iloc[-1]
+        .rename(DY_LABELS)
+        .dropna()
+        .to_frame("Dividend Yield")
+    )
+    save_chart(
+        last_dy,
+        filename="global_dy.png",
+        title="Dividend Yield - Bolsas Globais",
+        source="Bloomberg",
+        kind="bar",
+        units="%",
+        highlight="all",
+        sort="descending",
+        color="cycle",
+    )
+
 
 # =============================================================================
 # RESUMO
