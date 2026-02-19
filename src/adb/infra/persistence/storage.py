@@ -5,10 +5,11 @@ Responsavel por operacoes de CRUD em arquivos Parquet.
 Usado por todos os collectors do projeto.
 """
 
-from pathlib import Path
-from datetime import datetime
-from typing import Protocol
+import os
 import tempfile
+from datetime import datetime
+from pathlib import Path
+from typing import Protocol
 
 import duckdb
 import pandas as pd
@@ -230,9 +231,11 @@ class DataManager:
         df = normalize_index(df)
 
         # Arquivo temporario para escrita atomica
+        # mkstemp retorna fd aberto; fechar imediatamente para DuckDB poder usar o path
         temp_fd, temp_path_str = tempfile.mkstemp(
             suffix=".parquet", dir=filepath.parent
         )
+        os.close(temp_fd)
         temp_path = Path(temp_path_str)
 
         try:
@@ -268,13 +271,12 @@ class DataManager:
                     ) TO '{temp_path}' (FORMAT 'parquet', COMPRESSION 'snappy')
                 """
 
-            duckdb.sql(query)
-            duckdb.unregister("_new_data")
+            try:
+                duckdb.sql(query)
+            finally:
+                duckdb.unregister("_new_data")
 
             # Replace atomico
-            import os
-
-            os.close(temp_fd)
             temp_path.replace(filepath)
 
             if verbose:
@@ -283,9 +285,6 @@ class DataManager:
         except Exception as e:
             # Cleanup em caso de erro
             try:
-                import os
-
-                os.close(temp_fd)
                 temp_path.unlink(missing_ok=True)
             except Exception:
                 pass
