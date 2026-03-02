@@ -128,6 +128,7 @@ save_chart(
     kind="bar",
     units="%",
     y_origin="auto",
+    tick_freq="year"
 )
 
 # PIB YoY
@@ -139,6 +140,8 @@ save_chart(
     kind="bar",
     units="%",
     y_origin="auto",
+    tick_rotation=90,
+    tick_freq="year"
 )
 
 
@@ -342,7 +345,7 @@ save_chart(
     title="Dividendos Global",
     source="Bloomberg",
     kind="line",
-    units="USD",
+    units="%",
 )
 
 # Ibovespa

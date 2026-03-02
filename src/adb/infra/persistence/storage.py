@@ -249,7 +249,7 @@ class DataManager:
                 # quando ordem das colunas difere entre Parquet (PyArrow) e DataFrame (reset_index)
                 query = f"""
                     COPY (
-                        SELECT * EXCLUDE (_rn) FROM (
+                        SELECT * EXCLUDE (_rn, _source) FROM (
                             SELECT *, ROW_NUMBER() OVER (PARTITION BY date ORDER BY _source DESC) as _rn
                             FROM (
                                 SELECT *, 0 as _source FROM '{filepath}'
