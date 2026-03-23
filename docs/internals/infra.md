@@ -149,14 +149,12 @@ Tupla de excecoes que justificam retry automatico:
 
 ```python
 TRANSIENT_EXCEPTIONS = (
-    # Rede/HTTP
-    requests.RequestException,
-    requests.ConnectionError,
-    requests.Timeout,
-    urllib3.exceptions.HTTPError,
+    # HTTP (httpx)
+    httpx.HTTPError,
+    # Rede/OS
     ConnectionError,
     TimeoutError,
-    OSError,  # Inclui socket errors
+    OSError,  # Inclui socket errors + requests exceptions (via ipeadatapy)
 
     # Parsing (APIs que retornam resposta invalida/vazia)
     json.JSONDecodeError,
@@ -186,12 +184,12 @@ from adb.infra.resilience import retry
 
 @retry(max_attempts=3, delay=1.0)
 def fetch_data(url):
-    return requests.get(url, timeout=30)
+    return httpx.get(url, timeout=30)
 
 # Com parametros customizados
 @retry(max_attempts=5, delay=2.0, jitter=False)
 def fetch_critical(url):
-    return requests.get(url, timeout=60)
+    return httpx.get(url, timeout=60)
 ```
 
 ### Callbacks de Log

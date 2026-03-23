@@ -8,8 +8,7 @@ Usa tenacity para implementacao robusta de retry com exponential backoff.
 import json
 from typing import Tuple, Type
 
-import requests
-import urllib3
+import httpx
 from tenacity import (
     retry as tenacity_retry,
     stop_after_attempt,
@@ -78,14 +77,12 @@ def _log_final_failure(retry_state: RetryCallState):
 
 # Excecoes transientes que justificam retry (rede, parsing, APIs instaveis)
 TRANSIENT_EXCEPTIONS: Tuple[Type[Exception], ...] = (
-    # Rede/HTTP
-    requests.RequestException,
-    requests.ConnectionError,
-    requests.Timeout,
-    urllib3.exceptions.HTTPError,
+    # HTTP (httpx)
+    httpx.HTTPError,
+    # Rede/OS
     ConnectionError,
     TimeoutError,
-    OSError,  # Inclui socket errors
+    OSError,  # Inclui socket errors + requests exceptions (via ipeadatapy)
     # Parsing (APIs que retornam resposta invalida/vazia)
     json.JSONDecodeError,
     ValueError,
@@ -120,7 +117,7 @@ def retry(
     Example:
         @retry(max_attempts=3, delay=1.0)
         def fetch_data():
-            return requests.get(url, timeout=30)
+            return httpx.get(url, timeout=30)
     """
     # Calcula delay maximo baseado nos parametros
     # Com 3 tentativas e backoff 2.0: delays podem ser 1, 2, 4 -> max ~4s

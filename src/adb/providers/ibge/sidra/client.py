@@ -2,9 +2,10 @@
 Cliente para a API do IBGE Sidra.
 """
 
-import pandas as pd
-import requests
 from datetime import datetime
+
+import httpx
+import pandas as pd
 
 from adb.infra.config import DEFAULT_REQUEST_TIMEOUT
 from adb.infra.log import get_logger
@@ -117,7 +118,7 @@ class SidraClient:
                 f"/n{nivel_territorial}/{localidades}?formato=json"
             )
 
-        response = requests.get(url, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = httpx.get(url, timeout=DEFAULT_REQUEST_TIMEOUT)
         response.raise_for_status()
         return response.json()
 

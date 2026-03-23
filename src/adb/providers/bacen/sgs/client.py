@@ -1,12 +1,25 @@
-import pandas as pd
+import time
 from datetime import datetime
+
+import pandas as pd
 from bcb import sgs
 
 from adb.infra.config import DEFAULT_CHUNK_DELAY
 from adb.infra.log import get_logger
 from adb.infra.resilience import retry
 
-import time
+# python-bcb >= 0.3.4 usa httpx.get() sem timeout explicito (default 5s).
+# Series diarias do SGS retornam decadas de dados e precisam de mais tempo.
+_BCB_TIMEOUT = 120.0
+_original_httpx_get = sgs.httpx.get
+
+
+def _httpx_get_with_timeout(*args: object, **kwargs: object) -> object:
+    kwargs.setdefault("timeout", _BCB_TIMEOUT)
+    return _original_httpx_get(*args, **kwargs)
+
+
+sgs.httpx.get = _httpx_get_with_timeout  # type: ignore[attr-defined]
 
 
 class SGSClient:

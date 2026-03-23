@@ -14,6 +14,7 @@ dependencies = [
     { name = "bizdays" },
     { name = "cuallee", extra = ["duckdb"] },
     { name = "duckdb" },
+    { name = "httpx" },
     { name = "ipeadatapy" },
     { name = "loguru" },
     { name = "pandas" },
@@ -39,6 +40,7 @@ requires-dist = [
     { name = "blpapi", marker = "extra == 'bloomberg'", specifier = ">=3.25.12.1" },
     { name = "cuallee", extras = ["duckdb"], specifier = ">=0.5.2" },
     { name = "duckdb", specifier = ">=1.4.2" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "ipeadatapy", specifier = ">=0.1.9" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "pandas", specifier = ">=2.3.3" },
@@ -47,7 +49,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=22.0.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
-    { name = "python-bcb", specifier = ">=0.3.3" },
+    { name = "python-bcb", specifier = ">=0.3.4" },
     { name = "rich", specifier = ">=14.3.1" },
     { name = "tenacity", specifier = ">=9.1.2" },
     { name = "xbbg", marker = "extra == 'bloomberg'", specifier = ">=0.10.3" },
@@ -1150,17 +1152,16 @@ wheels = [
 
 [[package]]
 name = "python-bcb"
-version = "0.3.3"
+version = "0.3.4"
 source = { registry = "https://blpapi.bloomberg.com/repository/releases/python/simple/" }
 dependencies = [
     { name = "httpx" },
     { name = "lxml" },
     { name = "pandas" },
-    { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/ca/e0b2acfaf7a78649f6381c5fe13391c739a86521600159335d0f037ff1fe/python_bcb-0.3.3.tar.gz", hash = "sha256:deb22e3655d2ac73d1456138ef24029c10fbbf07581d76bef79ec55eb0804fe7", size = 17816, upload-time = "2025-04-21T13:04:18.455Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4b/79/8139bf37b7ad587d7ffb2bd39dd62ef78edf55c336db3a5ef727b8fb9ff5/python_bcb-0.3.4.tar.gz", hash = "sha256:04e41eddae5b8c1b1e21a21fcfe748f59b04104cd11b9f25749d7cef092058fc", size = 19154, upload-time = "2026-02-25T19:47:31.462Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/ac/8aa8a8e2d8460d8cc543ca0c79ea95a288705da0acbdbdc15e9111bdaf42/python_bcb-0.3.3-py3-none-any.whl", hash = "sha256:33d5d81d32907eda8dd1141b2734af7e2d3c4c8291038448d4b228fc13f37988", size = 19657, upload-time = "2025-04-21T13:04:15.585Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/75/93bfa42c89ed99442c54430dfdf9a0da4132f78fcca014d5bc40e69759b0/python_bcb-0.3.4-py3-none-any.whl", hash = "sha256:0a1f175d5ed2ff9f8e258e65205086a7a9bc0e8a4f2122a34094652e04bbf4d8", size = 21514, upload-time = "2026-02-25T19:47:30.396Z" },
 ]
 
 [[package]]

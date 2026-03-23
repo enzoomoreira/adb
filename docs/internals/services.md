@@ -375,7 +375,7 @@ class MyClient:
         if start_date:
             params['inicio'] = start_date
 
-        response = requests.get('https://api.exemplo.com/dados', params=params)
+        response = httpx.get('https://api.exemplo.com/dados', params=params)
         response.raise_for_status()
 
         return pd.DataFrame(response.json())

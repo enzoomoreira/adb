@@ -1,5 +1,19 @@
 # Project Changelog
 
+## [2026-03-23 02:06]
+
+### Changed
+- HTTP client padronizado para **httpx** em todo o projeto, substituindo requests/urllib3
+- `SidraClient`: `requests.get()` substituido por `httpx.get()`
+- `resilience.py`: exceptions transientes migradas de `requests.RequestException`/`requests.Timeout`/`urllib3.HTTPError` para `httpx.HTTPError` (exceptions de `requests` via ipeadatapy continuam capturadas via heranca `OSError`)
+- python-bcb atualizado de `>=0.3.3` para `>=0.3.4` (troca interna de requests para httpx, type annotations, custom exceptions)
+
+### Fixed
+- Series diarias do SGS (selic, cdi, ptax) falhando silenciosamente com python-bcb 0.3.4: a versao trocou requests por httpx mas sem timeout explicito no `sgs.get_json()` -- default de 5s do httpx e curto demais para series com decadas de dados. Adicionado patch em `SGSClient` que configura timeout de 120s nas chamadas httpx do `bcb.sgs`
+
+### Added
+- `httpx>=0.28.1` como dependencia direta
+
 ## [2026-03-23 01:18]
 
 ### Changed

@@ -143,8 +143,8 @@ O client encapsula a comunicacao com a API externa.
 ```python
 # src/adb/providers/nova_fonte/client.py
 
+import httpx
 import pandas as pd
-import requests
 
 from adb.infra.log import get_logger
 from adb.infra.resilience import retry
@@ -191,7 +191,7 @@ class NovaFonteClient:
             params["inicio"] = start_date
 
         try:
-            response = requests.get(
+            response = httpx.get(
                 f"{self.BASE_URL}/series",
                 params=params,
                 timeout=30,
@@ -206,7 +206,7 @@ class NovaFonteClient:
 
             return df
 
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             self.logger.error(f"Erro ao buscar {name}: {e}")
             raise  # Re-raise para retry funcionar
 ```

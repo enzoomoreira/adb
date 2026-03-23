@@ -8,6 +8,7 @@ dependencies = [
     "bizdays>=1.0.14",
     "cuallee[duckdb]>=0.5.2",
     "duckdb>=1.4.2",
+    "httpx>=0.28.1",
     "ipeadatapy>=0.1.9",
     "loguru>=0.7.3",
     "pandas>=2.3.3",
@@ -16,7 +17,7 @@ dependencies = [
     "pyarrow>=22.0.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.1",
-    "python-bcb>=0.3.3",
+    "python-bcb>=0.3.4",
     "rich>=14.3.1",
     "tenacity>=9.1.2",
 ]
