@@ -62,7 +62,7 @@ class IPEACollector(BaseCollector):
             filename: Nome do arquivo para salvar (sem extensao)
             name: Nome da serie para logs (default: usa filename)
             frequency: 'daily', 'monthly' ou 'quarterly'
-            subdir: Subdiretorio dentro de raw/ (default: ipea/{frequency})
+            subdir: Subdiretorio dentro de data/ (default: ipea/{frequency})
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
 

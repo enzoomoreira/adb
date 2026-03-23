@@ -244,7 +244,7 @@ flowchart TD
         DF["DataFrame"]
     end
 
-    PARQUET[("data/raw/*.parquet")]
+    PARQUET[("data/*.parquet")]
 
     %% Fluxo de Coleta
     User --> EC

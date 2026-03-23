@@ -19,10 +19,6 @@ class Settings(BaseSettings):
     data_dir: Path = Path(user_cache_dir(APP_NAME, appauthor=False))
 
     @property
-    def data_path(self) -> Path:
-        return self.data_dir
-
-    @property
     def logs_path(self) -> Path:
         path = self.data_dir.parent / "Logs"
         path.mkdir(parents=True, exist_ok=True)

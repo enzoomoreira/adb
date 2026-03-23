@@ -174,7 +174,7 @@ adb.bloomberg.get_status()
 Apos a coleta, os dados sao salvos em:
 
 ```
-data/raw/bloomberg/
+data/bloomberg/
     daily/
         msci_acwi_mktcap.parquet
         msci_acwi_pe.parquet

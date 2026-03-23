@@ -22,7 +22,7 @@ O `QueryEngine` e o motor de consultas SQL do projeto, baseado em **DuckDB**. En
 ```python
 from adb import QueryEngine
 
-# Inicializacao padrao (usa get_settings().data_path)
+# Inicializacao padrao (usa get_settings().data_dir)
 qe = QueryEngine()
 
 # Com path customizado
@@ -52,7 +52,7 @@ qe = QueryEngine(progress_bar=True)
 ```python
 df = qe.read(
     filename='selic',           # Nome do arquivo (sem .parquet)
-    subdir='bacen/sgs/daily',   # Subdiretorio em data/raw/
+    subdir='bacen/sgs/daily',   # Subdiretorio em data/
     columns=['date', 'value'],  # Colunas (opcional, None = todas)
     where="date >= '2023-01-01'"  # Filtro SQL (opcional)
 )
@@ -162,9 +162,8 @@ O QueryEngine substitui automaticamente estas variaveis:
 
 | Variavel | Caminho |
 |----------|---------|
-| `{raw}` | `data/raw/` |
-| `{processed}` | `data/processed/` |
-| `{subdir}` | `data/raw/{subdir_param}/` (se passado) |
+| `{base}` | `data/` |
+| `{subdir}` | `data/{subdir_param}/` (se passado) |
 
 ### Exemplos
 
@@ -172,15 +171,15 @@ O QueryEngine substitui automaticamente estas variaveis:
 # Query simples com variavel
 df = qe.sql("""
     SELECT date, value
-    FROM '{raw}/bacen/sgs/daily/selic.parquet'
+    FROM '{base}/bacen/sgs/daily/selic.parquet'
     WHERE date >= '2023-01-01'
 """)
 
 # JOIN entre arquivos
 df = qe.sql("""
     SELECT s.date, s.value as selic, c.value as cdi
-    FROM '{raw}/bacen/sgs/daily/selic.parquet' s
-    JOIN '{raw}/bacen/sgs/daily/cdi.parquet' c
+    FROM '{base}/bacen/sgs/daily/selic.parquet' s
+    JOIN '{base}/bacen/sgs/daily/cdi.parquet' c
       ON s.date = c.date
     WHERE s.date >= '2020-01-01'
 """)
@@ -195,7 +194,7 @@ df = qe.sql("""
 # Glob no SQL
 df = qe.sql("""
     SELECT *
-    FROM '{raw}/mte/caged/cagedmov_2024-*.parquet'
+    FROM '{base}/mte/caged/cagedmov_2024-*.parquet'
     WHERE uf = 35
 """)
 
@@ -205,7 +204,7 @@ df = qe.sql("""
         SELECT
             DATE_TRUNC('month', date) as month,
             AVG(value) as avg_selic
-        FROM '{raw}/bacen/sgs/daily/selic.parquet'
+        FROM '{base}/bacen/sgs/daily/selic.parquet'
         WHERE date >= '2020-01-01'
         GROUP BY DATE_TRUNC('month', date)
     )
@@ -294,13 +293,13 @@ con = qe.connection()
 # Usar diretamente
 result = con.execute("""
     SELECT *
-    FROM read_parquet(getvariable('raw_path') || '/bacen/sgs/daily/*.parquet')
+    FROM read_parquet(getvariable('base_path') || '/bacen/sgs/daily/*.parquet')
 """).fetchdf()
 
 # Registrar tabela virtual
 con.execute("""
     CREATE OR REPLACE VIEW selic AS
-    SELECT * FROM read_parquet('data/raw/bacen/sgs/daily/selic.parquet')
+    SELECT * FROM read_parquet('data/bacen/sgs/daily/selic.parquet')
 """)
 
 # Usar a view
@@ -341,7 +340,7 @@ df = qe.sql("""
             ORDER BY date
             ROWS BETWEEN 20 PRECEDING AND CURRENT ROW
         ) as mm21
-    FROM '{raw}/bacen/sgs/daily/selic.parquet'
+    FROM '{base}/bacen/sgs/daily/selic.parquet'
     WHERE date >= '2020-01-01'
     ORDER BY date
 """)
@@ -356,7 +355,7 @@ df = qe.sql("""
         LAST(value ORDER BY date) as last_value,
         FIRST(value ORDER BY date) as first_value,
         (LAST(value ORDER BY date) / FIRST(value ORDER BY date) - 1) * 100 as var_pct
-    FROM '{raw}/bacen/sgs/daily/dolar_ptax.parquet'
+    FROM '{base}/bacen/sgs/daily/dolar_ptax.parquet'
     WHERE date >= '2020-01-01'
     GROUP BY DATE_TRUNC('month', date)
     ORDER BY month
@@ -370,9 +369,9 @@ df = qe.sql("""
     SELECT
         CORR(s.value, c.value) as corr_selic_cdi,
         CORR(s.value, d.value) as corr_selic_dolar
-    FROM '{raw}/bacen/sgs/daily/selic.parquet' s
-    JOIN '{raw}/bacen/sgs/daily/cdi.parquet' c ON s.date = c.date
-    JOIN '{raw}/bacen/sgs/daily/dolar_ptax.parquet' d ON s.date = d.date
+    FROM '{base}/bacen/sgs/daily/selic.parquet' s
+    JOIN '{base}/bacen/sgs/daily/cdi.parquet' c ON s.date = c.date
+    JOIN '{base}/bacen/sgs/daily/dolar_ptax.parquet' d ON s.date = d.date
     WHERE s.date >= '2020-01-01'
 """)
 ```
@@ -385,7 +384,7 @@ df = qe.sql("""
         uf,
         SUM(saldo) as total_saldo,
         RANK() OVER (ORDER BY SUM(saldo) DESC) as ranking
-    FROM '{raw}/mte/caged/cagedmov_2024-*.parquet'
+    FROM '{base}/mte/caged/cagedmov_2024-*.parquet'
     GROUP BY uf
     ORDER BY ranking
 """)

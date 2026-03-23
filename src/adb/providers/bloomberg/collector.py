@@ -64,7 +64,7 @@ class BloombergCollector(BaseCollector):
             filename: Nome do arquivo para salvar (sem extensao)
             name: Nome da serie para logs (default: usa filename)
             frequency: 'daily' (Bloomberg padrao)
-            subdir: Subdiretorio dentro de raw/ (default: bloomberg/{frequency})
+            subdir: Subdiretorio dentro de data/ (default: bloomberg/{frequency})
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
 

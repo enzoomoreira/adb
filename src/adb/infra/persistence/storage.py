@@ -89,9 +89,7 @@ class DataManager:
         """
         from adb.infra.config import get_settings
 
-        self.base_path = Path(base_path) if base_path else get_settings().data_path
-        self.raw_path = self.base_path / "raw"
-        self.processed_path = self.base_path / "processed"
+        self.base_path = Path(base_path) if base_path else get_settings().data_dir
 
         # Composicao: usa QueryEngine para leituras otimizadas (DuckDB)
         from adb.infra.persistence.query import QueryEngine
@@ -120,12 +118,12 @@ class DataManager:
         Args:
             df: DataFrame para salvar
             filename: Nome do arquivo (sem extensao)
-            subdir: Subdiretorio dentro de raw/ (ex: 'daily', 'monthly', 'expectations')
+            subdir: Subdiretorio dentro de data/ (ex: 'daily', 'monthly', 'expectations')
             format: Formato do arquivo ('parquet' ou 'csv')
             metadata: Dicionario com metadata adicional (opcional)
             verbose: Se True, imprime caminho salvo
         """
-        output_dir = self.raw_path / subdir
+        output_dir = self.base_path / subdir
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Padronizar índice de data antes de salvar (usa método do QueryEngine)
@@ -162,16 +160,16 @@ class DataManager:
 
         Args:
             filename: Nome do arquivo (sem extensao)
-            subdir: Subdiretorio dentro de raw/
+            subdir: Subdiretorio dentro de data/
 
         Returns:
             DataFrame com dados (vazio se arquivo nao existe)
         """
-        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        filepath = self.base_path / subdir / f"{filename}.parquet"
 
         if not filepath.exists():
             # Tentar CSV como fallback
-            csv_path = self.raw_path / subdir / f"{filename}.csv"
+            csv_path = self.base_path / subdir / f"{filename}.csv"
             if csv_path.exists():
                 return pd.read_csv(csv_path, index_col=0, parse_dates=True)
             return pd.DataFrame()
@@ -189,7 +187,7 @@ class DataManager:
 
         Args:
             filename: Nome do arquivo (sem extensao)
-            subdir: Subdiretorio dentro de raw/
+            subdir: Subdiretorio dentro de data/
 
         Returns:
             Dict com metadados ou None se arquivo nao existe
@@ -213,12 +211,12 @@ class DataManager:
         Args:
             df: DataFrame com novos dados
             filename: Nome do arquivo
-            subdir: Subdiretorio dentro de raw/
+            subdir: Subdiretorio dentro de data/
             dedup: Se True, remove duplicatas por coluna date (para series temporais).
                    Se False, mantem todos os registros (para microdados como CAGED).
             verbose: Se True, imprime progresso
         """
-        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        filepath = self.base_path / subdir / f"{filename}.parquet"
 
         # Primeira insercao: simplesmente salvar
         if not filepath.exists():
@@ -302,12 +300,12 @@ class DataManager:
         Lista arquivos salvos em um subdiretorio.
 
         Args:
-            subdir: Subdiretorio dentro de raw/
+            subdir: Subdiretorio dentro de data/
 
         Returns:
             Lista de nomes de arquivos (sem extensao)
         """
-        dir_path = self.raw_path / subdir
+        dir_path = self.base_path / subdir
 
         if not dir_path.exists():
             return []
@@ -327,12 +325,12 @@ class DataManager:
 
         Args:
             filename: Nome do arquivo
-            subdir: Subdiretorio dentro de raw/
+            subdir: Subdiretorio dentro de data/
 
         Returns:
             datetime da ultima data ou None se nao existir
         """
-        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        filepath = self.base_path / subdir / f"{filename}.parquet"
 
         if not filepath.exists():
             return None
@@ -352,12 +350,12 @@ class DataManager:
         Verifica se e primeira execucao (subdiretorio nao existe ou esta vazio).
 
         Args:
-            subdir: Subdiretorio dentro de raw/
+            subdir: Subdiretorio dentro de data/
 
         Returns:
             True se nao existem arquivos no subdiretorio
         """
-        path = self.raw_path / subdir
+        path = self.base_path / subdir
         if not path.exists():
             return True
         return len(list(path.glob("*.parquet"))) == 0
@@ -373,4 +371,4 @@ class DataManager:
         Returns:
             Path do arquivo Parquet
         """
-        return self.raw_path / subdir / f"{filename}.parquet"
+        return self.base_path / subdir / f"{filename}.parquet"

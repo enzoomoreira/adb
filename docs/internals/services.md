@@ -41,7 +41,7 @@ Classe base abstrata para todos os coletores de dados. Fornece infraestrutura co
 
 | Atributo | Tipo | Default | Descricao |
 |----------|------|---------|-----------|
-| `default_subdir` | `str` | `'raw'` | Subdiretorio padrao para operacoes |
+| `default_subdir` | `str` | `''` | Subdiretorio padrao para operacoes |
 
 Subclasses **devem** sobrescrever este atributo:
 
@@ -57,7 +57,7 @@ class BaseCollector:
     def __init__(self, data_path: Path = None):
         """
         Args:
-            data_path: Caminho para data/ (opcional, usa get_settings().data_path se None)
+            data_path: Caminho para data/ (opcional, usa get_settings().data_dir se None)
         """
 ```
 
@@ -276,7 +276,7 @@ def _sync(
 | `fetch_fn` | Funcao que recebe `start_date` e retorna DataFrame |
 | `filename` | Nome do arquivo (sem extensao) |
 | `name` | Nome para exibicao |
-| `subdir` | Subdiretorio dentro de raw/ |
+| `subdir` | Subdiretorio dentro de data/ |
 | `frequency` | 'daily', 'monthly' ou 'quarterly' |
 | `save` | Se True, persiste resultados |
 | `verbose` | Se True, exibe progresso |

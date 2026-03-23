@@ -152,7 +152,7 @@ df = adb.expectations.read('ipca_12m', smooth=True, metric='Maximo')
 Apos a coleta, os dados sao salvos em formato Parquet:
 
 ```
-data/raw/bacen/
+data/bacen/
 ├── sgs/
 │   ├── daily/
 │   │   ├── selic.parquet

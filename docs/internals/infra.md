@@ -41,7 +41,6 @@ Configuracao centralizada usando `platformdirs` para paths e `pydantic-settings`
 | Propriedade | Descricao |
 |-------------|-----------|
 | `data_dir` | Diretorio de cache (default: `user_cache_dir("py-adb")`) |
-| `data_path` | Alias para `data_dir` |
 | `logs_path` | Diretorio de logs (`{data_dir}/../Logs`) |
 
 **Override via variavel de ambiente:** `ADB_DATA_DIR`
@@ -62,7 +61,7 @@ Configuracao centralizada usando `platformdirs` para paths e `pydantic-settings`
 from adb.infra.config import get_settings
 
 settings = get_settings()
-print(settings.data_path)  # %LOCALAPPDATA%/py-adb/Cache (Windows)
+print(settings.data_dir)  # %LOCALAPPDATA%/py-adb/Cache (Windows)
 print(settings.logs_path)  # %LOCALAPPDATA%/py-adb/Logs
 ```
 
@@ -255,7 +254,7 @@ class DataManager:
 
 | Parametro | Tipo | Default | Descricao |
 |-----------|------|---------|-----------|
-| `base_path` | `Path` | `get_settings().data_path` | Caminho base para data/ |
+| `base_path` | `Path` | `get_settings().data_dir` | Caminho base para data/ |
 | `callback` | `StorageCallback` | `NullCallback()` | Callback para feedback |
 
 ### Metodos CRUD
@@ -280,7 +279,7 @@ def save(
 |-----------|-----------|
 | `df` | DataFrame para salvar |
 | `filename` | Nome do arquivo (sem extensao) |
-| `subdir` | Subdiretorio dentro de raw/ |
+| `subdir` | Subdiretorio dentro de data/ |
 | `format` | 'parquet' ou 'csv' |
 | `metadata` | Dicionario adicional (opcional) |
 | `verbose` | Se True, dispara callback |
@@ -381,7 +380,7 @@ class QueryEngine:
 
 | Parametro | Default | Descricao |
 |-----------|---------|-----------|
-| `base_path` | `get_settings().data_path` | Caminho base |
+| `base_path` | `get_settings().data_dir` | Caminho base |
 | `progress_bar` | `False` | Exibe progresso do DuckDB |
 
 ### Metodos de Leitura
@@ -450,16 +449,15 @@ def sql(self, query: str, subdir: str = None) -> pd.DataFrame
 ```
 
 **Variaveis disponiveis:**
-- `{raw}` -> `data/raw`
-- `{processed}` -> `data/processed`
-- `{subdir}` -> `data/raw/{subdir}`
+- `{base}` -> `data/`
+- `{subdir}` -> `data/{subdir}`
 
 ```python
 qe = QueryEngine()
 
 df = qe.sql("""
     SELECT date, value
-    FROM '{raw}/bacen/sgs/daily/selic.parquet'
+    FROM '{base}/bacen/sgs/daily/selic.parquet'
     WHERE date >= '2020-01-01'
 """)
 ```

@@ -115,7 +115,7 @@ class CAGEDExplorer(BaseExplorer):
             dataset: Tipo de dados
         """
         pattern = self._build_pattern(dataset, year, month)
-        filepath = self._qe.raw_path / self._SUBDIR / pattern
+        filepath = self._qe.base_path / self._SUBDIR / pattern
 
         return self._qe.sql(f"""
             SELECT
@@ -142,7 +142,7 @@ class CAGEDExplorer(BaseExplorer):
             dataset: Tipo de dados
         """
         pattern = f"{dataset}_{year}-*.parquet"
-        filepath = self._qe.raw_path / self._SUBDIR / pattern
+        filepath = self._qe.base_path / self._SUBDIR / pattern
         where = f"WHERE uf = {uf}" if uf else ""
 
         return self._qe.sql(f"""
@@ -174,7 +174,7 @@ class CAGEDExplorer(BaseExplorer):
             dataset: Tipo de dados
         """
         pattern = self._build_pattern(dataset, year, month)
-        filepath = self._qe.raw_path / self._SUBDIR / pattern
+        filepath = self._qe.base_path / self._SUBDIR / pattern
         where = f"WHERE uf = {uf}" if uf else ""
 
         return self._qe.sql(f"""
@@ -195,7 +195,7 @@ class CAGEDExplorer(BaseExplorer):
         Args:
             dataset: Tipo de dados ('cagedmov', 'cagedfor', 'cagedexc')
         """
-        data_path = self._qe.raw_path / self._SUBDIR
+        data_path = self._qe.base_path / self._SUBDIR
         periods = []
 
         for f in data_path.glob(f"{dataset}_*.parquet"):

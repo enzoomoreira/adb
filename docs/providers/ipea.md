@@ -87,13 +87,12 @@ Apos a coleta, os dados sao salvos em:
 
 ```
 data/
-└── raw/
-    └── ipea/
-        └── monthly/
-            ├── caged_saldo.parquet
-            ├── caged_admissoes.parquet
-            ├── caged_desligamentos.parquet
-            └── taxa_desemprego.parquet
+└── ipea/
+    └── monthly/
+        ├── caged_saldo.parquet
+        ├── caged_admissoes.parquet
+        ├── caged_desligamentos.parquet
+        └── taxa_desemprego.parquet
 ```
 
 Os arquivos sao salvos no formato Parquet, organizados por frequencia.

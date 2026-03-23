@@ -31,7 +31,7 @@ class CAGEDCollector(BaseCollector):
     Para leitura e queries SQL nos dados coletados, use QueryEngine:
         from adb.infra.persistence import QueryEngine
         qe = QueryEngine('data/')
-        df = qe.sql("SELECT * FROM '{raw}/mte/caged/cagedmov_*.parquet'")
+        df = qe.sql("SELECT * FROM '{base}/mte/caged/cagedmov_*.parquet'")
 
     Herda de BaseCollector para padronizacao de logging.
     """
@@ -132,7 +132,7 @@ class CAGEDCollector(BaseCollector):
 
             # 4. Converter para Parquet usando DuckDB
             output_filename = f"{indicator_key}_{year}-{month:02d}.parquet"
-            output_path = self.data_manager.raw_path / subdir / output_filename
+            output_path = self.data_manager.base_path / subdir / output_filename
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Cada thread usa sua propria connection isolada para paralelismo real
@@ -276,9 +276,9 @@ class CAGEDCollector(BaseCollector):
         for key in CAGED_CONFIG.keys():
             # Glob para pegar todos os arquivos do indicador
             pattern = f"{key}_*.parquet"
-            glob_path = self.data_manager.raw_path / subdir / pattern
+            glob_path = self.data_manager.base_path / subdir / pattern
 
-            files = list((self.data_manager.raw_path / subdir).glob(pattern))
+            files = list((self.data_manager.base_path / subdir).glob(pattern))
 
             if not files:
                 status_data.append(

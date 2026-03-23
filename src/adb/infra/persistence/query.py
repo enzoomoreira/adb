@@ -45,9 +45,7 @@ class QueryEngine:
         """
         from adb.infra.config import get_settings
 
-        self.base_path = Path(base_path) if base_path else get_settings().data_path
-        self.raw_path = self.base_path / "raw"
-        self.processed_path = self.base_path / "processed"
+        self.base_path = Path(base_path) if base_path else get_settings().data_dir
 
         self._conn = duckdb.connect()
         self._conn.execute(f"SET enable_progress_bar = {str(progress_bar).lower()}")
@@ -120,14 +118,14 @@ class QueryEngine:
 
         Args:
             filename: Nome do arquivo (sem extensão)
-            subdir: Subdiretório dentro de raw/
+            subdir: Subdiretório dentro de data/
             columns: Lista de colunas para carregar
             where: Filtro SQL (ex: "uf = 35 AND date >= '2023-01-01'")
 
         Returns:
             DataFrame Pandas (dados normalizados no save via Schema on Write).
         """
-        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        filepath = self.base_path / subdir / f"{filename}.parquet"
 
         if not filepath.exists():
             return pd.DataFrame()
@@ -157,12 +155,12 @@ class QueryEngine:
             subdir: Subdiretório (opcional)
         """
         if subdir:
-            full_pattern = str(self.raw_path / subdir / pattern)
+            full_pattern = str(self.base_path / subdir / pattern)
         else:
             full_pattern = pattern
 
         try:
-            if subdir and not list((self.raw_path / subdir).glob(pattern)):
+            if subdir and not list((self.base_path / subdir).glob(pattern)):
                 return pd.DataFrame()
 
             sql = self._query(full_pattern, columns, where)
@@ -178,10 +176,9 @@ class QueryEngine:
         Executa SQL arbitrário com substituição de variáveis de caminho.
         """
         # Substituir variaveis no SQL
-        query = query.replace("{raw}", str(self.raw_path))
-        query = query.replace("{processed}", str(self.processed_path))
+        query = query.replace("{base}", str(self.base_path))
         if subdir:
-            query = query.replace("{subdir}", str(self.raw_path / subdir))
+            query = query.replace("{subdir}", str(self.base_path / subdir))
 
         return duckdb.sql(query).df()
 
@@ -202,9 +199,9 @@ class QueryEngine:
         Args:
             agg: Dict {coluna: funcao} (ex: {'value': 'AVG'})
         """
-        filepath = self.raw_path / subdir / filename
+        filepath = self.base_path / subdir / filename
         if not filename.endswith(".parquet") and "*" not in filename:
-            filepath = self.raw_path / subdir / f"{filename}.parquet"
+            filepath = self.base_path / subdir / f"{filename}.parquet"
 
         path_str = str(filepath)
 
@@ -232,7 +229,7 @@ class QueryEngine:
 
     def get_metadata(self, filename: str, subdir: str) -> dict | None:
         """Retorna metadados básicos do arquivo."""
-        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        filepath = self.base_path / subdir / f"{filename}.parquet"
         if not filepath.exists():
             return None
 
@@ -271,8 +268,7 @@ class QueryEngine:
             return {"arquivo": filename, "status": "Erro", "error": str(e)}
 
     def connection(self) -> duckdb.DuckDBPyConnection:
-        """Retorna uma conexão DuckDB configurada com variáveis de ambiente."""
+        """Retorna uma conexao DuckDB configurada com variaveis de ambiente."""
         con = duckdb.connect()
-        con.execute(f"SET VARIABLE raw_path = '{self.raw_path}'")
-        con.execute(f"SET VARIABLE processed_path = '{self.processed_path}'")
+        con.execute(f"SET VARIABLE base_path = '{self.base_path}'")
         return con

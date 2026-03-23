@@ -142,19 +142,18 @@ Apos a coleta, os dados sao salvos em:
 
 ```
 data/
-└── raw/
-    └── ibge/
-        └── sidra/
-            ├── monthly/
-            │   ├── ipca.parquet
-            │   ├── ipca_12m.parquet
-            │   ├── pim.parquet
-            │   ├── pmc_varejo.parquet
-            │   └── pms.parquet
-            └── quarterly/
-                ├── pib.parquet
-                ├── pib_dessaz.parquet
-                └── pnad_desocupacao.parquet
+└── ibge/
+    └── sidra/
+        ├── monthly/
+        │   ├── ipca.parquet
+        │   ├── ipca_12m.parquet
+        │   ├── pim.parquet
+        │   ├── pmc_varejo.parquet
+        │   └── pms.parquet
+        └── quarterly/
+            ├── pib.parquet
+            ├── pib_dessaz.parquet
+            └── pnad_desocupacao.parquet
 ```
 
 Os arquivos sao organizados por frequencia (mensal ou trimestral) e salvos no formato Parquet.

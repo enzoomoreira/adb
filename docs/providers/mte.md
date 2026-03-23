@@ -115,7 +115,7 @@ adb.caged.info('cagedmov') # Detalhes de um dataset
 Apos a coleta, os dados sao salvos em:
 
 ```
-data/raw/mte/caged/
+data/mte/caged/
     cagedmov_2020-01.parquet
     cagedmov_2020-02.parquet
     ...

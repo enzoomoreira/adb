@@ -27,7 +27,7 @@ class BaseCollector:
     - get_status() - para logica especifica (ex: CAGED usa periodos)
     """
 
-    default_subdir: str = "raw"
+    default_subdir: str = ""
 
     def __init__(self, data_path: Path | None = None):
         """
@@ -38,7 +38,7 @@ class BaseCollector:
         """
         from adb.infra.config import get_settings
 
-        self.data_path = Path(data_path) if data_path else get_settings().data_path
+        self.data_path = Path(data_path) if data_path else get_settings().data_dir
 
         # DataManager com callback para feedback visual
         from adb.infra.persistence.storage import DisplayCallback
@@ -305,7 +305,7 @@ class BaseCollector:
             fetch_fn: Funcao que recebe start_date e retorna DataFrame
             filename: Nome do arquivo (sem extensao)
             name: Nome para exibicao
-            subdir: Subdiretorio dentro de raw/
+            subdir: Subdiretorio dentro de data/
             frequency: 'daily', 'monthly' ou 'quarterly'
             save: Se True, salva resultados em Parquet
             verbose: Se True, imprime progresso

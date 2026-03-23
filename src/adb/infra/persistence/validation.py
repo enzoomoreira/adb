@@ -88,8 +88,7 @@ class DataValidator:
         """
         from adb.infra.config import get_settings
 
-        self.base_path = Path(base_path) if base_path else get_settings().data_path
-        self.raw_path = self.base_path / "raw"
+        self.base_path = Path(base_path) if base_path else get_settings().data_dir
         self._conn: duckdb.DuckDBPyConnection | None = duckdb.connect()
 
         # Calendario ANBIMA para dias uteis brasileiros
@@ -124,13 +123,13 @@ class DataValidator:
 
         Args:
             filename: Nome do arquivo (sem extensao .parquet)
-            subdir: Subdiretorio dentro de raw/
+            subdir: Subdiretorio dentro de data/
             frequency: Frequencia dos dados ('daily', 'monthly', 'quarterly')
 
         Returns:
             HealthReport com status, cobertura, gaps, etc.
         """
-        filepath = self.raw_path / subdir / f"{filename}.parquet"
+        filepath = self.base_path / subdir / f"{filename}.parquet"
 
         # Arquivo nao existe
         if not filepath.exists():

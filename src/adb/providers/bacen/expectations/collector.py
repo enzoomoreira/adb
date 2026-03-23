@@ -63,7 +63,7 @@ class ExpectationsCollector(BaseCollector):
             start_date: Data inicial 'YYYY-MM-DD' (override manual)
             end_date: Data final 'YYYY-MM-DD'
             limit: Limite de registros (None = sem limite)
-            subdir: Subdiretorio dentro de raw/ (default: 'expectations')
+            subdir: Subdiretorio dentro de data/ (default: 'expectations')
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
 

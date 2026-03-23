@@ -61,7 +61,7 @@ class SGSCollector(BaseCollector):
             filename: Nome do arquivo para salvar (sem extensao)
             name: Nome da serie (default: usa filename)
             frequency: 'daily' ou 'monthly'
-            subdir: Subdiretorio dentro de raw/ (default: sgs/{frequency})
+            subdir: Subdiretorio dentro de data/ (default: sgs/{frequency})
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
 

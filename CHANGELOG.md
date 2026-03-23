@@ -1,5 +1,17 @@
 # Project Changelog
 
+## [2026-03-23 01:18]
+
+### Changed
+- Estrutura de cache simplificada: removido nivel intermediario `raw/` -- providers agora ficam direto dentro do diretorio de cache (`cache/bacen/sgs/daily/` ao inves de `cache/raw/bacen/sgs/daily/`)
+- Camada `processed/` tambem removida (resquicio de filosofia anterior, nunca usada na pratica)
+- Property `data_path` removida de `Settings` -- era apenas alias de `data_dir`, callers agora usam `data_dir` diretamente
+- Variavel SQL `{raw}` renomeada para `{base}`, variavel DuckDB `raw_path` renomeada para `base_path`
+- Documentacao atualizada em 9 arquivos para refletir nova estrutura de paths
+
+### Removed
+- Atributos `raw_path` e `processed_path` de `DataManager`, `QueryEngine` e `DataValidator` -- substituidos por `base_path`
+
 ## [2026-03-23 00:45]
 
 ### Changed
