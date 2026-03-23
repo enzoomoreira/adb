@@ -1,6 +1,6 @@
 # Arquitetura do Projeto
 
-Documentacao tecnica da arquitetura Clean Architecture usada no projeto agora-database.
+Documentacao tecnica da arquitetura Clean Architecture usada no `adb`.
 
 ---
 
@@ -41,8 +41,8 @@ src/adb/
 │       └── indicators.py    # IndicatorConfig, SGSIndicatorConfig, etc.
 │
 ├── infra/                   # CAMADA DE INFRAESTRUTURA
-│   ├── __init__.py          # Exports (PROJECT_ROOT, get_logger, retry)
-│   ├── config.py            # Constantes de path e resiliencia
+│   ├── __init__.py          # Exports (get_settings, get_logger, retry)
+│   ├── config.py            # Settings (platformdirs) e constantes de resiliencia
 │   ├── log.py               # Sistema de logging (loguru)
 │   ├── resilience.py        # Decorator @retry (tenacity)
 │   └── persistence/         # Subcamada de persistencia
@@ -242,12 +242,9 @@ flowchart TD
     subgraph Saida ["3. SAIDA"]
         direction TB
         DF["DataFrame"]
-        VIZ["chartkit.plot()<br/>(biblioteca externa)"]
-        TRF["chartkit.transforms<br/>(yoy, mom, accum_12m)"]
     end
 
     PARQUET[("data/raw/*.parquet")]
-    CHART[("data/outputs/charts/")]
 
     %% Fluxo de Coleta
     User --> EC
@@ -263,12 +260,6 @@ flowchart TD
     PARQUET -->|"le"| ER
     ER -->|"delega"| QE
     QE --> DF
-
-    %% Fluxo de Visualizacao
-    DF --> VIZ
-    DF --> TRF
-    TRF --> DF
-    VIZ -->|"exporta"| CHART
 
     %% Styling
     style Coleta fill:#e8f4e8
@@ -303,17 +294,6 @@ df = adb.sgs.read('selic', start='2023')
 # 1. Explorer constroi WHERE clause
 # 2. QueryEngine executa SQL no DuckDB
 # 3. Retorna DataFrame com DatetimeIndex
-```
-
-#### 3. Visualizacao
-
-```python
-import chartkit
-
-# Transformacao e plot
-chartkit.yoy(df).chartkit.plot(title="Selic YoY")
-
-# chartkit e biblioteca externa
 ```
 
 ---

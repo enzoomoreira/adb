@@ -86,9 +86,9 @@ class DataValidator:
         Args:
             base_path: Caminho base para dados. Default usa DATA_PATH.
         """
-        from adb.infra.config import DATA_PATH
+        from adb.infra.config import get_settings
 
-        self.base_path = Path(base_path) if base_path else DATA_PATH
+        self.base_path = Path(base_path) if base_path else get_settings().data_path
         self.raw_path = self.base_path / "raw"
         self._conn: duckdb.DuckDBPyConnection | None = duckdb.connect()
 

@@ -57,7 +57,7 @@ class BaseCollector:
     def __init__(self, data_path: Path = None):
         """
         Args:
-            data_path: Caminho para data/ (opcional, usa DATA_PATH se None)
+            data_path: Caminho para data/ (opcional, usa get_settings().data_path se None)
         """
 ```
 

@@ -43,9 +43,9 @@ class QueryEngine:
             base_path: Caminho base para diretorio data/ (opcional, usa DATA_PATH se None)
             progress_bar: Se True, exibe barra de progresso do DuckDB (default: False)
         """
-        from adb.infra.config import DATA_PATH
+        from adb.infra.config import get_settings
 
-        self.base_path = Path(base_path) if base_path else DATA_PATH
+        self.base_path = Path(base_path) if base_path else get_settings().data_path
         self.raw_path = self.base_path / "raw"
         self.processed_path = self.base_path / "processed"
 

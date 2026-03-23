@@ -1,5 +1,23 @@
 # Project Changelog
 
+## [2026-03-23 00:45]
+
+### Changed
+- Projeto renomeado de `agora-database` para `adb` -- desvinculado da corretora, preparado para ser lib publica
+- Sistema de paths migrado de `PROJECT_ROOT/data` hardcoded para `platformdirs` + `pydantic-settings` -- dados agora ficam no cache do OS (`%LOCALAPPDATA%/py-adb/Cache` no Windows), com override via env var `ADB_DATA_DIR`
+- Todos os call sites de config (storage, query, validation, collectors, log) migrados para `get_settings()`
+- README reescrito como documentacao de biblioteca (instalacao via git, tabela de paths por OS)
+- Documentacao interna atualizada para refletir nova arquitetura de config
+
+### Removed
+- `notebooks/collection.ipynb` -- notebook de producao, migra para projeto consumidor
+- `scripts/generate_full_report.py` -- script de relatorios, migra para projeto consumidor
+- `assets/` -- fonts para relatorios
+- `.chartkit/` e `charting.toml` -- config de visualizacao
+- Dependencias opcionais `reports` (chartkit) e `notebooks` (ipykernel, ipywidgets)
+- Referencia local ao chartkit em `[tool.uv.sources]`
+- Exports `PROJECT_ROOT`, `DATA_PATH`, `OUTPUTS_PATH` do `__init__.py` -- substituidos por `get_settings()`
+
 ## [2026-02-11 19:30]
 
 ### Fixed

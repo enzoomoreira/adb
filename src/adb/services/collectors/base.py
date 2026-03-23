@@ -36,9 +36,9 @@ class BaseCollector:
         Args:
             data_path: Caminho para diretorio data/ (opcional, usa DATA_PATH se None)
         """
-        from adb.infra.config import DATA_PATH
+        from adb.infra.config import get_settings
 
-        self.data_path = Path(data_path) if data_path else DATA_PATH
+        self.data_path = Path(data_path) if data_path else get_settings().data_path
 
         # DataManager com callback para feedback visual
         from adb.infra.persistence.storage import DisplayCallback

@@ -1,15 +1,13 @@
 # Getting Started
 
-Guia rapido para comecar a usar o `adb` (agora-database).
+Guia rapido para comecar a usar o `adb`.
 
 ## Instalacao
 
-Clone o repositorio e instale as dependencias:
+Instale como dependencia no seu projeto:
 
 ```bash
-git clone https://github.com/seu-usuario/agora-database.git
-cd agora-database
-uv sync
+uv add adb --git https://github.com/seu-usuario/adb.git
 ```
 
 ## Primeiro Uso
@@ -55,17 +53,6 @@ df = adb.sgs.read('selic', 'cdi', 'dolar_ptax')
 # Filtrar por periodo
 df = adb.sgs.read('selic', start='2020', end='2023')
 df = adb.sgs.read('selic', start='2020-06')  # A partir de junho/2020
-```
-
-### 3. Visualizacao (Opcional)
-
-Use a biblioteca `chartkit` para criar graficos:
-
-```python
-from chartkit import Chart
-
-df = adb.sgs.read('selic', start='2020')
-Chart(df).line().show()
 ```
 
 ## Metodos Disponiveis

@@ -87,9 +87,9 @@ class DataManager:
             base_path: Caminho base para diretorio data/ (opcional, usa DATA_PATH se None)
             callback: Callback para feedback de operacoes (opcional, default silencioso)
         """
-        from adb.infra.config import DATA_PATH
+        from adb.infra.config import get_settings
 
-        self.base_path = Path(base_path) if base_path else DATA_PATH
+        self.base_path = Path(base_path) if base_path else get_settings().data_path
         self.raw_path = self.base_path / "raw"
         self.processed_path = self.base_path / "processed"
 

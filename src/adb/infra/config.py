@@ -1,36 +1,43 @@
 """
-Configuracao global do projeto.
+Configuracao centralizada da biblioteca.
 
-Resolve DATA_PATH automaticamente baseado na raiz do projeto.
+Paths resolvidos via platformdirs (cache do OS).
+Override via variavel de ambiente ADB_DATA_DIR.
 """
 
 from pathlib import Path
 
+from platformdirs import user_cache_dir
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-def get_project_root() -> Path:
-    """
-    Encontra raiz do projeto (onde esta pyproject.toml ou .git).
-
-    Sobe na arvore de diretorios ate encontrar.
-
-    Returns:
-        Path para raiz do projeto
-    """
-    current = Path(__file__).resolve().parent
-    for parent in [current] + list(current.parents):
-        if (parent / 'pyproject.toml').exists():
-            return parent
-        if (parent / '.git').exists():
-            return parent
-    # Fallback: diretorio atual
-    return Path.cwd()
+APP_NAME = "py-adb"
 
 
-PROJECT_ROOT = get_project_root()
-DATA_PATH = PROJECT_ROOT / 'data'
-OUTPUTS_PATH = DATA_PATH / 'outputs'
-LOG_PATH = PROJECT_ROOT / 'logs'
-ASSETS_PATH = PROJECT_ROOT / 'assets'
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="ADB_")
+
+    data_dir: Path = Path(user_cache_dir(APP_NAME, appauthor=False))
+
+    @property
+    def data_path(self) -> Path:
+        return self.data_dir
+
+    @property
+    def logs_path(self) -> Path:
+        path = self.data_dir.parent / "Logs"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+
+_settings: Settings | None = None
+
+
+def get_settings() -> Settings:
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings
+
 
 # =========================================================================
 # Resilience defaults (retry, timeout)

@@ -10,7 +10,7 @@ A camada de infraestrutura fornece:
 
 | Modulo | Arquivo | Responsabilidade |
 |--------|---------|------------------|
-| **Config** | `config.py` | Constantes de path e resiliencia |
+| **Config** | `config.py` | Settings (platformdirs) e constantes de resiliencia |
 | **Log** | `log.py` | Sistema de logging (loguru) |
 | **Resilience** | `resilience.py` | Decorator @retry (tenacity) |
 | **Persistence** | `persistence/` | DataManager, QueryEngine, DataValidator |
@@ -18,7 +18,7 @@ A camada de infraestrutura fornece:
 ```
 infra/
 ├── __init__.py         # Exports publicos
-├── config.py           # Constantes globais
+├── config.py           # Settings (platformdirs)
 ├── log.py              # Sistema de logging
 ├── resilience.py       # Retry com backoff
 └── persistence/
@@ -34,17 +34,17 @@ infra/
 
 **Localizacao:** `src/adb/infra/config.py`
 
-Configuracao global do projeto com deteccao automatica do diretorio raiz.
+Configuracao centralizada usando `platformdirs` para paths e `pydantic-settings` para override via env vars.
 
-### Constantes de Path
+### Settings
 
-| Constante | Descricao |
-|-----------|-----------|
-| `PROJECT_ROOT` | Raiz do projeto (detecta `pyproject.toml` ou `.git`) |
-| `DATA_PATH` | Diretorio de dados (`{PROJECT_ROOT}/data`) |
-| `OUTPUTS_PATH` | Diretorio de saidas (`{PROJECT_ROOT}/data/outputs`) |
-| `LOG_PATH` | Diretorio de logs (`{PROJECT_ROOT}/logs`) |
-| `ASSETS_PATH` | Diretorio de assets (`{PROJECT_ROOT}/assets`) |
+| Propriedade | Descricao |
+|-------------|-----------|
+| `data_dir` | Diretorio de cache (default: `user_cache_dir("py-adb")`) |
+| `data_path` | Alias para `data_dir` |
+| `logs_path` | Diretorio de logs (`{data_dir}/../Logs`) |
+
+**Override via variavel de ambiente:** `ADB_DATA_DIR`
 
 ### Constantes de Resiliencia
 
@@ -56,35 +56,14 @@ Configuracao global do projeto com deteccao automatica do diretorio raiz.
 | `DEFAULT_BACKOFF_FACTOR` | `2.0` | Multiplicador de backoff |
 | `DEFAULT_CHUNK_DELAY` | `2.0` | Delay entre chunks de requisicoes |
 
-### get_project_root()
-
-Detecta automaticamente a raiz do projeto.
-
-```python
-def get_project_root() -> Path:
-    """
-    Encontra raiz do projeto (onde esta pyproject.toml ou .git).
-
-    Sobe na arvore de diretorios ate encontrar.
-
-    Returns:
-        Path para raiz do projeto
-    """
-```
-
-**Algoritmo:**
-1. Comeca no diretorio do arquivo `config.py`
-2. Sobe na hierarquia procurando `pyproject.toml`
-3. Se nao encontrar, procura `.git`
-4. Fallback: diretorio atual (`Path.cwd()`)
-
 ### Uso
 
 ```python
-from adb.infra import PROJECT_ROOT, DATA_PATH
+from adb.infra.config import get_settings
 
-print(PROJECT_ROOT)  # C:\Users\Enzo\Documents\Programming\agora-database
-print(DATA_PATH)     # C:\Users\Enzo\Documents\Programming\agora-database\data
+settings = get_settings()
+print(settings.data_path)  # %LOCALAPPDATA%/py-adb/Cache (Windows)
+print(settings.logs_path)  # %LOCALAPPDATA%/py-adb/Logs
 ```
 
 ---
@@ -98,7 +77,7 @@ Sistema de logging tecnico centralizado usando **loguru**. Registra informacoes 
 ### Caracteristicas
 
 - **Arquivo:** DEBUG+, rotacao 10MB, retencao 30 dias
-- **Path:** `{PROJECT_ROOT}/logs/adb_YYYY-MM-DD.log`
+- **Path:** `{data_dir}/../Logs/adb_YYYY-MM-DD.log`
 - **Formato:** `[YYYY-MM-DD HH:MM:SS] LEVEL [logger_name] message`
 - **Lazy initialization:** Configura apenas na primeira chamada
 - **Sem console:** Output visual via `Display` (ver `ui/display.py`)
@@ -133,20 +112,16 @@ def _ensure_configured():
     if _configured:
         return
 
-    # Imports tardios
     from datetime import datetime
     from loguru import logger
-    from adb.infra.config import LOG_PATH
+    from adb.infra.config import get_settings
 
-    # Criar diretorio de logs
-    LOG_PATH.mkdir(exist_ok=True)
+    logs_path = get_settings().logs_path
 
-    # Remove handler padrao (console colorido)
     logger.remove()
 
-    # File handler com rotacao
     today = datetime.now().strftime('%Y-%m-%d')
-    log_file = LOG_PATH / f"adb_{today}.log"
+    log_file = logs_path / f"adb_{today}.log"
 
     logger.add(
         log_file,
@@ -280,7 +255,7 @@ class DataManager:
 
 | Parametro | Tipo | Default | Descricao |
 |-----------|------|---------|-----------|
-| `base_path` | `Path` | `DATA_PATH` | Caminho base para data/ |
+| `base_path` | `Path` | `get_settings().data_path` | Caminho base para data/ |
 | `callback` | `StorageCallback` | `NullCallback()` | Callback para feedback |
 
 ### Metodos CRUD
@@ -406,7 +381,7 @@ class QueryEngine:
 
 | Parametro | Default | Descricao |
 |-----------|---------|-----------|
-| `base_path` | `DATA_PATH` | Caminho base |
+| `base_path` | `get_settings().data_path` | Caminho base |
 | `progress_bar` | `False` | Exibe progresso do DuckDB |
 
 ### Metodos de Leitura
@@ -614,8 +589,9 @@ def get_health(
 ## Imports Recomendados
 
 ```python
-# Constantes
-from adb.infra import PROJECT_ROOT, DATA_PATH, OUTPUTS_PATH
+# Config
+from adb.infra.config import get_settings
+settings = get_settings()
 
 # Logging
 from adb.infra import get_logger

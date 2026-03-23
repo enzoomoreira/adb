@@ -1,6 +1,6 @@
-# agora-database
+# adb
 
-Coleta, armazenamento e visualizacao de dados economicos brasileiros. Suporta seis fontes de dados com interface unificada.
+Coleta e consulta de dados economicos de multiplas fontes. Interface unificada para series temporais e microdados.
 
 | Fonte | Modulo | Dados |
 |-------|--------|-------|
@@ -14,7 +14,7 @@ Coleta, armazenamento e visualizacao de dados economicos brasileiros. Suporta se
 ## Instalacao
 
 ```bash
-uv sync
+uv add adb --git https://github.com/seu-usuario/adb.git
 ```
 
 ## Uso Rapido
@@ -41,58 +41,44 @@ adb.sgs.collect(['selic', 'cdi'])
 adb.sgs.get_status()
 ```
 
+## Configuracao
+
+Dados sao armazenados no cache do OS via `platformdirs`:
+
+| OS | Path |
+|----|------|
+| Windows | `%LOCALAPPDATA%/py-adb/Cache` |
+| Linux | `~/.cache/py-adb` |
+| macOS | `~/Library/Caches/py-adb` |
+
+Override via variavel de ambiente:
+
+```bash
+export ADB_DATA_DIR=/caminho/customizado
+```
+
 ## Documentacao
 
 ### Guias de Uso
 
-- **[getting-started.md](docs2/getting-started.md)** - Instalacao e primeiro uso
+- **[getting-started.md](docs/getting-started.md)** - Instalacao e primeiro uso
 
 ### Fontes de Dados
 
-- **[bacen.md](docs2/providers/bacen.md)** - BCB (SGS + Expectations)
-- **[ibge.md](docs2/providers/ibge.md)** - IBGE/SIDRA
-- **[ipea.md](docs2/providers/ipea.md)** - IPEA
-- **[mte.md](docs2/providers/mte.md)** - MTE/CAGED
-- **[bloomberg.md](docs2/providers/bloomberg.md)** - Bloomberg Terminal
+- **[bacen.md](docs/providers/bacen.md)** - BCB (SGS + Expectations)
+- **[ibge.md](docs/providers/ibge.md)** - IBGE/SIDRA
+- **[ipea.md](docs/providers/ipea.md)** - IPEA
+- **[mte.md](docs/providers/mte.md)** - MTE/CAGED
+- **[bloomberg.md](docs/providers/bloomberg.md)** - Bloomberg Terminal
 
 ### Uso Avancado
 
-- **[querying.md](docs2/advanced/querying.md)** - Queries SQL com DuckDB
-- **[extending.md](docs2/advanced/extending.md)** - Como adicionar novos providers
+- **[querying.md](docs/advanced/querying.md)** - Queries SQL com DuckDB
+- **[extending.md](docs/advanced/extending.md)** - Como adicionar novos providers
 
 ### Arquitetura Interna
 
-- **[architecture.md](docs2/internals/architecture.md)** - Visao geral da arquitetura
-- **[domain.md](docs2/internals/domain.md)** - BaseExplorer, Schemas, Exceptions
-- **[infra.md](docs2/internals/infra.md)** - Config, Logging, Persistencia
-- **[services.md](docs2/internals/services.md)** - BaseCollector, Registry
-
-## Estrutura de Dados
-
-```
-data/raw/
-  bacen/
-    sgs/
-      daily/          # selic.parquet, cdi.parquet, dolar_ptax.parquet...
-      monthly/        # ibc_br_bruto.parquet, igp_m.parquet...
-    expectations/     # ipca_anual.parquet, selic_anual.parquet...
-  ibge/
-    sidra/
-      monthly/        # ipca.parquet, ipca_12m.parquet...
-  ipea/
-    monthly/          # caged_saldo.parquet, taxa_desemprego.parquet...
-  mte/
-    caged/            # cagedmov_2024-01.parquet...
-  bloomberg/
-    daily/            # ibov_points.parquet, brent.parquet...
-```
-
-## Visualizacao (chartkit)
-
-A visualizacao de graficos e feita pela biblioteca externa **chartkit**.
-
-```python
-import chartkit
-
-df.chartkit.plot(title="Selic", kind='line', units='%')
-```
+- **[architecture.md](docs/internals/architecture.md)** - Visao geral da arquitetura
+- **[domain.md](docs/internals/domain.md)** - BaseExplorer, Schemas, Exceptions
+- **[infra.md](docs/internals/infra.md)** - Config, Logging, Persistencia
+- **[services.md](docs/internals/services.md)** - BaseCollector, Registry

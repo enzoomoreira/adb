@@ -29,17 +29,16 @@ def _ensure_configured():
     # Imports tardios - so carrega quando realmente precisar
     from datetime import datetime
     from loguru import logger
-    from adb.infra.config import LOG_PATH
+    from adb.infra.config import get_settings
 
-    # Criar diretorio de logs (lazy)
-    LOG_PATH.mkdir(exist_ok=True)
+    logs_path = get_settings().logs_path
 
     # Remove handler padrao do loguru (console colorido)
     logger.remove()
 
     # File handler com rotacao (10MB max, 30 dias retencao)
     today = datetime.now().strftime("%Y-%m-%d")
-    log_file = LOG_PATH / f"adb_{today}.log"
+    log_file = logs_path / f"adb_{today}.log"
 
     logger.add(
         log_file,
@@ -59,7 +58,7 @@ def get_logger(name: str) -> "Logger":
     Retorna logger configurado para o modulo especificado.
 
     Configura o logger na primeira chamada (lazy initialization).
-    Logs vao para {PROJECT_ROOT}/logs/adb_YYYY-MM-DD.log
+    Logs vao para {data_dir}/../Logs/adb_YYYY-MM-DD.log
 
     O arquivo .log contem informacoes tecnicas para debugging:
     - Timestamps precisos

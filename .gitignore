@@ -9,17 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
-# Data files
-/data/
-
 # Temp files
 temp/
-
-# Test benchmarks
-scripts/tests/benchmark/
-
-# Logs
-logs/
 
 # Claude
 .claude/

@@ -204,6 +204,50 @@ class BaseExplorer:
         collector.collect(indicators=indicators, save=save, verbose=verbose, **kwargs)
 
     def get_status(self) -> pd.DataFrame:
-        """Retorna status dos arquivos salvos."""
+        """Retorna status de todos os indicadores configurados.
+
+        Inclui indicadores coletados (com metricas de saude) e nao coletados
+        (marcados como NOT_COLLECTED).
+        """
         collector = self._COLLECTOR_CLASS()
-        return collector.get_status()
+        df = collector.get_status()
+
+        tracked: set[str] = set(df["arquivo"].tolist()) if not df.empty else set()
+        missing: set[str] = set(self.available()) - tracked
+
+        if not missing:
+            if not df.empty:
+                return df.sort_values("arquivo", ignore_index=True)
+            return df
+
+        not_collected_rows: list[dict] = []
+        for indicator in sorted(missing):
+            row: dict = {
+                "arquivo": indicator,
+                "subdir": self._subdir(indicator),
+                "status": "NOT_COLLECTED",
+            }
+            if not df.empty:
+                for col in df.columns:
+                    if col not in row:
+                        row[col] = 0 if col in ("registros", "gaps") else None
+            else:
+                row.update(
+                    {
+                        "registros": 0,
+                        "primeira_data": None,
+                        "ultima_data": None,
+                        "cobertura": None,
+                        "gaps": 0,
+                    }
+                )
+            not_collected_rows.append(row)
+
+        not_collected_df = pd.DataFrame(not_collected_rows)
+
+        if df.empty:
+            result = not_collected_df
+        else:
+            result = pd.concat([df, not_collected_df], ignore_index=True)
+
+        return result.sort_values("arquivo", ignore_index=True)
