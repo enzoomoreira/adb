@@ -24,7 +24,7 @@ class BaseCollector:
     - default_consolidate_subdirs: list[str] - subdiretorios para consolidacao
 
     Subclasses podem sobrescrever:
-    - get_status() - para logica especifica (ex: CAGED usa periodos)
+    - get_status() - para logica especifica de cada provider
     """
 
     default_subdir: str = ""

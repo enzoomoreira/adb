@@ -78,8 +78,8 @@ df = qe.read('selic', 'bacen/sgs/daily',
              where="date >= '2023-01-01' AND value > 10.0")
 
 # Filtro com IN
-df = qe.read('cagedmov_2024-01', 'mte/caged',
-             where="uf IN (35, 33, 31)")  # SP, RJ, MG
+df = qe.read('ipca', 'ibge/sidra',
+             where="nivel_territorial IN ('N1', 'N2', 'N3')")
 
 # Filtro com LIKE
 df = qe.read('ipca', 'ibge/sidra',
@@ -108,10 +108,10 @@ O metodo `read_glob()` permite ler multiplos arquivos que correspondem a um padr
 
 ```python
 df = qe.read_glob(
-    pattern='cagedmov_2024-*.parquet',  # Glob pattern
-    subdir='mte/caged',                  # Subdiretorio
-    columns=['competencia', 'saldo'],    # Colunas (opcional)
-    where="uf = 35"                      # Filtro SQL (opcional)
+    pattern='selic_*.parquet',            # Glob pattern
+    subdir='bacen/sgs/daily',             # Subdiretorio
+    columns=['date', 'value'],            # Colunas (opcional)
+    where="date >= '2024-01-01'"          # Filtro SQL (opcional)
 )
 ```
 
@@ -120,22 +120,12 @@ df = qe.read_glob(
 | Padrao | Descricao |
 |--------|-----------|
 | `*.parquet` | Todos os arquivos Parquet |
-| `cagedmov_2024-*.parquet` | CAGED de todos os meses de 2024 |
-| `cagedmov_2024-0[1-6].parquet` | CAGED de janeiro a junho 2024 |
+| `selic_*.parquet` | Todos os arquivos Selic |
 | `expectativas_*.parquet` | Todas as expectativas |
 
 ### Exemplos Praticos
 
 ```python
-# Consolidar todos os arquivos CAGED de 2024
-df = qe.read_glob(
-    'cagedmov_2024-*.parquet',
-    subdir='mte/caged',
-    columns=['competencia', 'uf', 'saldo'],
-    where="uf = 35"
-)
-print(f"Total de registros SP: {len(df):,}")
-
 # Ler todas as series mensais do SGS
 df = qe.read_glob(
     '*.parquet',
@@ -144,9 +134,9 @@ df = qe.read_glob(
 
 # Combinar com filtro de data
 df = qe.read_glob(
-    'cagedmov_*.parquet',
-    subdir='mte/caged',
-    where="competencia >= '2023-01-01' AND uf IN (35, 33)"
+    '*.parquet',
+    subdir='bacen/sgs/daily',
+    where="date >= '2023-01-01'"
 )
 ```
 
@@ -194,8 +184,8 @@ df = qe.sql("""
 # Glob no SQL
 df = qe.sql("""
     SELECT *
-    FROM '{base}/mte/caged/cagedmov_2024-*.parquet'
-    WHERE uf = 35
+    FROM '{base}/bacen/sgs/daily/*.parquet'
+    WHERE date >= '2024-01-01'
 """)
 
 # Subquery e CTE
@@ -264,11 +254,10 @@ df = qe.aggregate(
 
 # Agrupamento por multiplas colunas
 df = qe.aggregate(
-    'cagedmov_2024-*',  # Glob tambem funciona
-    'mte/caged',
-    group_by=['uf', 'secao'],
-    agg={'saldo': 'SUM'},
-    where="uf IN (35, 33, 31)"
+    'ipca', 'ibge/sidra',
+    group_by=['nivel_territorial', 'variavel'],
+    agg={'value': 'AVG'},
+    where="date >= '2023-01-01'"
 )
 
 # Agregacao mensal
@@ -376,16 +365,17 @@ df = qe.sql("""
 """)
 ```
 
-### Ranking por UF
+### Ranking por Valor Medio Anual
 
 ```python
 df = qe.sql("""
     SELECT
-        uf,
-        SUM(saldo) as total_saldo,
-        RANK() OVER (ORDER BY SUM(saldo) DESC) as ranking
-    FROM '{base}/mte/caged/cagedmov_2024-*.parquet'
-    GROUP BY uf
+        YEAR(date) as year,
+        AVG(value) as avg_value,
+        RANK() OVER (ORDER BY AVG(value) DESC) as ranking
+    FROM '{base}/bacen/sgs/daily/dolar_ptax.parquet'
+    WHERE date >= '2015-01-01'
+    GROUP BY YEAR(date)
     ORDER BY ranking
 """)
 ```
@@ -406,13 +396,13 @@ df = qe.sql("""
 
 ```python
 # Bom: Filtros e colunas especificas
-df = qe.read('caged_2024-01', 'mte/caged',
-             columns=['uf', 'saldo'],
-             where="uf = 35")
+df = qe.read('selic', 'bacen/sgs/daily',
+             columns=['date', 'value'],
+             where="date >= '2023-01-01'")
 
 # Evitar: Ler tudo e filtrar depois em pandas
-df = qe.read('caged_2024-01', 'mte/caged')
-df = df[df['uf'] == 35][['uf', 'saldo']]
+df = qe.read('selic', 'bacen/sgs/daily')
+df = df[df['date'] >= '2023-01-01'][['date', 'value']]
 ```
 
 ---

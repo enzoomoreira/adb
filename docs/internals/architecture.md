@@ -65,8 +65,6 @@ src/adb/
 │   ├── ibge/
 │   │   └── sidra/           # client, collector, explorer, indicators
 │   ├── ipea/                # client, collector, explorer, indicators
-│   ├── mte/
-│   │   └── caged/           # client, collector, explorer, indicators
 │   └── bloomberg/           # client, collector, explorer, indicators
 │
 ├── shared/                  # UTILITARIOS COMPARTILHADOS
@@ -184,8 +182,6 @@ classDiagram
     class SGSCollector
     class ExpectationsExplorer
     class ExpectationsCollector
-    class CAGEDExplorer
-    class CAGEDCollector
 
     %% Relationships - Domain
     ADBException <|-- DataNotFoundError
@@ -200,11 +196,9 @@ classDiagram
     %% Relationships - Services/Providers
     BaseExplorer <|-- SGSExplorer
     BaseExplorer <|-- ExpectationsExplorer
-    BaseExplorer <|-- CAGEDExplorer
 
     BaseCollector <|-- SGSCollector
     BaseCollector <|-- ExpectationsCollector
-    BaseCollector <|-- CAGEDCollector
 
     %% Composition
     BaseExplorer o-- QueryEngine : usa

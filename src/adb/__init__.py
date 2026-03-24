@@ -1,35 +1,29 @@
 """
-adb - Coleta e consulta de dados economicos de multiplas fontes.
+adb - Acesso unificado a dados economicos brasileiros.
 
 Uso:
     import adb
 
-    # Query
-    df = adb.sgs.read('selic', start='2020')
-    df = adb.caged.read(year=2025, uf=35)
+    # Fetch direto da API (stateless, sem disco)
+    df = adb.sgs.fetch('selic', start='2020')
 
-    # Coleta
+    # Cache local (coleta + leitura de disco)
     adb.sgs.collect()
-    adb.caged.collect(max_workers=8)
+    df = adb.sgs.read('selic', start='2020')
 
 Fontes disponiveis:
     - sgs: Series temporais BCB (Selic, CDI, PTAX, IBC-Br, IGP-M)
     - expectations: Expectativas Focus BCB (IPCA, PIB, Cambio, Selic)
-    - caged: Microdados CAGED/MTE (admissoes, desligamentos)
     - ipea: Series agregadas IPEADATA
     - bloomberg: Dados de mercado (requer terminal)
     - sidra: Series IBGE Sidra (IPCA, PIB, etc.)
 """
-
-# Classes (para uso avancado)
-from adb.infra.persistence import QueryEngine, DataManager
 
 # Config
 from adb.infra.config import get_settings
 
 # Explorers (namespaces de query/coleta) - via lazy loading
 _sgs = None
-_caged = None
 _expectations = None
 _ipea = None
 _bloomberg = None
@@ -38,7 +32,7 @@ _sidra = None
 
 def __getattr__(name):
     """Lazy loading dos explorers."""
-    global _sgs, _caged, _expectations, _ipea, _bloomberg, _sidra
+    global _sgs, _expectations, _ipea, _bloomberg, _sidra
 
     if name == "sgs":
         if _sgs is None:
@@ -46,13 +40,6 @@ def __getattr__(name):
 
             _sgs = SGSExplorer()
         return _sgs
-
-    if name == "caged":
-        if _caged is None:
-            from adb.providers.mte.caged.explorer import CAGEDExplorer
-
-            _caged = CAGEDExplorer()
-        return _caged
 
     if name == "expectations":
         if _expectations is None:
@@ -87,20 +74,16 @@ def __getattr__(name):
 
 def available_sources() -> list[str]:
     """Lista todas as fontes de dados disponiveis."""
-    return ["sgs", "caged", "expectations", "ipea", "bloomberg", "sidra"]
+    return ["sgs", "expectations", "ipea", "bloomberg", "sidra"]
 
 
 __all__ = [
     # Explorers
     "sgs",
-    "caged",
     "expectations",
     "ipea",
     "bloomberg",
     "sidra",
-    # Classes
-    "QueryEngine",
-    "DataManager",
     # Config
     "get_settings",
     # Helpers

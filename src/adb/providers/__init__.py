@@ -12,5 +12,4 @@ Providers disponiveis:
 - ibge: IBGE (SIDRA)
 - ipea: IPEADATA
 - bloomberg: Bloomberg Terminal
-- mte: Ministerio do Trabalho (CAGED)
 """

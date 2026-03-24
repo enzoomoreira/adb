@@ -15,8 +15,6 @@ Uso:
     print(adb.expectations.available())
 """
 
-from typing import List
-
 import pandas as pd
 
 from adb.domain.explorers import BaseExplorer
@@ -59,7 +57,7 @@ class ExpectationsExplorer(BaseExplorer):
         *indicators: str,
         start: str | None = None,
         end: str | None = None,
-        columns: List[str] | None = None,
+        columns: list[str] | None = None,
         year: int | None = None,
         smooth: bool | None = None,
         metric: str = "Mediana",
@@ -160,6 +158,50 @@ class ExpectationsExplorer(BaseExplorer):
         result.columns = ["value"]
 
         return result.sort_index()
+
+    def _fetch_one(
+        self, indicator: str, start: str | None, end: str | None
+    ) -> pd.DataFrame:
+        from adb.providers.bacen.expectations.client import ExpectationsClient
+
+        config = self._CONFIG[indicator]
+        client = ExpectationsClient()
+        return client.query(
+            endpoint_key=config["endpoint"],
+            indicator=config.get("indicator"),
+            start_date=start,
+            end_date=end,
+        )
+
+    def fetch(
+        self,
+        *indicators: str,
+        start: str | None = None,
+        end: str | None = None,
+        year: int | None = None,
+        smooth: bool | None = None,
+        metric: str = "Mediana",
+    ) -> pd.DataFrame:
+        """
+        Busca expectativas diretamente da API (stateless, sem disco).
+
+        Args:
+            *indicators: Nomes dos indicadores (ex: 'selic_anual', 'ipca_12m')
+            start: Data inicial
+            end: Data final
+            year: Ano de referencia para filtrar
+            smooth: Se True, filtra apenas serie suavizada
+            metric: Metrica a extrair ('Mediana', 'Media', 'Minimo', 'Maximo')
+        """
+        df = super().fetch(*indicators, start=start, end=end)
+
+        if df.empty or (year is None and smooth is None):
+            return df
+
+        df = self._process_to_series(df, year=year, smooth=smooth, metric=metric)
+        if len(indicators) == 1 and "value" in df.columns:
+            df = df.rename(columns={"value": indicators[0]})
+        return df
 
     # =========================================================================
     # Metodos auxiliares

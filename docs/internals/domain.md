@@ -30,7 +30,7 @@ domain/
 
 **Localizacao:** `src/adb/domain/explorers.py`
 
-Classe base abstrata que define a interface publica para leitura e coleta de dados. Todos os explorers especificos (SGSExplorer, CAGEDExplorer, etc.) herdam desta classe.
+Classe base abstrata que define a interface publica para leitura e coleta de dados. Todos os explorers especificos (SGSExplorer, IPEAExplorer, etc.) herdam desta classe.
 
 ### Atributos de Classe
 

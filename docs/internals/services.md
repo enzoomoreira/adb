@@ -446,7 +446,6 @@ Registro interno de collectors para import dinamico.
 _COLLECTOR_MAP = {
     'sgs': ('bacen.sgs.collector', 'SGSCollector'),
     'expectations': ('bacen.expectations.collector', 'ExpectationsCollector'),
-    'caged': ('mte.caged.collector', 'CAGEDCollector'),
     'ipea': ('ipea.collector', 'IPEACollector'),
     'bloomberg': ('bloomberg.collector', 'BloombergCollector'),
     'sidra': ('ibge.sidra.collector', 'SidraCollector'),
@@ -461,7 +460,7 @@ Importa e retorna classe do collector (uso interno).
 def _get_collector(name: str):
     """
     Args:
-        name: Nome do collector ('sgs', 'caged', etc)
+        name: Nome do collector ('sgs', 'ipea', etc)
 
     Returns:
         Classe do collector

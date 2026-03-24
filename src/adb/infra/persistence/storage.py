@@ -213,7 +213,7 @@ class DataManager:
             filename: Nome do arquivo
             subdir: Subdiretorio dentro de data/
             dedup: Se True, remove duplicatas por coluna date (para series temporais).
-                   Se False, mantem todos os registros (para microdados como CAGED).
+                   Se False, mantem todos os registros (append sem deduplicacao).
             verbose: Se True, imprime progresso
         """
         filepath = self.base_path / subdir / f"{filename}.parquet"

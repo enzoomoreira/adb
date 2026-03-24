@@ -1,7 +1,7 @@
 """
 Funcoes genericas para manipulacao de indicadores.
 
-Centraliza logica comum usada por todos os modulos (sgs, expectations, ipea, caged).
+Centraliza logica comum usada por todos os modulos (sgs, expectations, ipea, sidra, bloomberg).
 Cada modulo mantem seu CONFIG especifico e usa estas funcoes helper.
 """
 

@@ -1,14 +1,13 @@
 # adb
 
-Coleta e consulta de dados economicos de multiplas fontes. Interface unificada para series temporais e microdados.
+Acesso unificado a dados economicos brasileiros. Agrega multiplas fontes sob uma API consistente com normalizacao e validacao de qualidade.
 
 | Fonte | Modulo | Dados |
 |-------|--------|-------|
-| BCB - SGS | `adb.sgs` | Series temporais (Selic, CDI, IPCA, cambio) |
+| BCB - SGS | `adb.sgs` | Series temporais (Selic, CDI, PTAX, IBC-Br, IGP-M) |
 | BCB - Focus | `adb.expectations` | Expectativas de mercado |
 | IBGE - SIDRA | `adb.sidra` | Dados demograficos e economicos (IPCA, PIB) |
-| IPEA | `adb.ipea` | Dados agregados de emprego |
-| MTE - CAGED | `adb.caged` | Microdados de emprego formal |
+| IPEA | `adb.ipea` | Dados agregados IPEADATA |
 | Bloomberg | `adb.bloomberg` | Dados de mercado financeiro (Terminal) |
 
 ## Instalacao
@@ -22,20 +21,17 @@ uv add adb --git https://github.com/seu-usuario/adb.git
 ```python
 import adb
 
-# Leitura de dados
+# Fetch direto da API (stateless, sem disco)
+df = adb.sgs.fetch('selic', start='2020')
+df = adb.sgs.fetch('selic', 'cdi')          # Multiplos indicadores
+
+# Cache local (coleta + leitura de disco)
+adb.sgs.collect()
 df = adb.sgs.read('selic', start='2020')
-df = adb.sgs.read('selic', 'cdi')           # Multiplos indicadores
-df = adb.expectations.read('ipca_anual')
-df = adb.sidra.read('ipca')
-df = adb.caged.read(year=2024, month=10)
 
 # Indicadores disponiveis
 adb.sgs.available()
 adb.sgs.info('selic')
-
-# Coleta de dados
-adb.sgs.collect()
-adb.sgs.collect(['selic', 'cdi'])
 
 # Status dos dados salvos
 adb.sgs.get_status()
@@ -68,7 +64,6 @@ export ADB_DATA_DIR=/caminho/customizado
 - **[bacen.md](docs/providers/bacen.md)** - BCB (SGS + Expectations)
 - **[ibge.md](docs/providers/ibge.md)** - IBGE/SIDRA
 - **[ipea.md](docs/providers/ipea.md)** - IPEA
-- **[mte.md](docs/providers/mte.md)** - MTE/CAGED
 - **[bloomberg.md](docs/providers/bloomberg.md)** - Bloomberg Terminal
 
 ### Uso Avancado

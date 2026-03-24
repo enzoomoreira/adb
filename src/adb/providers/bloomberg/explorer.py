@@ -11,6 +11,8 @@ Uso:
 Nota: Requer Bloomberg Terminal para coleta, mas leitura funciona offline.
 """
 
+import pandas as pd
+
 from adb.domain.explorers import BaseExplorer
 from .indicators import BLOOMBERG_CONFIG
 
@@ -40,3 +42,18 @@ class BloombergExplorer(BaseExplorer):
     def _subdir(self, indicator: str) -> str:
         """Bloomberg tem subdir dinamico baseado em frequency."""
         return f"bloomberg/{self._CONFIG[indicator]['frequency']}"
+
+    def _fetch_one(
+        self, indicator: str, start: str | None, end: str | None
+    ) -> pd.DataFrame:
+        from adb.providers.bloomberg.client import BloombergClient
+
+        config = self._CONFIG[indicator]
+        client = BloombergClient()
+        return client.get_data(
+            ticker=config["ticker"],
+            field=config["fields"][0],
+            name=config["name"],
+            start_date=start,
+            end_date=end,
+        )

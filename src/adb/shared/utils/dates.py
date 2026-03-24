@@ -4,14 +4,13 @@ Utilitarios para manipulacao de datas.
 Funcoes comuns usadas pelos explorers para parsing e formatacao.
 """
 
-
 import pandas as pd
 
 
 # Colunas de data reconhecidas (ordem de prioridade)
 # normalize_date_index() usa esta lista para converter qualquer variante para 'date'
 # Dados salvos via DataManager.save() SEMPRE terao coluna 'date' (Schema on Write)
-DATE_COLUMNS = ['date', 'Date', 'data', 'Data', 'DATE']
+DATE_COLUMNS = ["date", "Date", "data", "Data", "DATE"]
 
 
 def parse_date(date: str) -> str:
@@ -64,7 +63,7 @@ def normalize_index(df: pd.DataFrame) -> pd.DataFrame:
     # Caso 1: Ja tem DatetimeIndex - so padronizar nome e remover hora
     if pd.api.types.is_datetime64_any_dtype(df.index):
         df.index = df.index.normalize()
-        df.index.name = 'date'
+        df.index.name = "date"
         return df
 
     # Caso 2: Tem coluna de data - mover para indice e remover hora
@@ -73,8 +72,8 @@ def normalize_index(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = pd.to_datetime(df[col])
             df = df.set_index(col)
             df.index = df.index.normalize()
-            df.index.name = 'date'
+            df.index.name = "date"
             return df
 
-    # Caso 3: Sem data (ex: CAGED microdados) - retorna como esta
+    # Caso 3: Sem coluna de data reconhecida - retorna como esta
     return df

@@ -431,9 +431,9 @@ def read_glob(
 ```python
 qe = QueryEngine()
 
-df = qe.read_glob('cagedmov_2024-*.parquet',
-                  subdir='mte/caged',
-                  columns=['competencia', 'saldo'])
+df = qe.read_glob('*.parquet',
+                  subdir='bacen/sgs/daily',
+                  columns=['date', 'value'])
 ```
 
 ---

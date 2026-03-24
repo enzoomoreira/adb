@@ -20,6 +20,7 @@ class BaseExplorer:
     - _CONFIG: dict - Configuracao de indicadores
     - _SUBDIR: str - Subdiretorio padrao para arquivos
     - _COLLECTOR_CLASS: property - Classe do collector (lazy import)
+    - _fetch_one(): Busca um indicador da API (para fetch stateless)
 
     Subclasses podem sobrescrever:
     - _DATE_COLUMN: str - Nome da coluna de data (default: 'date')
@@ -68,6 +69,24 @@ class BaseExplorer:
         if end:
             where_clauses.append(f"{self._DATE_COLUMN} <= '{parse_date(end)}'")
         return " AND ".join(where_clauses) if where_clauses else None
+
+    def _fetch_one(
+        self, indicator: str, start: str | None, end: str | None
+    ) -> pd.DataFrame:
+        """
+        Busca um indicador diretamente da API (sem disco).
+
+        Subclasses devem implementar para chamar seu client especifico.
+
+        Args:
+            indicator: Chave do indicador em _CONFIG
+            start: Data inicial 'YYYY-MM-DD' (ja parsed)
+            end: Data final 'YYYY-MM-DD' (ja parsed)
+
+        Returns:
+            DataFrame com DatetimeIndex + coluna 'value'
+        """
+        raise NotImplementedError("Subclasse deve implementar _fetch_one")
 
     def _join(self, dfs: list, indicators: tuple) -> pd.DataFrame:
         """
@@ -144,6 +163,58 @@ class BaseExplorer:
                 dfs.append(df)
             else:
                 self.logger.warning(f"Nenhum dado encontrado para '{ind}'")
+
+        return self._join(dfs, indicators)
+
+    def fetch(
+        self,
+        *indicators: str,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> pd.DataFrame:
+        """
+        Busca dados diretamente da API (stateless, sem disco).
+
+        Args:
+            *indicators: Nomes dos indicadores (default: todos)
+            start: Data inicial (formatos: '2020', '2020-01', '2020-01-01')
+            end: Data final (mesmos formatos)
+
+        Returns:
+            DataFrame com series temporais (mesma estrutura de read())
+        """
+        if not indicators:
+            indicators = tuple(self._CONFIG.keys())
+
+        for ind in indicators:
+            if ind not in self._CONFIG:
+                available = ", ".join(self._CONFIG.keys())
+                raise KeyError(
+                    f"Indicador '{ind}' nao encontrado. Disponiveis: {available}"
+                )
+
+        parsed_start = parse_date(start) if start else None
+        parsed_end = parse_date(end) if end else None
+
+        if len(indicators) == 1:
+            df = self._fetch_one(indicators[0], parsed_start, parsed_end)
+            df = normalize_index(df)
+            if parsed_end and not df.empty:
+                df = df[df.index <= pd.Timestamp(parsed_end)]
+            if "value" in df.columns:
+                df = df.rename(columns={"value": indicators[0]})
+            return df
+
+        dfs = []
+        for ind in indicators:
+            df = self._fetch_one(ind, parsed_start, parsed_end)
+            df = normalize_index(df)
+            if parsed_end and not df.empty:
+                df = df[df.index <= pd.Timestamp(parsed_end)]
+            if not df.empty:
+                if "value" in df.columns:
+                    df = df.rename(columns={"value": ind})
+                dfs.append(df)
 
         return self._join(dfs, indicators)
 

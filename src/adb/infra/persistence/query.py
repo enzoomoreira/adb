@@ -151,7 +151,7 @@ class QueryEngine:
         Lê múltiplos arquivos Parquet usando glob pattern.
 
         Args:
-            pattern: Glob pattern (ex: 'cagedmov_2025-*.parquet')
+            pattern: Glob pattern (ex: 'selic_*.parquet')
             subdir: Subdiretório (opcional)
         """
         if subdir:

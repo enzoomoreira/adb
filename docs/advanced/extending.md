@@ -17,7 +17,6 @@ src/adb/
 │   │   └── expectations/
 │   ├── ibge/sidra/
 │   ├── ipea/
-│   ├── mte/caged/
 │   └── bloomberg/
 ├── shared/           # Utilitarios compartilhados
 └── ui/               # Interface visual (Rich)
@@ -39,7 +38,6 @@ Cada provider tem um arquivo `indicators.py` com a configuracao dos indicadores.
 - SIDRA: `src/adb/providers/ibge/sidra/indicators.py`
 - IPEA: `src/adb/providers/ipea/indicators.py`
 - Bloomberg: `src/adb/providers/bloomberg/indicators.py`
-- CAGED: `src/adb/providers/mte/caged/indicators.py`
 
 ### Exemplo: Adicionar indicador SGS
 
@@ -385,7 +383,6 @@ Adicione o collector ao registro em `src/adb/services/collectors/registry.py`:
 _COLLECTOR_MAP = {
     'sgs': ('bacen.sgs.collector', 'SGSCollector'),
     'expectations': ('bacen.expectations.collector', 'ExpectationsCollector'),
-    'caged': ('mte.caged.collector', 'CAGEDCollector'),
     'ipea': ('ipea.collector', 'IPEACollector'),
     'bloomberg': ('bloomberg.collector', 'BloombergCollector'),
     'sidra': ('ibge.sidra.collector', 'SidraCollector'),
@@ -408,7 +405,7 @@ Adicione o explorer em `src/adb/__init__.py`:
 _nova_fonte = None
 
 def __getattr__(name):
-    global _sgs, _caged, _expectations, _ipea, _bloomberg, _sidra, _nova_fonte
+    global _sgs, _expectations, _ipea, _bloomberg, _sidra, _nova_fonte
 
     # ... cases existentes ...
 
@@ -424,7 +421,7 @@ def __getattr__(name):
 
 def available_sources() -> list[str]:
     """Lista todas as fontes de dados disponiveis."""
-    return ['sgs', 'caged', 'expectations', 'ipea', 'bloomberg', 'sidra', 'nova_fonte']
+    return ['sgs', 'expectations', 'ipea', 'bloomberg', 'sidra', 'nova_fonte']
 
 
 __all__ = [

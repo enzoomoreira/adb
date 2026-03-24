@@ -75,7 +75,6 @@ Todos os explorers compartilham a mesma interface:
 | BCB Expectations | `adb.expectations` | Expectativas Focus (IPCA, PIB, Cambio) | [providers/expectations.md](providers/expectations.md) |
 | IBGE SIDRA | `adb.sidra` | Tabelas IBGE (IPCA, PIB, PNAD) | [providers/sidra.md](providers/sidra.md) |
 | IPEA | `adb.ipea` | Series IPEADATA | [providers/ipea.md](providers/ipea.md) |
-| MTE CAGED | `adb.caged` | Microdados de emprego formal | [providers/caged.md](providers/caged.md) |
 | Bloomberg | `adb.bloomberg` | Dados de mercado (requer terminal) | [providers/bloomberg.md](providers/bloomberg.md) |
 
 ## Exemplos Rapidos
@@ -108,16 +107,6 @@ print(status)
 #            indicator  last_update  rows
 # 0              selic   2025-01-15  5420
 # 1                cdi   2025-01-15  6230
-```
-
-### CAGED - Microdados
-
-```python
-# Coletar dados de um ano
-adb.caged.collect(year=2024)
-
-# Ler filtrando por UF (35 = SP)
-df = adb.caged.read(year=2024, uf=35)
 ```
 
 ### Expectativas Focus
