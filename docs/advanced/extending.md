@@ -8,7 +8,7 @@ O projeto segue Clean Architecture com separacao clara de responsabilidades:
 
 ```
 src/adb/
-├── domain/           # Regras de negocio (BaseExplorer, Exceptions, Schemas)
+├── domain/           # Regras de negocio (BaseExplorer, Exceptions)
 ├── infra/            # Infraestrutura (Config, Log, Persistence)
 ├── services/         # Logica de aplicacao (BaseCollector, Registry)
 ├── providers/        # Implementacoes por fonte de dados
@@ -211,7 +211,7 @@ class NovaFonteClient:
 
 ### Passo 3: Criar collector.py
 
-O collector orquestra a coleta de dados.
+O collector usa o padrao **Template Method**: herda `collect()` do `BaseCollector` e implementa apenas `_collect_one()` para a logica especifica de cada indicador.
 
 ```python
 # src/adb/providers/nova_fonte/collector.py
@@ -220,7 +220,6 @@ from pathlib import Path
 import pandas as pd
 
 from adb.services.collectors import BaseCollector
-from adb.shared.utils import get_config
 from .client import NovaFonteClient
 from .indicators import NOVA_FONTE_CONFIG
 
@@ -229,91 +228,51 @@ class NovaFonteCollector(BaseCollector):
     """
     Coletor de dados da Nova Fonte.
 
-    Herda de BaseCollector para:
-    - Logging padronizado (banners, fetch_start/result)
-    - get_status() com health checks
-    - Metodos auxiliares (_sync, _normalize_indicators, etc.)
+    Usa template method do BaseCollector:
+    - collect() e herdado (normalize -> start -> loop _collect_one -> end)
+    - get_status() auto-deriva subdirs do _CONFIG via _subdir_for()
     """
 
+    _CONFIG = NOVA_FONTE_CONFIG
+    _TITLE = "Nova Fonte - Coleta de Dados"
     default_subdir = 'nova_fonte/daily'
 
-    def __init__(self, data_path: Path = None):
+    def __init__(self, data_path: Path | None = None):
         super().__init__(data_path)
         self.client = NovaFonteClient()
 
-    def collect(
-        self,
-        indicators: list[str] | str = 'all',
-        save: bool = True,
-        verbose: bool = True,
-    ) -> None:
-        """
-        Coleta indicadores da Nova Fonte.
+    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+        """Coleta um indicador individual."""
+        frequency = config.get('frequency', 'daily')
+        subdir = self._subdir_for(key)
 
-        Args:
-            indicators: 'all', lista, ou string com indicador(es)
-            save: Se True, salva em Parquet
-            verbose: Se True, imprime progresso
-        """
-        # Normalizar entrada para lista
-        keys = self._normalize_indicators(indicators, NOVA_FONTE_CONFIG)
-
-        # Banner de inicio
-        self._start(
-            title="Nova Fonte - Coleta de Dados",
-            num_indicators=len(keys),
-            subdir=self.default_subdir,
-            check_first_run=True,
+        self._sync(
+            fetch_fn=lambda start: self.client.get_data(
+                code=config['code'],
+                name=config['name'],
+                frequency=frequency,
+                start_date=start,
+            ),
+            filename=key,
+            name=config['name'],
+            subdir=subdir,
+            frequency=frequency,
+            save=save,
             verbose=verbose,
         )
 
-        # Coletar cada indicador
-        for key in keys:
-            config = get_config(NOVA_FONTE_CONFIG, key)
-            frequency = config.get('frequency', 'daily')
-            subdir = f"nova_fonte/{frequency}"
-
-            # Funcao de fetch (passada para _sync)
-            def fetch(start_date: str | None) -> pd.DataFrame:
-                return self.client.get_data(
-                    code=config['code'],
-                    name=config['name'],
-                    frequency=frequency,
-                    start_date=start_date,
-                )
-
-            # _sync cuida de: verificar dados existentes, buscar novos, salvar/append
-            self._sync(
-                fetch_fn=fetch,
-                filename=key,
-                name=config['name'],
-                subdir=subdir,
-                frequency=frequency,
-                save=save,
-                verbose=verbose,
-            )
-
-        # Banner de conclusao
-        self._end(verbose=verbose)
-
-    def get_status(self) -> pd.DataFrame:
-        """Retorna status dos arquivos coletados."""
-        dfs = []
-        for freq in ['daily', 'monthly']:
-            subdir = f'nova_fonte/{freq}'
-            df = super().get_status(subdir)
-            if not df.empty:
-                dfs.append(df)
-
-        if not dfs:
-            return pd.DataFrame()
-        return pd.concat(dfs, ignore_index=True)
+    def _subdir_for(self, key: str) -> str:
+        """Subdir dinamico baseado na frequencia do indicador."""
+        freq = self._CONFIG[key].get('frequency', 'daily')
+        return f"nova_fonte/{freq}"
 
     def _get_frequency_for_file(self, filename: str) -> str | None:
         """Retorna frequencia de um indicador (usado pelo DataValidator)."""
         config = NOVA_FONTE_CONFIG.get(filename, {})
         return config.get('frequency', 'daily')
 ```
+
+> **Nota:** `collect()` e `get_status()` sao herdados do `BaseCollector`. O `get_status()` auto-deriva subdirs unicos chamando `_subdir_for()` para cada indicador do `_CONFIG`, sem necessidade de hardcodar listas de subdirs.
 
 ### Passo 4: Criar explorer.py
 
@@ -432,50 +391,7 @@ __all__ = [
 
 ---
 
-## 4. Validacao com Pydantic (Opcional)
-
-Para validacao mais robusta das configuracoes, crie um schema Pydantic.
-
-### Criar Schema
-
-```python
-# src/adb/domain/schemas/indicators.py
-
-# Adicionar novo schema
-class NovaFonteIndicatorConfig(IndicatorConfig):
-    """Schema para indicadores da Nova Fonte."""
-    code: str  # Codigo como string
-    unit: str | None = None  # Unidade (opcional)
-
-    @field_validator('code')
-    @classmethod
-    def code_not_empty(cls, v):
-        if not v or not v.strip():
-            raise ValueError('code nao pode ser vazio')
-        return v.strip()
-```
-
-### Usar no Collector
-
-```python
-# src/adb/providers/nova_fonte/collector.py
-
-from adb.domain.schemas import NovaFonteIndicatorConfig, validate_indicator_config
-
-class NovaFonteCollector(BaseCollector):
-    def __init__(self, data_path: Path = None):
-        super().__init__(data_path)
-
-        # Validar config na inicializacao
-        self._validated_config = validate_indicator_config(
-            NOVA_FONTE_CONFIG,
-            NovaFonteIndicatorConfig
-        )
-```
-
----
-
-## 5. Testes
+## 4. Testes
 
 ### Estrutura de Testes
 
@@ -520,12 +436,11 @@ class TestNovaFonteExplorer:
 
 - [ ] Criar `indicators.py` com configuracao
 - [ ] Criar `client.py` com comunicacao API
-- [ ] Criar `collector.py` herdando de BaseCollector
+- [ ] Criar `collector.py` herdando de BaseCollector (definir `_CONFIG`, `_TITLE`, `_collect_one()`)
 - [ ] Criar `explorer.py` herdando de BaseExplorer
 - [ ] Criar `__init__.py` com exports
 - [ ] Registrar em `services/collectors/registry.py`
 - [ ] Exportar em `src/adb/__init__.py`
-- [ ] (Opcional) Criar schema Pydantic
 - [ ] (Opcional) Escrever testes
 
 ---

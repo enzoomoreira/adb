@@ -12,16 +12,12 @@ A camada de dominio contem:
 |--------|---------|------------------|
 | **BaseExplorer** | `explorers.py` | Interface unificada para leitura e coleta |
 | **Exceptions** | `exceptions.py` | Hierarquia de excecoes customizadas |
-| **Schemas** | `schemas/indicators.py` | Validacao Pydantic de configuracoes |
 
 ```
 domain/
 ├── __init__.py        # Exports publicos
 ├── exceptions.py      # ADBException, DataNotFoundError, etc.
-├── explorers.py       # BaseExplorer
-└── schemas/
-    ├── __init__.py
-    └── indicators.py  # IndicatorConfig, SGSIndicatorConfig, etc.
+└── explorers.py       # BaseExplorer
 ```
 
 ---
@@ -215,184 +211,6 @@ class SGSExplorer(BaseExplorer):
 
 ---
 
-## Schemas Pydantic
-
-**Localizacao:** `src/adb/domain/schemas/indicators.py`
-
-Sistema de validacao de configuracoes usando Pydantic. Garante que configuracoes de indicadores estejam corretas antes de requisicoes a APIs.
-
-### FrequencyType
-
-Tipo literal para frequencias suportadas:
-
-```python
-FrequencyType = Literal["daily", "monthly", "quarterly", "yearly"]
-```
-
----
-
-### IndicatorConfig
-
-Schema base para todos os tipos de indicadores.
-
-| Campo | Tipo | Obrigatorio | Descricao |
-|-------|------|-------------|-----------|
-| `name` | `str` | Sim | Nome do indicador (min 1 char) |
-| `frequency` | `FrequencyType` | Sim | Frequencia dos dados |
-| `description` | `str \| None` | Nao | Descricao do indicador |
-
-**Configuracao:**
-- `model_config = {"extra": "allow"}` - Permite campos extras para extensibilidade
-
-```python
-from adb.domain.schemas import IndicatorConfig
-
-config = IndicatorConfig(
-    name="Taxa Selic",
-    frequency="daily",
-    description="Meta da taxa Selic"
-)
-```
-
----
-
-### SGSIndicatorConfig
-
-Schema para indicadores do Sistema Gerenciador de Series (BCB).
-
-| Campo | Tipo | Validacao | Descricao |
-|-------|------|-----------|-----------|
-| `code` | `int` | `> 0` | Codigo numerico da serie SGS |
-
-Herda todos os campos de `IndicatorConfig`.
-
-```python
-from adb.domain.schemas import SGSIndicatorConfig
-
-config = SGSIndicatorConfig(
-    name="Taxa Selic",
-    code=432,
-    frequency="daily"
-)
-
-# Erro se codigo invalido
-try:
-    invalid = SGSIndicatorConfig(name="Test", code=-1, frequency="daily")
-except ValueError as e:
-    print(e)  # code > 0
-```
-
----
-
-### IPEAIndicatorConfig
-
-Schema para indicadores do IPEA Data.
-
-| Campo | Tipo | Validacao | Descricao |
-|-------|------|-----------|-----------|
-| `code` | `str` | Nao vazio | Codigo string da serie |
-| `unit` | `str \| None` | - | Unidade de medida |
-| `source` | `str \| None` | - | Fonte dos dados |
-
-```python
-from adb.domain.schemas import IPEAIndicatorConfig
-
-config = IPEAIndicatorConfig(
-    name="Emprego Formal",
-    code="CAGED12_SALam12",
-    frequency="monthly",
-    unit="pessoas",
-    source="MTE/CAGED"
-)
-```
-
-**Validador customizado:**
-```python
-@field_validator("code")
-@classmethod
-def validate_ipea_code(cls, v: str) -> str:
-    """Valida que codigo IPEA nao esta vazio."""
-    if not v.strip():
-        raise ValueError("Codigo IPEA nao pode estar vazio")
-    return v.strip()
-```
-
----
-
-### SIDRAIndicatorConfig
-
-Schema para indicadores SIDRA (IBGE).
-
-| Campo | Tipo | Validacao | Descricao |
-|-------|------|-----------|-----------|
-| `code` | `int` | `> 0` | Codigo da tabela SIDRA |
-| `parameters` | `dict` | Campos obrigatorios | Parametros da consulta |
-
-**Campos obrigatorios em `parameters`:**
-- `agregados`
-- `periodos`
-- `variaveis`
-- `nivel_territorial`
-- `localidades`
-
-```python
-from adb.domain.schemas import SIDRAIndicatorConfig
-
-config = SIDRAIndicatorConfig(
-    name="IPCA",
-    code=1737,
-    frequency="monthly",
-    parameters={
-        "agregados": [1, 2],
-        "periodos": "all",
-        "variaveis": 63,
-        "nivel_territorial": "N1",
-        "localidades": "all"
-    }
-)
-```
-
----
-
-### validate_indicator_config()
-
-Valida um dicionario completo de configuracoes.
-
-```python
-def validate_indicator_config(
-    config: dict[str, dict],
-    schema_class: type[IndicatorConfig],
-) -> dict[str, IndicatorConfig]
-```
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| `config` | `dict[str, dict]` | Dicionario {chave: config_dict} |
-| `schema_class` | `type[IndicatorConfig]` | Classe do schema a usar |
-
-**Retorno:** `dict[str, IndicatorConfig]` com schemas validados
-
-**Raises:** `ValueError` indicando qual key falhou
-
-```python
-from adb.domain.schemas import validate_indicator_config, SGSIndicatorConfig
-
-# Config dict (como definido em indicators.py)
-SGS_CONFIG = {
-    'selic': {'name': 'Meta Selic', 'code': 432, 'frequency': 'daily'},
-    'cdi': {'name': 'CDI', 'code': 12, 'frequency': 'daily'},
-}
-
-# Validar todas as configs
-validated = validate_indicator_config(SGS_CONFIG, SGSIndicatorConfig)
-
-# Acessar campos validados
-print(validated['selic'].code)       # 432
-print(validated['selic'].frequency)  # 'daily'
-```
-
----
-
 ## Exceptions
 
 **Localizacao:** `src/adb/domain/exceptions.py`
@@ -503,7 +321,6 @@ df = adb.sgs.read('selic')
 
 # Imports diretos (para desenvolvedores)
 from adb.domain import BaseExplorer, ADBException
-from adb.domain.schemas import SGSIndicatorConfig, validate_indicator_config
 from adb.domain.exceptions import DataNotFoundError, APIError
 ```
 
@@ -511,17 +328,13 @@ from adb.domain.exceptions import DataNotFoundError, APIError
 
 ```python
 from adb.domain import BaseExplorer
-from adb.domain.schemas import SGSIndicatorConfig, validate_indicator_config
 
-# 1. Definir configuracao
+# 1. Definir configuracao (dicts simples, sem schemas)
 MY_CONFIG = {
     'indicador1': {'name': 'Meu Indicador', 'code': 123, 'frequency': 'daily'},
 }
 
-# 2. Validar (opcional mas recomendado)
-validated = validate_indicator_config(MY_CONFIG, SGSIndicatorConfig)
-
-# 3. Criar explorer
+# 2. Criar explorer
 class MyExplorer(BaseExplorer):
     _CONFIG = MY_CONFIG
     _SUBDIR = 'minha_fonte/daily'

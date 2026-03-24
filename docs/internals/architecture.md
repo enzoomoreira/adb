@@ -10,7 +10,7 @@ O projeto segue **Clean Architecture** com cinco camadas principais, organizadas
 
 | Camada | Diretorio | Responsabilidade |
 |--------|-----------|------------------|
-| **Domain** | `domain/` | Regras de negocio, entidades, excecoes, schemas Pydantic |
+| **Domain** | `domain/` | Regras de negocio, entidades, excecoes |
 | **Infra** | `infra/` | I/O, configuracoes, logging, retry, persistencia |
 | **Services** | `services/` | Logica de aplicacao, BaseCollector, registry |
 | **Providers** | `providers/` | Implementacoes especificas por fonte de dados |
@@ -20,7 +20,7 @@ O projeto segue **Clean Architecture** com cinco camadas principais, organizadas
 ### Principios
 
 1. **Dependencias apontam para dentro**: Providers dependem de Services, Services dependem de Domain
-2. **Domain e puro**: Sem dependencias externas (exceto Pydantic para validacao)
+2. **Domain e puro**: Sem dependencias externas
 3. **Infra e o adaptador**: Conecta o sistema ao mundo externo (APIs, filesystem, logs)
 4. **Inversao de dependencia**: Interfaces definidas em Domain, implementacoes em Infra
 
@@ -33,12 +33,9 @@ src/adb/
 ├── __init__.py              # Exports publicos (explorers, config)
 │
 ├── domain/                  # CAMADA DE DOMINIO
-│   ├── __init__.py          # Exports (BaseExplorer, exceptions, schemas)
+│   ├── __init__.py          # Exports (BaseExplorer, exceptions)
 │   ├── exceptions.py        # ADBException, DataNotFoundError, APIError, etc.
-│   ├── explorers.py         # BaseExplorer (interface unificada de leitura)
-│   └── schemas/             # Validacao Pydantic
-│       ├── __init__.py
-│       └── indicators.py    # IndicatorConfig, SGSIndicatorConfig, etc.
+│   └── explorers.py         # BaseExplorer (interface unificada de leitura)
 │
 ├── infra/                   # CAMADA DE INFRAESTRUTURA
 │   ├── __init__.py          # Exports (get_settings, get_logger, retry)
@@ -70,7 +67,7 @@ src/adb/
 ├── shared/                  # UTILITARIOS COMPARTILHADOS
 │   └── utils/
 │       ├── dates.py         # parse_date, normalize_index
-│       └── indicators.py    # list_keys, get_config
+│       └── indicators.py    # get_config
 │
 └── ui/                      # INTERFACE DE USUARIO
     ├── __init__.py
@@ -112,32 +109,18 @@ classDiagram
     class RateLimitError
     class ConnectionFailedError
 
-    class IndicatorConfig {
-        <<pydantic>>
-        +name: str
-        +frequency: FrequencyType
-        +description: str?
-    }
-    class SGSIndicatorConfig {
-        +code: int
-    }
-    class IPEAIndicatorConfig {
-        +code: str
-        +unit: str?
-        +source: str?
-    }
-    class SIDRAIndicatorConfig {
-        +code: int
-        +parameters: dict
-    }
-
     %% Services Layer
     class BaseCollector {
         <<abstract>>
+        +_CONFIG: dict
+        +_TITLE: str
         +default_subdir: str
         +data_manager: DataManager
         +display: Display
+        +collect(indicators, save, verbose)
         +get_status(subdir)
+        #_collect_one(key, config, save, verbose)*
+        #_subdir_for(key)
         #_normalize_indicators(indicators, config)
         #_next_date(last_date, frequency)
         #_sync(fetch_fn, filename, ...)
@@ -188,10 +171,6 @@ classDiagram
     ADBException <|-- APIError
     APIError <|-- RateLimitError
     APIError <|-- ConnectionFailedError
-
-    IndicatorConfig <|-- SGSIndicatorConfig
-    IndicatorConfig <|-- IPEAIndicatorConfig
-    IndicatorConfig <|-- SIDRAIndicatorConfig
 
     %% Relationships - Services/Providers
     BaseExplorer <|-- SGSExplorer
@@ -296,7 +275,7 @@ df = adb.sgs.read('selic', start='2023')
 
 | Padrao | Onde | Descricao |
 |--------|------|-----------|
-| **Template Method** | `BaseCollector._sync()` | Define esqueleto do algoritmo; subclasses implementam `fetch_fn` |
+| **Template Method** | `BaseCollector.collect()` | Define esqueleto do algoritmo (normalize -> start -> loop -> end); subclasses implementam `_collect_one()` |
 | **Facade** | `BaseExplorer` | Simplifica acesso a Collector + QueryEngine |
 | **Strategy** | `StorageCallback` | Callback protocol para feedback de storage |
 | **Lazy Loading** | `__init__.py` | Explorers carregados sob demanda |
@@ -358,6 +337,6 @@ graph TD
 
 | Doc | Conteudo |
 |-----|----------|
-| [domain.md](domain.md) | BaseExplorer, Schemas, Exceptions |
+| [domain.md](domain.md) | BaseExplorer, Exceptions |
 | [infra.md](infra.md) | Config, Log, Resilience, Persistence |
 | [services.md](services.md) | BaseCollector, Registry |

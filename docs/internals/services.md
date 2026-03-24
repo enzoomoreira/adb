@@ -28,25 +28,30 @@ services/
 
 **Localizacao:** `src/adb/services/collectors/base.py`
 
-Classe base abstrata para todos os coletores de dados. Fornece infraestrutura comum para coleta incremental, logging e status.
+Classe base abstrata para todos os coletores de dados. Usa o padrao **Template Method**: o metodo `collect()` define o esqueleto do algoritmo (normalize -> start -> loop -> end), e subclasses customizam apenas os pontos de extensao.
 
 ### Responsabilidades
 
+- Template method `collect()` com fluxo padronizado
 - Inicializacao padronizada com DataManager
 - Logging padronizado (arquivo + console)
 - Coleta incremental automatica via `_sync()`
-- Status de arquivos salvos via `get_status()`
+- Status de arquivos salvos via `get_status()` com subdirs auto-derivados
 
 ### Atributos de Classe
 
-| Atributo | Tipo | Default | Descricao |
-|----------|------|---------|-----------|
-| `default_subdir` | `str` | `''` | Subdiretorio padrao para operacoes |
+Subclasses **devem** definir:
 
-Subclasses **devem** sobrescrever este atributo:
+| Atributo | Tipo | Descricao |
+|----------|------|-----------|
+| `_CONFIG` | `dict` | Dicionario de configuracao de indicadores do provider |
+| `_TITLE` | `str` | Titulo para banner de coleta (ex: "BACEN - SGS") |
+| `default_subdir` | `str` | Subdiretorio padrao para operacoes |
 
 ```python
 class SGSCollector(BaseCollector):
+    _CONFIG = SGS_CONFIG
+    _TITLE = "BACEN - Sistema Gerenciador de Series"
     default_subdir = 'bacen/sgs/daily'
 ```
 
@@ -93,7 +98,11 @@ def get_status(self, subdir: str = None) -> pd.DataFrame
 
 | Parametro | Descricao |
 |-----------|-----------|
-| `subdir` | Subdiretorio (default: `default_subdir`) |
+| `subdir` | Subdiretorio especifico (default: agrega todos auto-derivados do `_CONFIG`) |
+
+**Comportamento:**
+- Sem `subdir`: itera todos os indicadores do `_CONFIG`, usa `_subdir_for()` para derivar subdirs unicos, e agrega status de todos eles. Subclasses **nao** precisam sobrescrever `get_status()` com listas hardcoded de subdirs.
+- Com `subdir`: retorna status apenas daquele subdiretorio.
 
 **Colunas retornadas:**
 
@@ -110,7 +119,7 @@ def get_status(self, subdir: str = None) -> pd.DataFrame
 
 ```python
 collector = SGSCollector()
-status_df = collector.get_status()
+status_df = collector.get_status()  # Agrega daily + monthly automaticamente
 print(status_df)
 ```
 
@@ -302,23 +311,21 @@ flowchart TD
 ```
 
 ```python
-def collect(self, indicators='all', save=True, verbose=True):
-    keys = self._normalize_indicators(indicators, MY_CONFIG)
-    self._start("Minha Fonte", len(keys), verbose=verbose)
+# Subclasse so implementa _collect_one() - collect() e herdado do BaseCollector:
 
-    for key in keys:
-        cfg = MY_CONFIG[key]
-        self._sync(
-            fetch_fn=lambda start: self.client.fetch(cfg['code'], start),
-            filename=key,
-            name=cfg['name'],
-            subdir=self.default_subdir,
-            frequency=cfg.get('frequency', 'daily'),
-            save=save,
-            verbose=verbose
-        )
+def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+    frequency = config.get('frequency', 'daily')
+    subdir = self._subdir_for(key)
 
-    self._end(verbose=verbose)
+    self._sync(
+        fetch_fn=lambda start, c=config['code']: self.client.fetch(c, start),
+        filename=key,
+        name=config['name'],
+        subdir=subdir,
+        frequency=frequency,
+        save=save,
+        verbose=verbose,
+    )
 ```
 
 ---
@@ -345,9 +352,10 @@ class SGSCollector(BaseCollector):
 
 ### Template de Implementacao
 
-Exemplo completo de como implementar um novo collector:
+Exemplo completo de como implementar um novo collector usando o template method:
 
 ```python
+from pathlib import Path
 from adb.services.collectors import BaseCollector
 from adb.infra.resilience import retry
 
@@ -381,49 +389,35 @@ class MyClient:
         return pd.DataFrame(response.json())
 
 
-# 3. Collector
+# 3. Collector (template method - nao sobrescreve collect())
 class MyCollector(BaseCollector):
+    _CONFIG = MY_CONFIG
+    _TITLE = "Minha Fonte de Dados"
     default_subdir = 'minha_fonte/daily'
 
-    def __init__(self, data_path=None):
+    def __init__(self, data_path: Path | None = None):
         super().__init__(data_path)
         self.client = MyClient()
 
-    def collect(
-        self,
-        indicators: list[str] | str = 'all',
-        save: bool = True,
-        verbose: bool = True,
-    ):
-        """Coleta dados da fonte."""
-        keys = self._normalize_indicators(indicators, MY_CONFIG)
+    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+        """Coleta um indicador individual."""
+        frequency = config.get('frequency', 'daily')
+        subdir = self._subdir_for(key)
 
-        self._start(
-            title="Minha Fonte de Dados",
-            num_indicators=len(keys),
-            subdir=self.default_subdir,
-            check_first_run=True,
-            verbose=verbose
+        self._sync(
+            fetch_fn=lambda start, c=config['code']: self.client.fetch(c, start),
+            filename=key,
+            name=config['name'],
+            subdir=subdir,
+            frequency=frequency,
+            save=save,
+            verbose=verbose,
         )
 
-        for key in keys:
-            cfg = MY_CONFIG[key]
-            freq = cfg.get('frequency', 'daily')
-
-            # Determinar subdir por frequencia
-            subdir = f'minha_fonte/{freq}'
-
-            self._sync(
-                fetch_fn=lambda start, c=cfg['code']: self.client.fetch(c, start),
-                filename=key,
-                name=cfg['name'],
-                subdir=subdir,
-                frequency=freq,
-                save=save,
-                verbose=verbose
-            )
-
-        self._end(verbose=verbose)
+    def _subdir_for(self, key: str) -> str:
+        """Subdir dinamico baseado na frequencia."""
+        freq = self._CONFIG[key].get('frequency', 'daily')
+        return f'minha_fonte/{freq}'
 
     def _get_frequency_for_file(self, filename: str) -> str | None:
         """Retorna frequencia do indicador para validacao."""
@@ -561,5 +555,5 @@ from adb.services.collectors.registry import _get_collector
 | Doc | Conteudo |
 |-----|----------|
 | [architecture.md](architecture.md) | Visao geral da arquitetura |
-| [domain.md](domain.md) | BaseExplorer, Schemas, Exceptions |
+| [domain.md](domain.md) | BaseExplorer, Exceptions |
 | [infra.md](infra.md) | Config, Log, Resilience, Persistence |

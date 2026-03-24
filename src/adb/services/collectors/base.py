@@ -5,9 +5,11 @@ Fornece metodos utilitarios comuns para todos os collectors.
 """
 
 from pathlib import Path
+
 import pandas as pd
 
 from adb.infra.persistence import DataManager
+from adb.shared.utils import get_config
 
 
 class BaseCollector:
@@ -17,16 +19,19 @@ class BaseCollector:
     Fornece:
     - Inicializacao padronizada com DataManager
     - Logging padronizado (_fetch_start, _fetch_result)
-    - get_status() generico baseado em arquivos
+    - collect() template method (normalize -> start -> loop -> end)
+    - get_status() generico com suporte a multi-subdir
 
     Subclasses devem definir:
+    - _CONFIG: dict - configuracao de indicadores do provider
+    - _TITLE: str - titulo para banner de coleta
     - default_subdir: str - subdiretorio padrao para operacoes
-    - default_consolidate_subdirs: list[str] - subdiretorios para consolidacao
-
-    Subclasses podem sobrescrever:
-    - get_status() - para logica especifica de cada provider
+    - _collect_one() - logica de coleta de um indicador
+    - _get_frequency_for_file() - frequencia de um indicador
     """
 
+    _CONFIG: dict
+    _TITLE: str
     default_subdir: str = ""
 
     def __init__(self, data_path: Path | None = None):
@@ -91,6 +96,67 @@ class BaseCollector:
         self.logger.warning(message)
 
     # =========================================================================
+    # API Publica (Template Method)
+    # =========================================================================
+
+    def collect(
+        self,
+        indicators: list[str] | str = "all",
+        save: bool = True,
+        verbose: bool = True,
+    ) -> None:
+        """
+        Coleta um ou mais indicadores.
+
+        Template method: normaliza entrada, exibe banner, itera indicadores
+        chamando _collect_one() em cada um, e exibe conclusao.
+
+        Args:
+            indicators: 'all', lista, ou string com indicador(es)
+            save: Se True, salva em Parquet
+            verbose: Se True, imprime progresso
+        """
+        keys = self._normalize_indicators(indicators, self._CONFIG)
+
+        self._start(
+            title=self._TITLE,
+            num_indicators=len(keys),
+            subdir=self.default_subdir,
+            check_first_run=True,
+            verbose=verbose,
+        )
+
+        for key in keys:
+            config = get_config(self._CONFIG, key)
+            self._collect_one(key, config, save=save, verbose=verbose)
+
+        self._end(verbose=verbose)
+
+    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+        """
+        Coleta um indicador individual.
+
+        Subclasses devem implementar para chamar seu client especifico
+        e delegar ao _sync().
+
+        Args:
+            key: Chave do indicador no _CONFIG
+            config: Dict de configuracao do indicador
+            save: Se True, salva em Parquet
+            verbose: Se True, imprime progresso
+        """
+        raise NotImplementedError("Subclasse deve implementar _collect_one")
+
+    def _subdir_for(self, key: str) -> str:
+        """
+        Retorna subdiretorio para um indicador.
+
+        Default: usa default_subdir. Override para subdirs dinamicos
+        baseados em frequency (ex: SGS com daily/monthly).
+        """
+        return self.default_subdir
+
+    # =========================================================================
     # Status
     # =========================================================================
 
@@ -98,20 +164,36 @@ class BaseCollector:
         """
         Retorna status dos arquivos salvos com informacoes de saude.
 
-        Usa DataValidator para calcular cobertura, gaps e status real dos dados.
+        Agrega automaticamente todos os subdirs derivados do _CONFIG
+        (ex: SGS agrega daily + monthly). Se subdir e passado, usa apenas esse.
 
         Args:
-            subdir: Subdiretorio (default: default_subdir)
+            subdir: Subdiretorio especifico (default: agrega todos do config)
 
         Returns:
             DataFrame com status de cada arquivo incluindo cobertura e gaps
-
-        Raises:
-            ValueError: Se frequencia do indicador nao estiver configurada.
         """
+        if subdir:
+            return self._get_status_for_subdir(subdir)
+
+        # Derivar subdirs unicos do config
+        subdirs = {self._subdir_for(key) for key in self._CONFIG}
+
+        dfs = []
+        for sd in sorted(subdirs):
+            df = self._get_status_for_subdir(sd)
+            if not df.empty:
+                dfs.append(df)
+
+        if not dfs:
+            return pd.DataFrame()
+
+        return pd.concat(dfs, ignore_index=True)
+
+    def _get_status_for_subdir(self, subdir: str) -> pd.DataFrame:
+        """Retorna status dos arquivos em um subdiretorio especifico."""
         from adb.infra.persistence.validation import DataValidator
 
-        subdir = subdir or self.default_subdir
         files = self.data_manager.list_files(subdir)
 
         if not files:
@@ -121,15 +203,10 @@ class BaseCollector:
 
         with DataValidator(self.data_path) as validator:
             for filename in files:
-                # Obter frequencia do indicador (subclasses devem implementar)
                 frequency = self._get_frequency_for_file(filename)
                 if frequency is None:
-                    raise ValueError(
-                        f"Frequencia desconhecida para '{filename}'. "
-                        f"Adicione 'frequency' na configuracao do indicador."
-                    )
+                    continue
 
-                # Validar saude dos dados
                 health = validator.get_health(filename, subdir, frequency)
 
                 status_data.append(

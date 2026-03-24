@@ -617,5 +617,5 @@ from adb.infra.persistence.validation import DataValidator, HealthStatus
 | Doc | Conteudo |
 |-----|----------|
 | [architecture.md](architecture.md) | Visao geral da arquitetura |
-| [domain.md](domain.md) | BaseExplorer, Schemas, Exceptions |
+| [domain.md](domain.md) | BaseExplorer, Exceptions |
 | [services.md](services.md) | BaseCollector, Registry |
