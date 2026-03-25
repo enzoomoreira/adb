@@ -65,7 +65,7 @@ Todos os explorers compartilham a mesma interface:
 | `.collect(indicators, **kwargs)` | Baixa dados da fonte |
 | `.available()` | Lista indicadores disponiveis |
 | `.info(indicator)` | Retorna metadados do indicador |
-| `.get_status()` | Mostra status dos arquivos salvos |
+| `.status()` | Mostra status dos arquivos salvos |
 
 ## Fontes de Dados
 
@@ -102,7 +102,7 @@ print(info)
 ### Verificar status dos dados
 
 ```python
-status = adb.sgs.get_status()
+status = adb.sgs.status()
 print(status)
 #            indicator  last_update  rows
 # 0              selic   2025-01-15  5420

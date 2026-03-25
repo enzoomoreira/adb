@@ -61,7 +61,7 @@ df = adb.sgs.read('selic', start='2020', end='2023')
 df = adb.sgs.read('selic', 'cdi')      # Multiplos indicadores
 
 # Status dos arquivos locais
-adb.sgs.get_status()
+adb.sgs.status()
 ```
 
 ---

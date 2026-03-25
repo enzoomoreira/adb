@@ -172,14 +172,14 @@ adb.sgs.collect(['selic', 'cdi'])
 
 ---
 
-#### `get_status() -> DataFrame`
+#### `status() -> DataFrame`
 
 Retorna status dos arquivos salvos.
 
 ```python
 import adb
 
-adb.sgs.get_status()
+adb.sgs.status()
 # DataFrame com colunas:
 # - arquivo: nome do indicador
 # - registros: numero de linhas

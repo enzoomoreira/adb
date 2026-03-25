@@ -20,7 +20,7 @@ class BaseCollector:
     - Inicializacao padronizada com DataManager
     - Logging padronizado (_fetch_start, _fetch_result)
     - collect() template method (normalize -> start -> loop -> end)
-    - get_status() generico com suporte a multi-subdir
+    - status() generico com suporte a multi-subdir
 
     Subclasses devem definir:
     - _CONFIG: dict - configuracao de indicadores do provider
@@ -102,6 +102,8 @@ class BaseCollector:
     def collect(
         self,
         indicators: list[str] | str = "all",
+        start: str | None = None,
+        end: str | None = None,
         save: bool = True,
         verbose: bool = True,
     ) -> None:
@@ -113,10 +115,17 @@ class BaseCollector:
 
         Args:
             indicators: 'all', lista, ou string com indicador(es)
+            start: Data inicial (formatos: '2020', '2020-01', '2020-01-01').
+                   None = incremental desde ultima data salva.
+            end: Data final (mesmos formatos). None = ate hoje.
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
         """
+        from adb.shared.utils import parse_date
+
         keys = self._normalize_indicators(indicators, self._CONFIG)
+        parsed_start = parse_date(start) if start else None
+        parsed_end = parse_date(end) if end else None
 
         self._start(
             title=self._TITLE,
@@ -128,20 +137,37 @@ class BaseCollector:
 
         for key in keys:
             config = get_config(self._CONFIG, key)
-            self._collect_one(key, config, save=save, verbose=verbose)
+            self._collect_one(
+                key,
+                config,
+                start=parsed_start,
+                end=parsed_end,
+                save=save,
+                verbose=verbose,
+            )
 
         self._end(verbose=verbose)
 
-    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+    def _collect_one(
+        self,
+        key: str,
+        config: dict,
+        start: str | None,
+        end: str | None,
+        save: bool,
+        verbose: bool,
+    ) -> None:
         """
         Coleta um indicador individual.
 
         Subclasses devem implementar para chamar seu client especifico
-        e delegar ao _sync().
+        e delegar ao _persist().
 
         Args:
             key: Chave do indicador no _CONFIG
             config: Dict de configuracao do indicador
+            start: Data inicial (ja parsed, ou None pra incremental)
+            end: Data final (ja parsed, ou None pra ate hoje)
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
         """
@@ -160,7 +186,7 @@ class BaseCollector:
     # Status
     # =========================================================================
 
-    def get_status(self, subdir: str | None = None) -> pd.DataFrame:
+    def status(self, subdir: str | None = None) -> pd.DataFrame:
         """
         Retorna status dos arquivos salvos com informacoes de saude.
 
@@ -174,14 +200,14 @@ class BaseCollector:
             DataFrame com status de cada arquivo incluindo cobertura e gaps
         """
         if subdir:
-            return self._get_status_for_subdir(subdir)
+            return self._status_for_subdir(subdir)
 
         # Derivar subdirs unicos do config
         subdirs = {self._subdir_for(key) for key in self._CONFIG}
 
         dfs = []
         for sd in sorted(subdirs):
-            df = self._get_status_for_subdir(sd)
+            df = self._status_for_subdir(sd)
             if not df.empty:
                 dfs.append(df)
 
@@ -190,7 +216,7 @@ class BaseCollector:
 
         return pd.concat(dfs, ignore_index=True)
 
-    def _get_status_for_subdir(self, subdir: str) -> pd.DataFrame:
+    def _status_for_subdir(self, subdir: str) -> pd.DataFrame:
         """Retorna status dos arquivos em um subdiretorio especifico."""
         from adb.infra.persistence.validation import DataValidator
 
@@ -362,74 +388,58 @@ class BaseCollector:
             # daily - proximo dia
             return (last_date + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    def _sync(
+    def _persist(
         self,
         fetch_fn,
         filename: str,
         name: str,
         subdir: str,
-        frequency: str = "daily",
+        frequency: str,
+        start: str | None = None,
+        end: str | None = None,
         save: bool = True,
         verbose: bool = True,
-    ) -> pd.DataFrame | None:
+    ) -> None:
         """
-        Orquestra coleta incremental: valida dados existentes, busca novos, salva/append.
+        Busca dados e persiste em disco (save ou append).
 
-        Usa DataValidator para verificar integridade dos dados existentes antes de
-        determinar estrategia de coleta.
+        Suporta coleta incremental: se start nao e fornecido e o arquivo
+        existe, calcula start a partir da ultima data salva.
 
         Args:
-            fetch_fn: Funcao que recebe start_date e retorna DataFrame
+            fetch_fn: Funcao(start_date, end_date) -> DataFrame
             filename: Nome do arquivo (sem extensao)
             name: Nome para exibicao
             subdir: Subdiretorio dentro de data/
             frequency: 'daily', 'monthly' ou 'quarterly'
-            save: Se True, salva resultados em Parquet
+            start: Data inicial (None = incremental desde ultima data)
+            end: Data final (None = ate hoje)
+            save: Se True, persiste em Parquet
             verbose: Se True, imprime progresso
         """
-        from adb.infra.persistence.validation import DataValidator, HealthStatus
+        # 1. Determinar start (incremental se nao explicito)
+        effective_start = start
+        if effective_start is None and save:
+            last_date = self.data_manager.get_last_date(filename, subdir)
+            if last_date is not None:
+                effective_start = self._next_date(last_date, frequency)
 
-        # 1. Validar dados existentes
-        with DataValidator(self.data_path) as validator:
-            health = validator.get_health(filename, subdir, frequency)
+        is_first_run = not self.data_manager.get_file_path(filename, subdir).exists()
 
-        self.logger.debug(
-            f"Health: {filename} - {health.status.value}, "
-            f"coverage={health.coverage}%, stale={health.stale_days}d"
-        )
-
-        # 2. Determinar estrategia baseada no health check
-        is_first_run = health.status == HealthStatus.MISSING
-        start_date = None
-
-        if not is_first_run and save:
-            # Arquivo existe - calcular data de inicio
-            if health.last_date:
-                ts = pd.Timestamp(health.last_date)
-                if isinstance(ts, pd.Timestamp):
-                    start_date = self._next_date(ts, frequency)
-
-        # 3. Wrapper de log
-        def fetch_with_log(date_param):
-            self._fetch_start(name, date_param, verbose)
-            return fetch_fn(date_param)
-
-        # 4. Executar fetch
+        # 2. Fetch
+        self._fetch_start(name, effective_start, verbose)
         try:
-            df = fetch_with_log(start_date)
+            df = fetch_fn(effective_start, end)
         except Exception as e:
-            self.logger.error(f"Unexpected error during fetch for {name}: {e}")
-            return pd.DataFrame()
+            self.logger.error(f"Fetch error for {name}: {e}")
+            self._fetch_result(name, 0, verbose)
+            return
 
-        # 5. Salvar resultados
+        # 3. Persist
         if not df.empty and save:
             if is_first_run:
                 self.data_manager.save(df, filename, subdir, verbose=verbose)
             else:
                 self.data_manager.append(df, filename, subdir, verbose=verbose)
 
-        # 6. Log final
         self._fetch_result(name, len(df), verbose)
-
-        # Nao retorna df - dados ja salvos em disco
-        # Evita poluicao de output no notebook (comportamento da API antiga)

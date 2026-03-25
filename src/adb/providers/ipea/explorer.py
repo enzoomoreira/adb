@@ -41,5 +41,8 @@ class IPEAExplorer(BaseExplorer):
         config = self._CONFIG[indicator]
         client = IPEAClient()
         return client.get_data(
-            code=config["code"], name=config["name"], start_date=start
+            code=config["code"],
+            name=config["name"],
+            start_date=start,
+            end_date=end,
         )

@@ -88,7 +88,7 @@ class BloombergClient:
         """
         Busca serie temporal historica do Bloomberg.
 
-        Metodo principal usado por BloombergCollector via fetch_and_sync().
+        Usado por BloombergCollector e BloombergExplorer.fetch().
 
         Args:
             ticker: Bloomberg ticker (ex: 'MXWD Index', 'IBOV Index')

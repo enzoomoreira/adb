@@ -76,7 +76,7 @@ adb.ipea.available(frequency='monthly')
 adb.ipea.info('caged_saldo')
 
 # Verificar status dos arquivos coletados
-adb.ipea.get_status()
+adb.ipea.status()
 ```
 
 ---

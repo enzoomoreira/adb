@@ -67,32 +67,28 @@ class SGSClient:
         name: str,
         frequency: str,
         start_date: str | None = None,
+        end_date: str | None = None,
     ) -> pd.DataFrame:
         """
         Busca serie temporal do SGS.
-
-        Metodo unificado que substitui get_historical() e get_incremental().
-        Usado pelo SGSCollector via fetch_and_sync() do DataManager.
 
         Args:
             code: Codigo SGS do indicador
             name: Nome para a coluna no DataFrame
             frequency: 'daily' ou 'monthly'
             start_date: Data inicial 'YYYY-MM-DD' (None = historico completo desde 1980)
+            end_date: Data final 'YYYY-MM-DD' (None = ate hoje)
 
         Returns:
             DataFrame com serie temporal
         """
-        # Se nao tem start_date, busca historico completo
         if start_date is None:
             start_date = "1980-01-01"
 
         if frequency == "daily":
-            # Series diarias: usar chunking (API limita ~10 anos por request)
-            df = self._fetch_with_chunking(code, name, start_date)
+            df = self._fetch_with_chunking(code, name, start_date, end_date)
         else:
-            # Series mensais: busca direta
-            df = self._fetch_series(code, name, start_date, None)
+            df = self._fetch_series(code, name, start_date, end_date)
 
         if df.empty:
             return df
@@ -108,6 +104,7 @@ class SGSClient:
         code: int,
         name: str,
         start_date: str,
+        end_date: str | None = None,
     ) -> pd.DataFrame:
         """
         Busca serie diaria com chunking de 10 anos.
@@ -115,23 +112,25 @@ class SGSClient:
         A API do BCB limita series diarias a ~10 anos por consulta.
         """
         start_year = int(start_date[:4])
-        current_year = datetime.now().year
+        final_year = int(end_date[:4]) if end_date else datetime.now().year
 
         chunks = []
-        for chunk_start in range(start_year, current_year + 1, 10):
-            chunk_end = min(chunk_start + 9, current_year)
+        for chunk_start in range(start_year, final_year + 1, 10):
+            chunk_end = min(chunk_start + 9, final_year)
 
-            # Ajustar data inicial do primeiro chunk
             if chunk_start == start_year:
                 chunk_start_date = start_date
             else:
                 chunk_start_date = f"{chunk_start}-01-01"
-                # Delay entre requests para evitar rate limit
                 time.sleep(DEFAULT_CHUNK_DELAY)
 
-            end_date = f"{chunk_end}-12-31"
+            # Ultimo chunk usa end_date real se fornecido
+            if end_date and chunk_end >= final_year:
+                chunk_end_date = end_date
+            else:
+                chunk_end_date = f"{chunk_end}-12-31"
 
-            chunk = self._fetch_series(code, name, chunk_start_date, end_date)
+            chunk = self._fetch_series(code, name, chunk_start_date, chunk_end_date)
 
             if not chunk.empty:
                 chunks.append(chunk)

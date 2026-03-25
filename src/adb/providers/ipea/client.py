@@ -33,36 +33,38 @@ class IPEAClient:
         code: str,
         name: str | None = None,
         start_date: str | None = None,
+        end_date: str | None = None,
     ) -> pd.DataFrame:
         """
         Busca serie temporal do IPEADATA.
-
-        Metodo principal usado pelo IPEACollector via fetch_and_sync().
 
         Args:
             code: Codigo da serie no IPEADATA (ex: 'CAGED12_SALDON12')
             name: Nome para identificacao (usado em logs, opcional)
             start_date: Data inicial 'YYYY-MM-DD' (None = historico completo)
+            end_date: Data final 'YYYY-MM-DD' (None = ate hoje)
 
         Returns:
             DataFrame com indice=DatetimeIndex, coluna='value'
         """
-        # Determinar ano para filtro inicial (otimizacao)
+        # API so suporta yearGreaterThan -- filtro por data exata e client-side
         year = None
         if start_date:
-            year = int(start_date[:4]) - 1  # yearGreaterThan e exclusivo
+            year = int(start_date[:4]) - 1
 
         df = self._fetch_timeseries(code, year)
 
         if df is None or df.empty:
             return pd.DataFrame()
 
-        # Normalizar para padrao do projeto
         df = self._normalize_dataframe(df)
 
-        # Filtrar por data exata (se necessario)
-        if start_date and not df.empty:
-            df = self._filter_by_start_date(df, start_date)
+        # Filtros client-side (API nao suporta range exato)
+        if not df.empty:
+            if start_date:
+                df = df[df.index >= pd.to_datetime(start_date)]
+            if end_date:
+                df = df[df.index <= pd.to_datetime(end_date)]
 
         return df
 
@@ -166,20 +168,3 @@ class IPEAClient:
         df = df.sort_index()
 
         return df
-
-    def _filter_by_start_date(self, df: pd.DataFrame, start_date: str) -> pd.DataFrame:
-        """
-        Filtra DataFrame por data inicial.
-
-        O ipeadatapy.timeseries() usa yearGreaterThan mas nao tem filtro
-        por data exata, entao filtramos apos o download.
-
-        Args:
-            df: DataFrame com DatetimeIndex
-            start_date: Data inicial 'YYYY-MM-DD'
-
-        Returns:
-            DataFrame filtrado
-        """
-        start = pd.to_datetime(start_date)
-        return df[df.index >= start]

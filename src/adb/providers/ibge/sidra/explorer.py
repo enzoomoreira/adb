@@ -48,4 +48,8 @@ class SidraExplorer(BaseExplorer):
 
         config = self._CONFIG[indicator]
         client = SidraClient()
-        return client.get_data(config=config["parameters"], start_date=start)
+        return client.get_data(
+            config=config["parameters"],
+            start_date=start,
+            end_date=end,
+        )

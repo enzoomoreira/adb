@@ -35,8 +35,8 @@ Classe base abstrata para todos os coletores de dados. Usa o padrao **Template M
 - Template method `collect()` com fluxo padronizado
 - Inicializacao padronizada com DataManager
 - Logging padronizado (arquivo + console)
-- Coleta incremental automatica via `_sync()`
-- Status de arquivos salvos via `get_status()` com subdirs auto-derivados
+- Coleta incremental automatica via `_persist()`
+- Status de arquivos salvos via `status()` com subdirs auto-derivados
 
 ### Atributos de Classe
 
@@ -88,12 +88,12 @@ class MyCollector(BaseCollector):
 
 ### Metodos Publicos
 
-#### get_status()
+#### status()
 
 Retorna DataFrame com status dos arquivos salvos.
 
 ```python
-def get_status(self, subdir: str = None) -> pd.DataFrame
+def status(self, subdir: str = None) -> pd.DataFrame
 ```
 
 | Parametro | Descricao |
@@ -101,7 +101,7 @@ def get_status(self, subdir: str = None) -> pd.DataFrame
 | `subdir` | Subdiretorio especifico (default: agrega todos auto-derivados do `_CONFIG`) |
 
 **Comportamento:**
-- Sem `subdir`: itera todos os indicadores do `_CONFIG`, usa `_subdir_for()` para derivar subdirs unicos, e agrega status de todos eles. Subclasses **nao** precisam sobrescrever `get_status()` com listas hardcoded de subdirs.
+- Sem `subdir`: itera todos os indicadores do `_CONFIG`, usa `_subdir_for()` para derivar subdirs unicos, e agrega status de todos eles. Subclasses **nao** precisam sobrescrever `status()` com listas hardcoded de subdirs.
 - Com `subdir`: retorna status apenas daquele subdiretorio.
 
 **Colunas retornadas:**
@@ -119,7 +119,7 @@ def get_status(self, subdir: str = None) -> pd.DataFrame
 
 ```python
 collector = SGSCollector()
-status_df = collector.get_status()  # Agrega daily + monthly automaticamente
+status_df = collector.status()  # Agrega daily + monthly automaticamente
 print(status_df)
 ```
 
@@ -263,18 +263,20 @@ next_date = self._next_date(pd.Timestamp('2024-03-31'), 'quarterly')
 
 ---
 
-#### _sync()
+#### _persist()
 
 Template principal para coleta incremental. Orquestra todo o fluxo.
 
 ```python
-def _sync(
+def _persist(
     self,
     fetch_fn,
     filename: str,
     name: str,
     subdir: str,
     frequency: str = 'daily',
+    start: str | None = None,
+    end: str | None = None,
     save: bool = True,
     verbose: bool = True,
 ) -> None
@@ -282,11 +284,13 @@ def _sync(
 
 | Parametro | Descricao |
 |-----------|-----------|
-| `fetch_fn` | Funcao que recebe `start_date` e retorna DataFrame |
+| `fetch_fn` | Funcao que recebe `start_date` e `end_date` e retorna DataFrame |
 | `filename` | Nome do arquivo (sem extensao) |
 | `name` | Nome para exibicao |
 | `subdir` | Subdiretorio dentro de data/ |
 | `frequency` | 'daily', 'monthly' ou 'quarterly' |
+| `start` | Data inicial explicita (opcional, sobrescreve calculo automatico) |
+| `end` | Data final explicita (opcional) |
 | `save` | Se True, persiste resultados |
 | `verbose` | Se True, exibe progresso |
 
@@ -294,7 +298,7 @@ def _sync(
 
 ```mermaid
 flowchart TD
-    A[Inicio _sync] --> B[DataValidator.get_health]
+    A[Inicio _persist] --> B[DataManager.get_last_date]
     B --> C{Arquivo existe?}
     C -->|Nao| D[is_first_run = True]
     C -->|Sim| E[Calcular start_date]
@@ -313,16 +317,18 @@ flowchart TD
 ```python
 # Subclasse so implementa _collect_one() - collect() e herdado do BaseCollector:
 
-def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+def _collect_one(self, key: str, config: dict, start: str | None, end: str | None, save: bool, verbose: bool) -> None:
     frequency = config.get('frequency', 'daily')
     subdir = self._subdir_for(key)
 
-    self._sync(
-        fetch_fn=lambda start, c=config['code']: self.client.fetch(c, start),
+    self._persist(
+        fetch_fn=lambda start_date, end_date, c=config['code']: self.client.fetch(c, start_date, end_date),
         filename=key,
         name=config['name'],
         subdir=subdir,
         frequency=frequency,
+        start=start,
+        end=end,
         save=save,
         verbose=verbose,
     )
@@ -399,17 +405,19 @@ class MyCollector(BaseCollector):
         super().__init__(data_path)
         self.client = MyClient()
 
-    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+    def _collect_one(self, key: str, config: dict, start: str | None, end: str | None, save: bool, verbose: bool) -> None:
         """Coleta um indicador individual."""
         frequency = config.get('frequency', 'daily')
         subdir = self._subdir_for(key)
 
-        self._sync(
-            fetch_fn=lambda start, c=config['code']: self.client.fetch(c, start),
+        self._persist(
+            fetch_fn=lambda start_date, end_date, c=config['code']: self.client.fetch(c, start_date, end_date),
             filename=key,
             name=config['name'],
             subdir=subdir,
             frequency=frequency,
+            start=start,
+            end=end,
             save=save,
             verbose=verbose,
         )
@@ -500,22 +508,21 @@ sequenceDiagram
     participant Collector
     participant Client
     participant DataManager
-    participant DataValidator
 
     User->>Explorer: collect(['selic'])
-    Explorer->>Collector: collect(indicators, save, verbose)
+    Explorer->>Collector: collect(indicators, start, end, save, verbose)
 
     Collector->>Collector: _normalize_indicators()
     Collector->>Collector: _start()
 
     loop Para cada indicador
-        Collector->>DataValidator: get_health(filename, subdir, freq)
-        DataValidator-->>Collector: HealthReport
+        Collector->>DataManager: get_last_date(filename, subdir)
+        DataManager-->>Collector: last_date | None
 
         alt is_first_run
-            Collector->>Client: fetch(code, None)
+            Collector->>Client: fetch(code, None, end_date)
         else incremental
-            Collector->>Client: fetch(code, start_date)
+            Collector->>Client: fetch(code, start_date, end_date)
         end
 
         Client-->>Collector: DataFrame

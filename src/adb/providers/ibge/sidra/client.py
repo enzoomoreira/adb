@@ -32,6 +32,7 @@ class SidraClient:
         self,
         config: dict,
         start_date: str | None = None,
+        end_date: str | None = None,
     ) -> pd.DataFrame:
         """
         Busca serie temporal do Sidra de acordo com configuracao.
@@ -39,6 +40,7 @@ class SidraClient:
         Args:
             config: Parte 'parameters' do SIDRA_CONFIG
             start_date: Data inicial 'YYYY-MM-DD' (filtra direto na API)
+            end_date: Data final 'YYYY-MM-DD' (None = ate hoje)
 
         Returns:
             DataFrame com serie temporal (index=Date, value=valor)
@@ -48,9 +50,8 @@ class SidraClient:
         frequency = params.get("frequency", "monthly")
         if start_date is not None:
             periodo_inicio = self._date_to_sidra_period(start_date, frequency)
-            periodo_fim = self._date_to_sidra_period(
-                datetime.now().strftime("%Y-%m-%d"), frequency
-            )
+            fim = end_date or datetime.now().strftime("%Y-%m-%d")
+            periodo_fim = self._date_to_sidra_period(fim, frequency)
             params["periodos"] = f"{periodo_inicio}-{periodo_fim}"
 
         data = self._request_data(**params)

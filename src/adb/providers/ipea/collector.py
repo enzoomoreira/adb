@@ -29,26 +29,37 @@ class IPEACollector(BaseCollector):
         super().__init__(data_path)
         self.client = IPEAClient()
 
-    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+    def _collect_one(
+        self,
+        key: str,
+        config: dict,
+        start: str | None,
+        end: str | None,
+        save: bool,
+        verbose: bool,
+    ) -> None:
         frequency = self._get_frequency_for_file(key)
         subdir = f"ipea/{frequency}"
 
-        def fetch(start_date: str | None) -> pd.DataFrame:
+        def fetch(start_date: str | None, end_date: str | None) -> pd.DataFrame:
             return self.client.get_data(
                 code=config["code"],
                 name=config["name"],
                 start_date=start_date,
+                end_date=end_date,
             )
 
         # Para quarterly, usar monthly (DataManager pula para proximo mes)
         effective_freq = "monthly" if frequency == "quarterly" else frequency
 
-        self._sync(
+        self._persist(
             fetch_fn=fetch,
             filename=key,
             name=config["name"],
             subdir=subdir,
             frequency=effective_freq,
+            start=start,
+            end=end,
             save=save,
             verbose=verbose,
         )

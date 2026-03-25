@@ -70,7 +70,6 @@ class DataManager:
     Responsabilidades:
     - Salvar/ler/append de arquivos Parquet
     - Consolidacao de multiplos arquivos
-    - Controle de coleta incremental (fetch_and_sync)
 
     Para queries SQL, use QueryEngine de adb.infra.persistence.query.
     """

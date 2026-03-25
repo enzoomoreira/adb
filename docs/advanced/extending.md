@@ -170,6 +170,7 @@ class NovaFonteClient:
         name: str,
         frequency: str,
         start_date: str = None,
+        end_date: str = None,
     ) -> pd.DataFrame:
         """
         Busca dados de um indicador.
@@ -230,7 +231,7 @@ class NovaFonteCollector(BaseCollector):
 
     Usa template method do BaseCollector:
     - collect() e herdado (normalize -> start -> loop _collect_one -> end)
-    - get_status() auto-deriva subdirs do _CONFIG via _subdir_for()
+    - status() auto-deriva subdirs do _CONFIG via _subdir_for()
     """
 
     _CONFIG = NOVA_FONTE_CONFIG
@@ -241,22 +242,25 @@ class NovaFonteCollector(BaseCollector):
         super().__init__(data_path)
         self.client = NovaFonteClient()
 
-    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+    def _collect_one(self, key: str, config: dict, start: str | None, end: str | None, save: bool, verbose: bool) -> None:
         """Coleta um indicador individual."""
         frequency = config.get('frequency', 'daily')
         subdir = self._subdir_for(key)
 
-        self._sync(
-            fetch_fn=lambda start: self.client.get_data(
+        self._persist(
+            fetch_fn=lambda start_date, end_date: self.client.get_data(
                 code=config['code'],
                 name=config['name'],
                 frequency=frequency,
-                start_date=start,
+                start_date=start_date,
+                end_date=end_date,
             ),
             filename=key,
             name=config['name'],
             subdir=subdir,
             frequency=frequency,
+            start=start,
+            end=end,
             save=save,
             verbose=verbose,
         )
@@ -272,7 +276,7 @@ class NovaFonteCollector(BaseCollector):
         return config.get('frequency', 'daily')
 ```
 
-> **Nota:** `collect()` e `get_status()` sao herdados do `BaseCollector`. O `get_status()` auto-deriva subdirs unicos chamando `_subdir_for()` para cada indicador do `_CONFIG`, sem necessidade de hardcodar listas de subdirs.
+> **Nota:** `collect()` e `status()` sao herdados do `BaseCollector`. O `status()` auto-deriva subdirs unicos chamando `_subdir_for()` para cada indicador do `_CONFIG`, sem necessidade de hardcodar listas de subdirs.
 
 ### Passo 4: Criar explorer.py
 

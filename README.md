@@ -26,7 +26,8 @@ df = adb.sgs.fetch('selic', start='2020')
 df = adb.sgs.fetch('selic', 'cdi')          # Multiplos indicadores
 
 # Cache local (coleta + leitura de disco)
-adb.sgs.collect()
+adb.sgs.collect()                              # incremental
+adb.sgs.collect('selic', start='2020', end='2024')  # range especifico
 df = adb.sgs.read('selic', start='2020')
 
 # Indicadores disponiveis
@@ -34,7 +35,7 @@ adb.sgs.available()
 adb.sgs.info('selic')
 
 # Status dos dados salvos
-adb.sgs.get_status()
+adb.sgs.status()
 ```
 
 ## Configuracao
@@ -74,6 +75,6 @@ export ADB_DATA_DIR=/caminho/customizado
 ### Arquitetura Interna
 
 - **[architecture.md](docs/internals/architecture.md)** - Visao geral da arquitetura
-- **[domain.md](docs/internals/domain.md)** - BaseExplorer, Schemas, Exceptions
+- **[domain.md](docs/internals/domain.md)** - BaseExplorer, Exceptions
 - **[infra.md](docs/internals/infra.md)** - Config, Logging, Persistencia
 - **[services.md](docs/internals/services.md)** - BaseCollector, Registry

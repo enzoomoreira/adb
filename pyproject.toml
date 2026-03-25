@@ -1,7 +1,7 @@
 [project]
 name = "adb"
 version = "0.1.0"
-description = "Coleta e consulta de dados economicos de multiplas fontes"
+description = "Acesso unificado a dados economicos brasileiros"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

@@ -54,4 +54,5 @@ class SGSExplorer(BaseExplorer):
             name=config["name"],
             frequency=config["frequency"],
             start_date=start,
+            end_date=end,
         )

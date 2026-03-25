@@ -131,7 +131,7 @@ adb.sidra.available(frequency='quarterly')
 adb.sidra.info('ipca')
 
 # Verificar status dos arquivos coletados
-adb.sidra.get_status()
+adb.sidra.status()
 ```
 
 ---

@@ -257,31 +257,41 @@ class BaseExplorer:
     def collect(
         self,
         indicators: list[str] | str = "all",
+        start: str | None = None,
+        end: str | None = None,
         save: bool = True,
         verbose: bool = True,
         **kwargs,
     ) -> None:
         """
-        Coleta dados da fonte.
+        Coleta dados da fonte e salva em cache local (Parquet).
 
         Args:
             indicators: 'all', lista, ou string com indicador(es)
+            start: Data inicial (None = incremental desde ultima data salva)
+            end: Data final (None = ate hoje)
             save: Se True, salva em Parquet
             verbose: Se True, imprime progresso
             **kwargs: Argumentos extras para o collector
         """
-        # Logs removidos - BaseCollector ja faz banners detalhados
         collector = self._COLLECTOR_CLASS()
-        collector.collect(indicators=indicators, save=save, verbose=verbose, **kwargs)
+        collector.collect(
+            indicators=indicators,
+            start=start,
+            end=end,
+            save=save,
+            verbose=verbose,
+            **kwargs,
+        )
 
-    def get_status(self) -> pd.DataFrame:
+    def status(self) -> pd.DataFrame:
         """Retorna status de todos os indicadores configurados.
 
         Inclui indicadores coletados (com metricas de saude) e nao coletados
         (marcados como NOT_COLLECTED).
         """
         collector = self._COLLECTOR_CLASS()
-        df = collector.get_status()
+        df = collector.status()
 
         tracked: set[str] = set(df["arquivo"].tolist()) if not df.empty else set()
         missing: set[str] = set(self.available()) - tracked

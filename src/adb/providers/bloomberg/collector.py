@@ -33,7 +33,15 @@ class BloombergCollector(BaseCollector):
         frequency = self._CONFIG[key].get("frequency", "daily")
         return f"bloomberg/{frequency}"
 
-    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+    def _collect_one(
+        self,
+        key: str,
+        config: dict,
+        start: str | None,
+        end: str | None,
+        save: bool,
+        verbose: bool,
+    ) -> None:
         frequency = self._get_frequency_for_file(key)
         subdir = self._subdir_for(key)
 
@@ -43,20 +51,23 @@ class BloombergCollector(BaseCollector):
             else config["fields"]
         )
 
-        def fetch(start_date: str | None) -> pd.DataFrame:
+        def fetch(start_date: str | None, end_date: str | None) -> pd.DataFrame:
             return self.client.get_data(
                 ticker=config["ticker"],
                 field=field,
                 name=config["name"],
                 start_date=start_date,
+                end_date=end_date,
             )
 
-        self._sync(
+        self._persist(
             fetch_fn=fetch,
             filename=key,
             name=config["name"],
             subdir=subdir,
             frequency=frequency,
+            start=start,
+            end=end,
             save=save,
             verbose=verbose,
         )

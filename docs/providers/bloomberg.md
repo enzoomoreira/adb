@@ -164,7 +164,7 @@ adb.bloomberg.info('brent')
 # }
 
 # Status dos arquivos salvos
-adb.bloomberg.get_status()
+adb.bloomberg.status()
 ```
 
 ---

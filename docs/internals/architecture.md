@@ -95,7 +95,7 @@ classDiagram
         +available(**filters)
         +info(indicator)
         +collect(indicators, save, verbose)
-        +get_status()
+        +status()
         #_subdir(indicator)
         #_where(start, end)
         #_join(dfs, indicators)
@@ -117,13 +117,13 @@ classDiagram
         +default_subdir: str
         +data_manager: DataManager
         +display: Display
-        +collect(indicators, save, verbose)
-        +get_status(subdir)
-        #_collect_one(key, config, save, verbose)*
+        +collect(indicators, start, end, save, verbose)
+        +status(subdir)
+        #_collect_one(key, config, start, end, save, verbose)*
         #_subdir_for(key)
         #_normalize_indicators(indicators, config)
         #_next_date(last_date, frequency)
-        #_sync(fetch_fn, filename, ...)
+        #_persist(fetch_fn, filename, ...)
         #_start(title, num_indicators, ...)
         #_end(verbose)
         #_fetch_start(name, start_date)
@@ -182,7 +182,7 @@ classDiagram
     %% Composition
     BaseExplorer o-- QueryEngine : usa
     BaseCollector o-- DataManager : usa
-    BaseCollector o-- DataValidator : usa
+    BaseCollector o-- DataValidator : usa (status only)
     DataManager o-- QueryEngine : delega leituras
 ```
 
@@ -252,7 +252,7 @@ adb.sgs.collect(['selic', 'cdi'])
 
 # Internamente:
 # 1. Explorer instancia Collector
-# 2. Collector usa _sync() para orquestrar
+# 2. Collector usa _persist() para orquestrar
 # 3. Client faz requisicao (com @retry)
 # 4. DataManager salva em Parquet
 ```

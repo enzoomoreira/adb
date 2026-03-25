@@ -29,22 +29,33 @@ class ExpectationsCollector(BaseCollector):
         super().__init__(data_path)
         self.client = ExpectationsClient()
 
-    def _collect_one(self, key: str, config: dict, save: bool, verbose: bool) -> None:
+    def _collect_one(
+        self,
+        key: str,
+        config: dict,
+        start: str | None,
+        end: str | None,
+        save: bool,
+        verbose: bool,
+    ) -> None:
         log_name = config.get("indicator") or key
 
-        def fetch(start_date: str | None) -> pd.DataFrame:
+        def fetch(start_date: str | None, end_date: str | None) -> pd.DataFrame:
             return self.client.query(
                 endpoint_key=config["endpoint"],
                 indicator=config.get("indicator"),
                 start_date=start_date,
+                end_date=end_date,
             )
 
-        self._sync(
+        self._persist(
             fetch_fn=fetch,
             filename=key,
             name=log_name,
             subdir=self.default_subdir,
             frequency="daily",
+            start=start,
+            end=end,
             save=save,
             verbose=verbose,
         )

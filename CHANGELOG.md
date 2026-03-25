@@ -22,7 +22,7 @@ Reestruturacao para alinhar a lib com sua identidade de
   a partir do config do indicador (ex: SGS daily/monthly).
 - **Template method `BaseCollector.collect()`**: loop normalize -> start -> iterate -> end
   vive na base, eliminando duplicacao nos 5 collectors.
-- **`get_status()` automatico**: BaseCollector agora deriva subdirs do `_CONFIG` via
+- **`status()` automatico**: BaseCollector agora deriva subdirs do `_CONFIG` via
   `_subdir_for()`, eliminando listas hardcoded que podiam divergir do config real.
 - Scripts de verificacao em `scripts/` (verify_refactor.py, verify_full.py).
 
@@ -37,7 +37,7 @@ Reestruturacao para alinhar a lib com sua identidade de
   da API publica. Ainda acessiveis via `from adb.infra.persistence import QueryEngine`.
 - Metodos intermediarios `_collect_series()`/`_collect_endpoint()` dos collectors:
   substituidos pelo `_collect_one()` do template method.
-- Override de `get_status()` em SGS/Bloomberg/Sidra collectors: base class resolve.
+- Override de `status()` em SGS/Bloomberg/Sidra collectors: base class resolve.
 
 ### Changed
 
