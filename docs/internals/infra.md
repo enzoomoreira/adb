@@ -267,7 +267,6 @@ def save(
     df: pd.DataFrame,
     filename: str,
     subdir: str = 'daily',
-    format: str = 'parquet',
     metadata: dict = None,
     verbose: bool = False,
 )
@@ -278,9 +277,10 @@ def save(
 | `df` | DataFrame para salvar |
 | `filename` | Nome do arquivo (sem extensao) |
 | `subdir` | Subdiretorio dentro de data/ |
-| `format` | 'parquet' ou 'csv' |
 | `metadata` | Dicionario adicional (opcional) |
 | `verbose` | Se True, dispara callback |
+
+Usa DuckDB COPY para escrita (mesmo padrao de pycaged/ifdata-bcb).
 
 ```python
 dm = DataManager()

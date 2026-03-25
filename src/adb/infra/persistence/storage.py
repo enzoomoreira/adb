@@ -107,18 +107,16 @@ class DataManager:
         df: pd.DataFrame,
         filename: str,
         subdir: str = "daily",
-        format: str = "parquet",
         metadata: dict | None = None,
         verbose: bool = False,
     ):
         """
-        Salva DataFrame em arquivo.
+        Salva DataFrame em Parquet via DuckDB.
 
         Args:
             df: DataFrame para salvar
             filename: Nome do arquivo (sem extensao)
             subdir: Subdiretorio dentro de data/ (ex: 'daily', 'monthly', 'expectations')
-            format: Formato do arquivo ('parquet' ou 'csv')
             metadata: Dicionario com metadata adicional (opcional)
             verbose: Se True, imprime caminho salvo
         """
@@ -135,16 +133,16 @@ class DataManager:
         if metadata:
             df.attrs.update(metadata)
 
-        if format == "parquet":
-            filepath = output_dir / f"{filename}.parquet"
-            df.to_parquet(filepath, engine="pyarrow", compression="snappy", index=True)
-        elif format == "csv":
-            filepath = output_dir / f"{filename}.csv"
-            df.to_csv(filepath, index=True)
-        else:
-            raise ValueError(
-                f"Formato '{format}' nao suportado. Use 'parquet' ou 'csv'."
+        filepath = output_dir / f"{filename}.parquet"
+
+        # DuckDB COPY para escrita (mesmo padrao de pycaged/ifdata-bcb)
+        duckdb.register("_save_df", df.reset_index())
+        try:
+            duckdb.sql(
+                f"COPY _save_df TO '{filepath}' (FORMAT 'parquet', COMPRESSION 'snappy')"
             )
+        finally:
+            duckdb.unregister("_save_df")
 
         if verbose:
             self._callback.on_saved(str(filepath.relative_to(self.base_path)))
@@ -167,10 +165,6 @@ class DataManager:
         filepath = self.base_path / subdir / f"{filename}.parquet"
 
         if not filepath.exists():
-            # Tentar CSV como fallback
-            csv_path = self.base_path / subdir / f"{filename}.csv"
-            if csv_path.exists():
-                return pd.read_csv(csv_path, index_col=0, parse_dates=True)
             return pd.DataFrame()
 
         # Usa QueryEngine (DuckDB) para leitura otimizada
