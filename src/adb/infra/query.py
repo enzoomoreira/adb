@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import duckdb
 
-from adb.shared.utils.dates import DATE_COLUMNS
+from adb.utils import DATE_COLUMNS
 
 # Logger lazy - so carrega quando usado
 _logger = None

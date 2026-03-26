@@ -20,7 +20,7 @@ O `QueryEngine` e o motor de consultas SQL do projeto, baseado em **DuckDB**. En
 ## Import e Inicializacao
 
 ```python
-from adb import QueryEngine
+from adb.infra.query import QueryEngine
 
 # Inicializacao padrao (usa get_settings().data_dir)
 qe = QueryEngine()

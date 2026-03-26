@@ -42,6 +42,26 @@ class ExpectationsClient:
         endpoint_name = ENDPOINTS.get(endpoint_key, endpoint_key)
         return self.api.get_endpoint(endpoint_name)
 
+    def get_data(
+        self,
+        config: dict,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Busca expectativas via config padrao.
+
+        Args:
+            config: Dict do indicador com endpoint, indicator.
+            start_date: Data inicial 'YYYY-MM-DD'.
+            end_date: Data final 'YYYY-MM-DD'.
+        """
+        return self.query(
+            endpoint_key=config["endpoint"],
+            indicator=config.get("indicator"),
+            start_date=start_date,
+            end_date=end_date,
+        )
+
     @retry()  # usa defaults para falhas de rede
     def query(
         self,

@@ -1,28 +1,6 @@
-# Arquitetura do Projeto
+# Arquitetura
 
-Documentacao tecnica da arquitetura Clean Architecture usada no `adb`.
-
----
-
-## Visao Geral
-
-O projeto segue **Clean Architecture** com cinco camadas principais, organizadas por responsabilidade:
-
-| Camada | Diretorio | Responsabilidade |
-|--------|-----------|------------------|
-| **Domain** | `domain/` | Regras de negocio, entidades, excecoes |
-| **Infra** | `infra/` | I/O, configuracoes, logging, retry, persistencia |
-| **Services** | `services/` | Logica de aplicacao, BaseCollector, registry |
-| **Providers** | `providers/` | Implementacoes especificas por fonte de dados |
-| **Shared** | `shared/` | Utilitarios compartilhados (datas, indicadores) |
-| **UI** | `ui/` | Output visual ao usuario (Rich) |
-
-### Principios
-
-1. **Dependencias apontam para dentro**: Providers dependem de Services, Services dependem de Domain
-2. **Domain e puro**: Sem dependencias externas
-3. **Infra e o adaptador**: Conecta o sistema ao mundo externo (APIs, filesystem, logs)
-4. **Inversao de dependencia**: Interfaces definidas em Domain, implementacoes em Infra
+Documentacao tecnica da estrutura interna do adb.
 
 ---
 
@@ -30,244 +8,171 @@ O projeto segue **Clean Architecture** com cinco camadas principais, organizadas
 
 ```
 src/adb/
-├── __init__.py              # Exports publicos (explorers, config)
-│
-├── domain/                  # CAMADA DE DOMINIO
-│   ├── __init__.py          # Exports (BaseExplorer, exceptions)
-│   ├── exceptions.py        # ADBException, DataNotFoundError, APIError, etc.
-│   └── explorers.py         # BaseExplorer (interface unificada de leitura)
-│
-├── infra/                   # CAMADA DE INFRAESTRUTURA
-│   ├── __init__.py          # Exports (get_settings, get_logger, retry)
-│   ├── config.py            # Settings (platformdirs) e constantes de resiliencia
-│   ├── log.py               # Sistema de logging (loguru)
-│   ├── resilience.py        # Decorator @retry (tenacity)
-│   └── persistence/         # Subcamada de persistencia
-│       ├── __init__.py      # Exports (DataManager, QueryEngine)
-│       ├── storage.py       # DataManager (I/O Parquet)
-│       ├── query.py         # QueryEngine (DuckDB)
-│       └── validation.py    # DataValidator (integridade)
-│
-├── services/                # CAMADA DE SERVICOS
-│   ├── __init__.py
-│   └── collectors/          # Abstracao de coleta
-│       ├── __init__.py
-│       ├── base.py          # BaseCollector
-│       └── registry.py      # Mapeamento de collectors
-│
-├── providers/               # CAMADA DE PROVIDERS (por fonte)
-│   ├── bacen/               # Banco Central
-│   │   ├── sgs/             # client, collector, explorer, indicators
-│   │   └── expectations/    # client, collector, explorer, indicators
-│   ├── ibge/
-│   │   └── sidra/           # client, collector, explorer, indicators
-│   ├── ipea/                # client, collector, explorer, indicators
-│   └── bloomberg/           # client, collector, explorer, indicators
-│
-├── shared/                  # UTILITARIOS COMPARTILHADOS
-│   └── utils/
-│       ├── dates.py         # parse_date, normalize_index
-│       └── indicators.py    # get_config
-│
-└── ui/                      # INTERFACE DE USUARIO
-    ├── __init__.py
-    └── display.py           # Output visual (Rich)
+    __init__.py              # Registry de explorers (importlib + dict)
+    explorer.py              # BaseExplorer (interface publica unificada)
+    collector.py             # BaseCollector (generico, parametrizado)
+    display.py               # Display singleton (Rich)
+    utils.py                 # parse_date, normalize_index, DATE_COLUMNS
+    exceptions.py            # ADBException, APIError, DataNotFoundError
+    infra/
+        config.py            # Settings (platformdirs), constantes de resilience
+        log.py               # Logging (loguru, lazy init, file rotation)
+        resilience.py        # @retry (tenacity, exponential backoff)
+        query.py             # QueryEngine (DuckDB sobre Parquet)
+        storage.py           # DataManager (save/append Parquet, dedup)
+        validation.py        # DataValidator (health checks, gaps, cobertura)
+    providers/
+        bacen/
+            sgs/             # client.py, explorer.py, indicators.py
+            expectations/    # client.py, explorer.py, indicators.py
+        ibge/
+            sidra/           # client.py, explorer.py, indicators.py
+        ipea/                # client.py, explorer.py, indicators.py
+        bloomberg/           # client.py, explorer.py, indicators.py
 ```
 
----
+Cada provider tem 3 arquivos:
+- `indicators.py` -- dict `_CONFIG` com catalogo curado
+- `client.py` -- wrapper stateless da API com `get_data(config, start, end) -> DataFrame`
+- `explorer.py` -- herda `BaseExplorer`, declara config/client/subdir/title
 
-## Hierarquia de Classes
-
-Diagrama mostrando heranca e composicao entre componentes:
-
-```mermaid
-classDiagram
-    direction TB
-
-    %% Domain Layer
-    class BaseExplorer {
-        <<abstract>>
-        +_CONFIG: dict
-        +_SUBDIR: str
-        +_DATE_COLUMN: str
-        +_COLLECTOR_CLASS: property
-        +read(*indicators, start, end)
-        +available(**filters)
-        +info(indicator)
-        +collect(indicators, save, verbose)
-        +status()
-        #_subdir(indicator)
-        #_where(start, end)
-        #_join(dfs, indicators)
-    }
-
-    class ADBException {
-        <<exception>>
-    }
-    class DataNotFoundError
-    class APIError
-    class RateLimitError
-    class ConnectionFailedError
-
-    %% Services Layer
-    class BaseCollector {
-        <<abstract>>
-        +_CONFIG: dict
-        +_TITLE: str
-        +default_subdir: str
-        +data_manager: DataManager
-        +display: Display
-        +collect(indicators, start, end, save, verbose)
-        +status(subdir)
-        #_collect_one(key, config, start, end, save, verbose)*
-        #_subdir_for(key)
-        #_normalize_indicators(indicators, config)
-        #_next_date(last_date, frequency)
-        #_persist(fetch_fn, filename, ...)
-        #_start(title, num_indicators, ...)
-        #_end(verbose)
-        #_fetch_start(name, start_date)
-        #_fetch_result(name, count)
-        #_get_frequency_for_file(filename)
-    }
-
-    %% Infra Layer
-    class DataManager {
-        +base_path: Path
-        +save(df, filename, subdir, ...)
-        +read(filename, subdir)
-        +append(df, filename, subdir, ...)
-        +get_metadata(filename, subdir)
-        +get_last_date(filename, subdir)
-        +list_files(subdir)
-        +is_first_run(subdir)
-        +get_file_path(filename, subdir)
-    }
-
-    class QueryEngine {
-        +base_path: Path
-        +read(filename, subdir, columns, where)
-        +read_glob(pattern, subdir, ...)
-        +sql(query, subdir)
-        +aggregate(filename, subdir, group_by, agg)
-        +get_metadata(filename, subdir)
-        +connection()
-    }
-
-    class DataValidator {
-        +STALE_THRESHOLD: dict
-        +COVERAGE_THRESHOLD: float
-        +get_health(filename, subdir, frequency)
-    }
-
-    %% Providers (exemplos)
-    class SGSExplorer
-    class SGSCollector
-    class ExpectationsExplorer
-    class ExpectationsCollector
-
-    %% Relationships - Domain
-    ADBException <|-- DataNotFoundError
-    ADBException <|-- APIError
-    APIError <|-- RateLimitError
-    APIError <|-- ConnectionFailedError
-
-    %% Relationships - Services/Providers
-    BaseExplorer <|-- SGSExplorer
-    BaseExplorer <|-- ExpectationsExplorer
-
-    BaseCollector <|-- SGSCollector
-    BaseCollector <|-- ExpectationsCollector
-
-    %% Composition
-    BaseExplorer o-- QueryEngine : usa
-    BaseCollector o-- DataManager : usa
-    BaseCollector o-- DataValidator : usa (status only)
-    DataManager o-- QueryEngine : delega leituras
-```
+Nao existem collectors concretos. O `BaseCollector` e generico e parametrizado.
 
 ---
 
 ## Fluxo de Dados
 
-Diagrama do fluxo completo desde coleta ate visualizacao:
+### fetch() -- stateless, sem disco
 
-```mermaid
-flowchart TD
-    User["Usuario<br/>(Notebook/Script)"]
-
-    subgraph Coleta ["1. COLETA"]
-        direction TB
-        EC["Explorer.collect()"]
-        CC["Collector.collect()"]
-        CLI["Client<br/>(API externa)"]
-        RET["@retry<br/>(tenacity)"]
-        RAW["Dados brutos"]
-        DM["DataManager.save/append()"]
-    end
-
-    subgraph Leitura ["2. LEITURA"]
-        direction TB
-        ER["Explorer.read()"]
-        QE["QueryEngine<br/>(DuckDB SQL)"]
-    end
-
-    subgraph Saida ["3. SAIDA"]
-        direction TB
-        DF["DataFrame"]
-    end
-
-    PARQUET[("data/*.parquet")]
-
-    %% Fluxo de Coleta
-    User --> EC
-    EC -->|"instancia"| CC
-    CC -->|"chama"| CLI
-    CLI -.->|"decorado"| RET
-    CLI --> RAW
-    RAW --> DM
-    DM -->|"persiste"| PARQUET
-
-    %% Fluxo de Leitura
-    User --> ER
-    PARQUET -->|"le"| ER
-    ER -->|"delega"| QE
-    QE --> DF
-
-    %% Styling
-    style Coleta fill:#e8f4e8
-    style Leitura fill:#e8e8f4
-    style Saida fill:#f4e8e8
+```
+adb.sgs.fetch("selic", start="2020")
+    |
+    v
+BaseExplorer.fetch()
+    -> _fetch_one(indicator, start, end)
+        -> _CLIENT_CLASS().get_data(config, start, end)
+            -> API externa (python-bcb, ipeadatapy, etc.)
+    -> normalize_index(df)
+    -> rename "value" -> indicator name
+    -> return DataFrame
 ```
 
-### Detalhes do Fluxo
+### collect() + read() -- com cache local
 
-#### 1. Coleta
+```
+adb.sgs.collect()
+    |
+    v
+BaseExplorer.collect()
+    -> BaseCollector(config, title, client_class, subdir_template)
+        -> collect() template method:
+            1. _normalize_indicators()
+            2. _start() (banner)
+            3. for key in indicators:
+                _collect_one(key, config, start, end, save, verbose)
+                    -> client.get_data(config, start, end)
+                    -> _persist(fetch_fn, filename, subdir, frequency)
+                        -> get_last_date() (incremental)
+                        -> DataManager.save() ou .append()
+            4. _end() (banner)
+
+adb.sgs.read("selic", start="2020")
+    |
+    v
+BaseExplorer.read()
+    -> QueryEngine.read(filename, subdir, where="date >= '2020-01-01'")
+    -> normalize_index(df)
+    -> rename "value" -> indicator name
+    -> return DataFrame
+```
+
+---
+
+## Componentes Principais
+
+### BaseExplorer (`explorer.py`)
+
+Interface publica. Todos os explorers herdam desta classe.
+
+**Atributos de classe** (subclass define):
+- `_CONFIG: dict` -- catalogo de indicadores
+- `_SUBDIR_TEMPLATE: str` -- template de subdir (ex: `"bacen/sgs/{frequency}"`)
+- `_CLIENT_CLASS: type` -- classe do client
+- `_TITLE: str` -- titulo para banners de coleta
+
+**Metodos publicos**:
+- `read(*indicators, start, end, columns)` -- le do cache Parquet
+- `fetch(*indicators, start, end)` -- busca direto da API (stateless)
+- `collect(indicators, start, end, save, verbose)` -- coleta e persiste
+- `available(**filters)` -- lista indicadores, filtro opcional
+- `info(indicator)` -- retorna config do indicador
+- `status()` -- health check dos dados salvos
+
+**Extension points**:
+- `_fetch_one()` -- generico na base, override para casos especiais (Expectations)
+- `_subdir()` -- resolve template com frequency do config
+- `_join()` -- outer join por data (override: Expectations faz concat)
+
+### BaseCollector (`collector.py`)
+
+Classe concreta parametrizada. O Explorer cria instancias no construtor.
 
 ```python
-import adb
-
-# Usuario chama collect no Explorer
-adb.sgs.collect(['selic', 'cdi'])
-
-# Internamente:
-# 1. Explorer instancia Collector
-# 2. Collector usa _persist() para orquestrar
-# 3. Client faz requisicao (com @retry)
-# 4. DataManager salva em Parquet
+collector = BaseCollector(
+    config=self._CONFIG,
+    title=self._TITLE,
+    client_class=self._CLIENT_CLASS,
+    subdir_template=self._SUBDIR_TEMPLATE,
+)
 ```
 
-#### 2. Leitura
+**Responsabilidades**:
+- Template method `collect()` (loop sequencial por indicadores)
+- `_collect_one()` generico: chama `client.get_data(config, start, end)`
+- `_persist()` com incrementalidade (get_last_date + _next_date)
+- `status()` com health checks via DataValidator
+- Display (banners, fetch_start/fetch_result) via Display singleton
+
+### Client Protocol
+
+Todos os clients seguem a mesma interface:
 
 ```python
-# Usuario chama read no Explorer
-df = adb.sgs.read('selic', start='2023')
-
-# Internamente:
-# 1. Explorer constroi WHERE clause
-# 2. QueryEngine executa SQL no DuckDB
-# 3. Retorna DataFrame com DatetimeIndex
+class SomeClient:
+    def get_data(self, config: dict, start_date: str | None, end_date: str | None) -> pd.DataFrame:
+        # Extrai do config o que precisa (code, ticker, endpoint, etc.)
+        # Chama API externa
+        # Normaliza para DatetimeIndex + coluna "value"
+        ...
 ```
+
+O client recebe o dict de config completo e extrai internamente os campos
+que precisa. Nao existe interface formal (Protocol) -- duck typing.
+
+### Infra
+
+| Modulo | Arquivo | Responsabilidade |
+|--------|---------|------------------|
+| Config | `infra/config.py` | Settings via platformdirs, constantes de retry |
+| Log | `infra/log.py` | Logging loguru com lazy init e file rotation |
+| Resilience | `infra/resilience.py` | `@retry` com tenacity, exponential backoff |
+| Query | `infra/query.py` | QueryEngine (DuckDB SQL sobre Parquet) |
+| Storage | `infra/storage.py` | DataManager (save/append com dedup atomico) |
+| Validation | `infra/validation.py` | DataValidator (health checks, gaps, cobertura) |
+
+---
+
+## Excecoes
+
+```
+ADBException (base)
++-- DataNotFoundError
++-- APIError
+```
+
+`@retry` absorve erros transientes de rede. Excecoes especificas
+(`RateLimitError`, `ConnectionFailedError`) foram removidas por nao
+serem usadas.
 
 ---
 
@@ -275,68 +180,10 @@ df = adb.sgs.read('selic', start='2023')
 
 | Padrao | Onde | Descricao |
 |--------|------|-----------|
-| **Template Method** | `BaseCollector.collect()` | Define esqueleto do algoritmo (normalize -> start -> loop -> end); subclasses implementam `_collect_one()` |
-| **Facade** | `BaseExplorer` | Simplifica acesso a Collector + QueryEngine |
-| **Strategy** | `StorageCallback` | Callback protocol para feedback de storage |
-| **Lazy Loading** | `__init__.py` | Explorers carregados sob demanda |
-| **Decorator** | `@retry` | Resiliencia de rede via tenacity |
+| **Facade** | `BaseExplorer` | Simplifica acesso a Client + Collector + QueryEngine |
+| **Parametrized Factory** | `BaseCollector` | Recebe config no construtor, sem subclasses |
+| **Registry** | `__init__.py` | Dict + importlib para lazy loading de explorers |
+| **Strategy** | `StorageCallback` | Protocol para feedback visual no DataManager |
+| **Decorator** | `@retry` | Resilience de rede via tenacity |
 | **Singleton** | `get_display()` | Instancia unica de Display (thread-safe) |
-| **Composition** | `DataManager -> QueryEngine` | DataManager delega leituras para QueryEngine |
-
----
-
-## Dependencias entre Camadas
-
-```mermaid
-graph TD
-    subgraph External ["Externo"]
-        APIs["APIs<br/>(BCB, IBGE, etc)"]
-        FS["Filesystem"]
-    end
-
-    subgraph App ["Aplicacao"]
-        UI["ui/"]
-        PROV["providers/"]
-        SERV["services/"]
-        INFRA["infra/"]
-        DOM["domain/"]
-        SHARED["shared/"]
-    end
-
-    %% Dependencias permitidas
-    PROV --> SERV
-    PROV --> DOM
-    PROV --> INFRA
-    SERV --> DOM
-    SERV --> INFRA
-    INFRA --> DOM
-    UI --> INFRA
-
-    %% Shared e transversal
-    PROV -.-> SHARED
-    SERV -.-> SHARED
-    INFRA -.-> SHARED
-
-    %% Conexoes externas (apenas Infra)
-    INFRA --> APIs
-    INFRA --> FS
-
-    style DOM fill:#d4edda
-    style INFRA fill:#cce5ff
-    style SERV fill:#fff3cd
-    style PROV fill:#f8d7da
-    style SHARED fill:#e2e3e5
-    style UI fill:#d1ecf1
-```
-
-**Regra de Ouro**: Domain nunca depende de outras camadas internas.
-
----
-
-## Documentacao Relacionada
-
-| Doc | Conteudo |
-|-----|----------|
-| [domain.md](domain.md) | BaseExplorer, Exceptions |
-| [infra.md](infra.md) | Config, Log, Resilience, Persistence |
-| [services.md](services.md) | BaseCollector, Registry |
+| **Composition** | `DataManager -> QueryEngine` | DataManager delega leituras |

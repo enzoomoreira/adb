@@ -1,6 +1,55 @@
 # Changelog
 
-## [Unreleased] - refactor/align-philosophy
+## [2026-03-25 21:06]
+
+Refatoracao inspirada no OpenBB Platform: padronizar interface de clients,
+eliminar collectors concretos, e simplificar estrutura de pastas.
+
+### Added
+
+- **`Client.get_data(config, start, end)`**: interface padrao em todos os 5 clients.
+  Cada client recebe o dict de config do indicador e extrai internamente o que precisa,
+  eliminando a necessidade de cada collector saber quais campos extrair.
+- **`ExpectationsClient.get_data()`**: novo metodo que wrappa `query()` para seguir
+  a interface padrao dos demais clients.
+- **`_SUBDIR_TEMPLATE`** no BaseExplorer: template string (ex: `"bacen/sgs/{frequency}"`)
+  que resolve subdir automaticamente a partir do frequency do config.
+- **`_CLIENT_CLASS`** e **`_TITLE`** como atributos do BaseExplorer: explorer declara
+  qual client e titulo usar, BaseCollector e criado parametricamente.
+- **Registry pattern no `__init__.py`**: dict + importlib substitui lazy loading manual
+  com variaveis globais. Adicionar provider = adicionar entrada no dict.
+
+### Removed
+
+- **5 collectors concretos**: `SGSCollector`, `IPEACollector`, `SidraCollector`,
+  `BloombergCollector`, `ExpectationsCollector`. BaseCollector agora e generico
+  e recebe config/title/client_class/subdir_template no construtor.
+- **`services/collectors/registry.py`**: dead code, nao era importado em nenhum lugar.
+- **`shared/utils/indicators.py`** (`get_config()`): unico caller era o antigo BaseCollector.
+- **`RateLimitError`** e **`ConnectionFailedError`**: definidas mas nunca usadas. O `@retry`
+  absorve erros transientes sem precisar de excecoes especificas.
+- **Camadas `domain/`, `services/`, `shared/`, `ui/`**: eliminadas por conter 1 arquivo cada.
+  Arquivos promovidos ao nivel do pacote (`explorer.py`, `collector.py`, `utils.py`, `display.py`).
+- **`infra/persistence/`**: flatten -- `query.py`, `storage.py`, `validation.py` sobem para `infra/`.
+- **7 `__init__.py` intermediarios** e **7 diretorios vazios** removidos.
+
+### Changed
+
+- **BaseCollector**: de abstract class com `_collect_one()` para classe concreta parametrizada.
+  O Explorer cria instancias passando config/title/client/subdir no construtor.
+  `_collect_one()` agora e generico e chama `client.get_data(config, start, end)`.
+- **BaseExplorer._fetch_one()**: implementacao generica na base class usando `_CLIENT_CLASS`.
+  Apenas `ExpectationsExplorer` mantem override (read/join/fetch customizados).
+- **5 clients refatorados**: assinatura mudou de parametros individuais
+  (`code, name, frequency, start, end`) para `(config: dict, start, end)`.
+- **SidraClient.get_data()**: agora recebe config completo e extrai `config["parameters"]`
+  internamente (antes recebia o subdict `parameters` diretamente).
+- **Explorers simplificados**: 4 explorers (SGS, IPEA, Sidra, Bloomberg) reduzidos a
+  ~15 linhas cada -- declaram `_CONFIG`, `_SUBDIR_TEMPLATE`, `_TITLE`, `_CLIENT_CLASS`.
+- **Imports atualizados**: todos os 18 imports internos atualizados para refletir nova
+  estrutura (`adb.explorer`, `adb.collector`, `adb.utils`, `adb.display`, `adb.infra.query`, etc.).
+
+## [2026-03-25] - refactor/align-philosophy
 
 Reestruturacao para alinhar a lib com sua identidade de
 "unified data access layer for Brazilian economic data".
@@ -8,44 +57,13 @@ Reestruturacao para alinhar a lib com sua identidade de
 ### Added
 
 - **API stateless `fetch()`**: novo metodo em todos os explorers que busca
-  dados direto da API sem tocar em disco. Permite consumidores como
-  projetos internos de database usarem o adb sem cache local.
-  ```python
-  df = adb.sgs.fetch("selic", start="2020")
-  df = adb.sidra.fetch("ipca", start="2024")
-  ```
-- **`_fetch_one()` extension point** no BaseExplorer: subclasses implementam
-  a chamada especifica ao client para habilitar `fetch()`.
-- **`_collect_one()` extension point** no BaseCollector: subclasses implementam
-  a logica de coleta de um indicador individual.
-- **`_subdir_for()` extension point** no BaseCollector: permite derivar subdir
-  a partir do config do indicador (ex: SGS daily/monthly).
+  dados direto da API sem tocar em disco.
 - **Template method `BaseCollector.collect()`**: loop normalize -> start -> iterate -> end
   vive na base, eliminando duplicacao nos 5 collectors.
-- **`status()` automatico**: BaseCollector agora deriva subdirs do `_CONFIG` via
-  `_subdir_for()`, eliminando listas hardcoded que podiam divergir do config real.
-- Scripts de verificacao em `scripts/` (verify_refactor.py, verify_full.py).
+- **`status()` automatico**: BaseCollector deriva subdirs do `_CONFIG` automaticamente.
 
 ### Removed
 
-- **Provider CAGED/MTE** (`src/adb/providers/mte/`): microdados sao dominio
-  diferente de series temporais. Sera lib standalone no futuro. Remove dependencia `py7zr`.
-- **Schemas Pydantic** (`domain/schemas/`): 126 linhas de dead code nunca chamado.
-  Configs sao dicts fixos no codigo, nao input externo que precise validacao runtime.
-- **Funcoes `list_keys()` e `filter_by()`** de shared/utils: zero callers no codebase.
-- **`QueryEngine` e `DataManager` do top-level exports**: infra interna nao faz parte
-  da API publica. Ainda acessiveis via `from adb.infra.persistence import QueryEngine`.
-- Metodos intermediarios `_collect_series()`/`_collect_endpoint()` dos collectors:
-  substituidos pelo `_collect_one()` do template method.
-- Override de `status()` em SGS/Bloomberg/Sidra collectors: base class resolve.
-
-### Changed
-
-- **Docstring e `__all__` do `__init__.py`**: reflete nova API (fetch como primario,
-  5 fontes sem CAGED, sem QueryEngine/DataManager no top-level).
-- **`available_sources()`**: retorna 5 fontes (removido "caged").
-- **Todos os 5 collectors** simplificados: definem `_CONFIG`, `_TITLE`,
-  implementam `_collect_one()` ao inves de override completo de `collect()`.
-- Comentarios/docstrings limpos de referencias ao CAGED em arquivos de infra.
-- Documentacao completa atualizada (getting-started, extending, querying,
-  architecture, domain, services, infra).
+- **Provider CAGED/MTE**: microdados sao dominio diferente de series temporais.
+- **Schemas Pydantic**: dead code nunca chamado.
+- **`QueryEngine` e `DataManager` do top-level exports**: infra interna nao e API publica.

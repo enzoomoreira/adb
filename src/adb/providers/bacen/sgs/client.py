@@ -63,25 +63,21 @@ class SGSClient:
 
     def get_data(
         self,
-        code: int,
-        name: str,
-        frequency: str,
+        config: dict,
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> pd.DataFrame:
-        """
-        Busca serie temporal do SGS.
+        """Busca serie temporal do SGS.
 
         Args:
-            code: Codigo SGS do indicador
-            name: Nome para a coluna no DataFrame
-            frequency: 'daily' ou 'monthly'
-            start_date: Data inicial 'YYYY-MM-DD' (None = historico completo desde 1980)
-            end_date: Data final 'YYYY-MM-DD' (None = ate hoje)
-
-        Returns:
-            DataFrame com serie temporal
+            config: Dict do indicador com code, name, frequency.
+            start_date: Data inicial 'YYYY-MM-DD' (None = historico completo desde 1980).
+            end_date: Data final 'YYYY-MM-DD' (None = ate hoje).
         """
+        code = config["code"]
+        name = config["name"]
+        frequency = config["frequency"]
+
         if start_date is None:
             start_date = "1980-01-01"
 
@@ -93,7 +89,6 @@ class SGSClient:
         if df.empty:
             return df
 
-        # Renomear coluna para 'value' (padrao do DataManager)
         if name in df.columns:
             df = df.rename(columns={name: "value"})
 

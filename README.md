@@ -74,7 +74,4 @@ export ADB_DATA_DIR=/caminho/customizado
 
 ### Arquitetura Interna
 
-- **[architecture.md](docs/internals/architecture.md)** - Visao geral da arquitetura
-- **[domain.md](docs/internals/domain.md)** - BaseExplorer, Exceptions
-- **[infra.md](docs/internals/infra.md)** - Config, Logging, Persistencia
-- **[services.md](docs/internals/services.md)** - BaseCollector, Registry
+- **[architecture.md](docs/internals/architecture.md)** - Estrutura, fluxos e padroes de projeto

@@ -79,50 +79,35 @@ class BloombergClient:
     @retry(max_attempts=2, delay=1.0, exceptions=(RuntimeError, TimeoutError, OSError))
     def get_data(
         self,
-        ticker: str,
-        field: str,
-        name: str | None = None,
+        config: dict,
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> pd.DataFrame:
-        """
-        Busca serie temporal historica do Bloomberg.
-
-        Usado por BloombergCollector e BloombergExplorer.fetch().
+        """Busca serie temporal historica do Bloomberg.
 
         Args:
-            ticker: Bloomberg ticker (ex: 'MXWD Index', 'IBOV Index')
-            field: Bloomberg field (ex: 'PX_LAST', 'BEST_PE_RATIO')
-            name: Nome para logging (opcional)
-            start_date: Data inicial 'YYYY-MM-DD' (None = usa LOOKBACK_DAYS)
-            end_date: Data final 'YYYY-MM-DD' (None = hoje)
-
-        Returns:
-            DataFrame com DatetimeIndex e coluna 'value'
-            Retorna DataFrame vazio em caso de erro
+            config: Dict do indicador com ticker, fields, name.
+            start_date: Data inicial 'YYYY-MM-DD' (None = usa LOOKBACK_DAYS).
+            end_date: Data final 'YYYY-MM-DD' (None = hoje).
         """
+        ticker = config["ticker"]
+        fields = config["fields"]
+        field = fields[0] if isinstance(fields, list) else fields
+
         try:
-            # Defesa minima: trata NaT como None
             if pd.isna(start_date):
                 start_date = None
             if pd.isna(end_date):
                 end_date = None
 
-            # Se start_date=None, limitar a LOOKBACK_DAYS para evitar quotas
             if start_date is None:
                 start_date = (
                     datetime.today() - timedelta(days=LOOKBACK_DAYS)
                 ).strftime("%Y-%m-%d")
 
-            # Se end_date=None, usa hoje
             if end_date is None:
                 end_date = datetime.today().strftime("%Y-%m-%d")
 
-            # xbbg.blp.bdh retorna DataFrame com:
-            # - Index: DatetimeIndex
-            # - Columns: MultiIndex (ticker, field) se multiplos tickers/fields
-            #            ou Index simples se 1 ticker + 1 field
-            # Captura stdout/stderr do SDK para evitar ruido no terminal
             with _capture_external_output(self.logger):
                 df = blp.bdh(
                     tickers=ticker,
@@ -134,7 +119,6 @@ class BloombergClient:
             if df is None or df.empty:
                 return pd.DataFrame()
 
-            # Normalizar para DatetimeIndex + coluna 'value'
             df = self._normalize_dataframe(df, ticker, field)
 
             return df

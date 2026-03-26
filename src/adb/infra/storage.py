@@ -14,7 +14,7 @@ from typing import Protocol
 import duckdb
 import pandas as pd
 
-from adb.shared.utils.dates import normalize_index
+from adb.utils import normalize_index
 
 
 # =========================================================================
@@ -50,7 +50,7 @@ class DisplayCallback:
     """Adapter que conecta storage ao display."""
 
     def __init__(self):
-        from adb.ui.display import get_display
+        from adb.display import get_display
 
         self._display = get_display()
 
@@ -91,7 +91,7 @@ class DataManager:
         self.base_path = Path(base_path) if base_path else get_settings().data_dir
 
         # Composicao: usa QueryEngine para leituras otimizadas (DuckDB)
-        from adb.infra.persistence.query import QueryEngine
+        from adb.infra.query import QueryEngine
 
         self._qe = QueryEngine(self.base_path)
 

@@ -20,7 +20,6 @@ O Sistema Gerenciador de Series (SGS) disponibiliza series historicas de indicad
 | Chave | Codigo | Nome | Descricao |
 |-------|--------|------|-----------|
 | `selic` | 432 | Meta Selic | Taxa basica de juros da economia brasileira |
-| `selic_acum_mensal` | 4390 | Selic Acumulada no Mes | Taxa de juros acumulada no mes |
 | `cdi` | 12 | CDI | Certificado de Deposito Interbancario |
 | `dolar_ptax` | 10813 | Dolar PTAX | Taxa de cambio Dolar/Real - PTAX Venda |
 | `euro_ptax` | 21619 | Euro PTAX | Taxa de cambio Euro/Real - PTAX Venda |
@@ -29,6 +28,7 @@ O Sistema Gerenciador de Series (SGS) disponibiliza series historicas de indicad
 
 | Chave | Codigo | Nome | Descricao |
 |-------|--------|------|-----------|
+| `selic_acum_mensal` | 4390 | Selic Acumulada no Mes | Taxa de juros acumulada no mes |
 | `ibc_br_bruto` | 24363 | IBC-Br Bruto | Indice de Atividade Economica - Bruto |
 | `ibc_br_dessaz` | 24364 | IBC-Br Dessazonalizado | Indice de Atividade Economica - Dessazonalizado |
 | `igp_m` | 189 | IGP-M | Indice Geral de Precos do Mercado |
@@ -47,7 +47,7 @@ adb.sgs.available()
 
 # Informacoes de um indicador
 adb.sgs.info('selic')
-# IndicatorConfig(code=432, name='Meta Selic', frequency='daily', ...)
+# {'code': 432, 'name': 'Meta Selic', 'frequency': 'daily', ...}
 
 # Coletar dados
 adb.sgs.collect()                      # Todos indicadores

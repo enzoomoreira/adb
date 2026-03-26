@@ -8,58 +8,47 @@ reduzindo duplicacao entre os explorers especificos.
 import pandas as pd
 
 from adb.infra.log import get_logger
-from adb.shared.utils import parse_date
-from adb.shared.utils.dates import normalize_index
+from adb.utils import normalize_index, parse_date
 
 
 class BaseExplorer:
-    """
-    Classe base para explorers de dados.
+    """Classe base para explorers de dados.
 
     Subclasses devem definir:
     - _CONFIG: dict - Configuracao de indicadores
-    - _SUBDIR: str - Subdiretorio padrao para arquivos
-    - _COLLECTOR_CLASS: property - Classe do collector (lazy import)
-    - _fetch_one(): Busca um indicador da API (para fetch stateless)
+    - _SUBDIR_TEMPLATE: str - Template de subdir (ex: "bacen/sgs/{frequency}")
+    - _CLIENT_CLASS: type - Classe do client
+    - _TITLE: str - Titulo para banner de coleta
 
     Subclasses podem sobrescrever:
     - _DATE_COLUMN: str - Nome da coluna de data (default: 'date')
-    - _subdir(): Para subdir dinamico por indicador
+    - _fetch_one(): Para logica de fetch customizada
     - _join(): Para logica de join diferente
     """
 
     _CONFIG: dict
-    _SUBDIR: str
+    _SUBDIR_TEMPLATE: str
+    _CLIENT_CLASS: type
+    _TITLE: str
     _DATE_COLUMN: str = "date"
 
     def __init__(self, query_engine=None):
-        """
-        Inicializa o explorer.
-
-        Args:
-            query_engine: QueryEngine customizado (opcional, cria novo se None)
-        """
-        from adb.infra.persistence import QueryEngine
+        from adb.infra.query import QueryEngine
 
         self._qe = query_engine or QueryEngine()
         self.logger = get_logger(self.__class__.__name__)
-
-    @property
-    def _COLLECTOR_CLASS(self):
-        """Retorna classe do collector. Sobrescrever na subclasse."""
-        raise NotImplementedError("Subclasse deve implementar _COLLECTOR_CLASS")
 
     # =========================================================================
     # Metodos Internos (Extension Points)
     # =========================================================================
 
     def _subdir(self, indicator: str) -> str:
-        """
-        Retorna subdiretorio para um indicador.
-
-        Override para subdirs dinamicos (ex: SGS com daily/monthly).
-        """
-        return self._SUBDIR
+        """Retorna subdiretorio para um indicador via template."""
+        template = self._SUBDIR_TEMPLATE
+        if "{frequency}" in template:
+            frequency = self._CONFIG[indicator].get("frequency", "daily")
+            return template.format(frequency=frequency)
+        return template
 
     def _where(self, start: str | None = None, end: str | None = None) -> str | None:
         """Constroi clausula WHERE para filtro de data."""
@@ -73,20 +62,10 @@ class BaseExplorer:
     def _fetch_one(
         self, indicator: str, start: str | None, end: str | None
     ) -> pd.DataFrame:
-        """
-        Busca um indicador diretamente da API (sem disco).
-
-        Subclasses devem implementar para chamar seu client especifico.
-
-        Args:
-            indicator: Chave do indicador em _CONFIG
-            start: Data inicial 'YYYY-MM-DD' (ja parsed)
-            end: Data final 'YYYY-MM-DD' (ja parsed)
-
-        Returns:
-            DataFrame com DatetimeIndex + coluna 'value'
-        """
-        raise NotImplementedError("Subclasse deve implementar _fetch_one")
+        """Busca um indicador diretamente da API (sem disco)."""
+        config = self._CONFIG[indicator]
+        client = self._CLIENT_CLASS()
+        return client.get_data(config, start, end)
 
     def _join(self, dfs: list, indicators: tuple) -> pd.DataFrame:
         """
@@ -261,27 +240,22 @@ class BaseExplorer:
         end: str | None = None,
         save: bool = True,
         verbose: bool = True,
-        **kwargs,
     ) -> None:
-        """
-        Coleta dados da fonte e salva em cache local (Parquet).
+        """Coleta dados da fonte e salva em cache local (Parquet)."""
+        from adb.collector import BaseCollector
 
-        Args:
-            indicators: 'all', lista, ou string com indicador(es)
-            start: Data inicial (None = incremental desde ultima data salva)
-            end: Data final (None = ate hoje)
-            save: Se True, salva em Parquet
-            verbose: Se True, imprime progresso
-            **kwargs: Argumentos extras para o collector
-        """
-        collector = self._COLLECTOR_CLASS()
+        collector = BaseCollector(
+            config=self._CONFIG,
+            title=self._TITLE,
+            client_class=self._CLIENT_CLASS,
+            subdir_template=self._SUBDIR_TEMPLATE,
+        )
         collector.collect(
             indicators=indicators,
             start=start,
             end=end,
             save=save,
             verbose=verbose,
-            **kwargs,
         )
 
     def status(self) -> pd.DataFrame:
@@ -290,7 +264,14 @@ class BaseExplorer:
         Inclui indicadores coletados (com metricas de saude) e nao coletados
         (marcados como NOT_COLLECTED).
         """
-        collector = self._COLLECTOR_CLASS()
+        from adb.collector import BaseCollector
+
+        collector = BaseCollector(
+            config=self._CONFIG,
+            title=self._TITLE,
+            client_class=self._CLIENT_CLASS,
+            subdir_template=self._SUBDIR_TEMPLATE,
+        )
         df = collector.status()
 
         tracked: set[str] = set(df["arquivo"].tolist()) if not df.empty else set()

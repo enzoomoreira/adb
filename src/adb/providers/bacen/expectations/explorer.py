@@ -17,7 +17,7 @@ Uso:
 
 import pandas as pd
 
-from adb.domain.explorers import BaseExplorer
+from adb.explorer import BaseExplorer
 from .indicators import EXPECTATIONS_CONFIG
 
 
@@ -38,15 +38,15 @@ class ExpectationsExplorer(BaseExplorer):
     """
 
     _CONFIG = EXPECTATIONS_CONFIG
-    _SUBDIR = "bacen/expectations"
+    _SUBDIR_TEMPLATE = "bacen/expectations"
+    _TITLE = "BACEN - Expectativas (Relatorio Focus)"
     _DATE_COLUMN = "date"
 
     @property
-    def _COLLECTOR_CLASS(self):
-        """Retorna a classe do coletor associado."""
-        from adb.providers.bacen.expectations.collector import ExpectationsCollector
+    def _CLIENT_CLASS(self):
+        from adb.providers.bacen.expectations.client import ExpectationsClient
 
-        return ExpectationsCollector
+        return ExpectationsClient
 
     # =========================================================================
     # Metodos de leitura e processamento
@@ -158,20 +158,6 @@ class ExpectationsExplorer(BaseExplorer):
         result.columns = ["value"]
 
         return result.sort_index()
-
-    def _fetch_one(
-        self, indicator: str, start: str | None, end: str | None
-    ) -> pd.DataFrame:
-        from adb.providers.bacen.expectations.client import ExpectationsClient
-
-        config = self._CONFIG[indicator]
-        client = ExpectationsClient()
-        return client.query(
-            endpoint_key=config["endpoint"],
-            indicator=config.get("indicator"),
-            start_date=start,
-            end_date=end,
-        )
 
     def fetch(
         self,

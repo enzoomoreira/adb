@@ -75,11 +75,11 @@ O IBGE (Instituto Brasileiro de Geografia e Estatistica) e a principal fonte ofi
 | `pms_ytd` | 5906 | 11625 | YTD |
 | `pms_12m` | 5906 | 11626 | Acumulado 12 meses |
 
-### PNAD (Emprego) - Trimestral
+### PNAD (Emprego) - Mensal (Trimestre Movel)
 
 | Chave | Tabela | Variavel | Descricao |
 |-------|--------|----------|-----------|
-| `pnad_desocupacao` | 4099 | 4099 | Taxa de desocupacao |
+| `pnad_desocupacao` | 6381 | 4099 | Taxa de desocupacao |
 
 ---
 

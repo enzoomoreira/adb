@@ -30,24 +30,19 @@ class IPEAClient:
 
     def get_data(
         self,
-        code: str,
-        name: str | None = None,
+        config: dict,
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> pd.DataFrame:
-        """
-        Busca serie temporal do IPEADATA.
+        """Busca serie temporal do IPEADATA.
 
         Args:
-            code: Codigo da serie no IPEADATA (ex: 'CAGED12_SALDON12')
-            name: Nome para identificacao (usado em logs, opcional)
-            start_date: Data inicial 'YYYY-MM-DD' (None = historico completo)
-            end_date: Data final 'YYYY-MM-DD' (None = ate hoje)
-
-        Returns:
-            DataFrame com indice=DatetimeIndex, coluna='value'
+            config: Dict do indicador com code, name.
+            start_date: Data inicial 'YYYY-MM-DD' (None = historico completo).
+            end_date: Data final 'YYYY-MM-DD' (None = ate hoje).
         """
-        # API so suporta yearGreaterThan -- filtro por data exata e client-side
+        code = config["code"]
+
         year = None
         if start_date:
             year = int(start_date[:4]) - 1
@@ -59,7 +54,6 @@ class IPEAClient:
 
         df = self._normalize_dataframe(df)
 
-        # Filtros client-side (API nao suporta range exato)
         if not df.empty:
             if start_date:
                 df = df[df.index >= pd.to_datetime(start_date)]
