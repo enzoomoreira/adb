@@ -11,7 +11,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-import duckdb
 import pandas as pd
 
 from adb.utils import normalize_index
@@ -136,13 +135,13 @@ class DataManager:
         filepath = output_dir / f"{filename}.parquet"
 
         # DuckDB COPY para escrita (mesmo padrao de pycaged/ifdata-bcb)
-        duckdb.register("_save_df", df.reset_index())
+        self._qe._conn.register("_save_df", df.reset_index())
         try:
-            duckdb.sql(
+            self._qe._conn.sql(
                 f"COPY _save_df TO '{filepath}' (FORMAT 'parquet', COMPRESSION 'snappy')"
             )
         finally:
-            duckdb.unregister("_save_df")
+            self._qe._conn.unregister("_save_df")
 
         if verbose:
             self._callback.on_saved(str(filepath.relative_to(self.base_path)))
@@ -231,7 +230,7 @@ class DataManager:
 
         try:
             # Registrar DataFrame como view temporaria no DuckDB
-            duckdb.register("_new_data", df.reset_index())
+            self._qe._conn.register("_new_data", df.reset_index())
 
             if dedup:
                 # Streaming com deduplicacao por coluna 'date'
@@ -263,12 +262,15 @@ class DataManager:
                 """
 
             try:
-                duckdb.sql(query)
+                self._qe._conn.sql(query)
             finally:
-                duckdb.unregister("_new_data")
+                self._qe._conn.unregister("_new_data")
 
             # Replace atomico
             temp_path.replace(filepath)
+
+            # Limpar cache de metadata do DuckDB apos replace
+            self._qe._refresh()
 
             if verbose:
                 self._callback.on_appended(str(filepath.relative_to(self.base_path)))

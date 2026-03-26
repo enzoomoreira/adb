@@ -47,8 +47,21 @@ class QueryEngine:
 
         self.base_path = Path(base_path) if base_path else get_settings().data_dir
 
+        self._progress_bar = progress_bar
         self._conn = duckdb.connect()
         self._conn.execute(f"SET enable_progress_bar = {str(progress_bar).lower()}")
+
+    def _refresh(self) -> None:
+        """Recria conexao para limpar cache de metadata de arquivos Parquet.
+
+        Necessario apos operacoes que fazem replace atomico de arquivos
+        (ex: DataManager.append), pois o DuckDB cacheia metadata internamente.
+        """
+        self._conn.close()
+        self._conn = duckdb.connect()
+        self._conn.execute(
+            f"SET enable_progress_bar = {str(self._progress_bar).lower()}"
+        )
 
     # =========================================================================
     # Helpers Internos
@@ -71,7 +84,7 @@ class QueryEngine:
         # Se não, precisamos descobrir se existe coluna de data no arquivo
         try:
             # DuckDB DESCRIBE é rápido
-            schema_df = duckdb.sql(
+            schema_df = self._conn.sql(
                 f"DESCRIBE SELECT * FROM '{path_or_glob}' LIMIT 0"
             ).df()
             available_cols = set(schema_df["column_name"].values)
@@ -133,7 +146,7 @@ class QueryEngine:
         sql = self._query(str(filepath), columns, where)
 
         try:
-            df = duckdb.sql(sql).df()
+            df = self._conn.sql(sql).df()
             return df
         except Exception as e:
             # Logar erro tecnicamente (nao exibir para usuario)
@@ -164,7 +177,7 @@ class QueryEngine:
                 return pd.DataFrame()
 
             sql = self._query(full_pattern, columns, where)
-            df = duckdb.sql(sql).df()
+            df = self._conn.sql(sql).df()
             # Nota: normalize_date_index é chamado apenas no save() (Schema on Write)
             return df
         except Exception:
@@ -180,7 +193,7 @@ class QueryEngine:
         if subdir:
             query = query.replace("{subdir}", str(self.base_path / subdir))
 
-        return duckdb.sql(query).df()
+        return self._conn.sql(query).df()
 
     # =========================================================================
     # Agregacoes e Metadados
@@ -225,7 +238,7 @@ class QueryEngine:
             sql += f" WHERE {where}"
         sql += f" GROUP BY {group_cols}"
 
-        return duckdb.sql(sql).df()
+        return self._conn.sql(sql).df()
 
     def get_metadata(self, filename: str, subdir: str) -> dict | None:
         """Retorna metadados básicos do arquivo."""
@@ -239,7 +252,7 @@ class QueryEngine:
             # Para metadata puro (k/v), pyarrow é melhor. Para estatisticas de dados, DuckDB.
 
             # 1. Discover date column
-            schema = duckdb.sql(f"DESCRIBE SELECT * FROM '{filepath}' LIMIT 0").df()
+            schema = self._conn.sql(f"DESCRIBE SELECT * FROM '{filepath}' LIMIT 0").df()
             cols = set(schema["column_name"].tolist())
 
             date_col = "date" if "date" in cols else None
@@ -251,7 +264,7 @@ class QueryEngine:
                 sql = f"SELECT COUNT(*) as total, NULL as min_date, NULL as max_date FROM '{filepath}'"
 
             # 3. Execute
-            res = duckdb.sql(sql).fetchone()
+            res = self._conn.sql(sql).fetchone()
             assert res is not None
             total, min_d, max_d = res
 

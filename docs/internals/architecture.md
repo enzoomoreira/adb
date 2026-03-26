@@ -186,4 +186,4 @@ serem usadas.
 | **Strategy** | `StorageCallback` | Protocol para feedback visual no DataManager |
 | **Decorator** | `@retry` | Resilience de rede via tenacity |
 | **Singleton** | `get_display()` | Instancia unica de Display (thread-safe) |
-| **Composition** | `DataManager -> QueryEngine` | DataManager delega leituras |
+| **Composition** | `DataManager -> QueryEngine` | DataManager delega leituras e conexao DuckDB |

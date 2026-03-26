@@ -69,6 +69,7 @@ def normalize_index(df: pd.DataFrame) -> pd.DataFrame:
     # Caso 2: Tem coluna de data - mover para indice e remover hora
     for col in DATE_COLUMNS:
         if col in df.columns:
+            df = df.copy()
             df[col] = pd.to_datetime(df[col])
             df = df.set_index(col)
             df.index = df.index.normalize()

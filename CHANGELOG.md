@@ -1,5 +1,33 @@
 # Changelog
 
+## [2026-03-26 00:53]
+
+Correcoes de robustez no QueryEngine e DataManager: centralizar conexao DuckDB,
+fix de cache stale apos replace atomico, e guard clauses em validacao e normalize.
+
+### Fixed
+
+- **Cache stale apos `append()`**: DuckDB cacheava metadata de arquivos Parquet
+  internamente; apos replace atomico o arquivo mudava mas a conexao retornava
+  dados antigos. `_refresh()` recria a conexao para limpar o cache.
+- **`normalize_index()` mutava DataFrame original**: operacao `df[col] = ...`
+  modificava o DataFrame do caller. Adicionado `df.copy()` antes da mutacao.
+- **`_expected_dates()` com `start > end`**: retorna set vazio ao inves de
+  gerar range invalido.
+
+### Changed
+
+- **QueryEngine**: todas as queries agora usam `self._conn.sql()` ao inves de
+  `duckdb.sql()` global. Garante que configuracoes (progress_bar) e cache sejam
+  consistentes dentro da mesma instancia.
+- **DataManager**: operacoes `register()`/`unregister()`/`sql()` usam a conexao
+  do QueryEngine (`self._qe._conn`) ao inves de funcoes globais do duckdb.
+
+### Removed
+
+- **`import duckdb` em `storage.py`**: DataManager nao depende mais do modulo
+  duckdb diretamente, usa a conexao via QueryEngine.
+
 ## [2026-03-25 21:06]
 
 Refatoracao inspirada no OpenBB Platform: padronizar interface de clients,

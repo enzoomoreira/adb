@@ -276,6 +276,9 @@ class DataValidator:
         Returns:
             Set de datas esperadas
         """
+        if start > end:
+            return set()
+
         if frequency == Frequency.DAILY:
             # Dias uteis brasileiros (calendario ANBIMA)
             if self._calendar:
